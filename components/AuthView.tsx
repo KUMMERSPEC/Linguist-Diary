@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { signInWithPopup, GoogleAuthProvider, signInAnonymously, Auth } from 'firebase/auth';
 
 interface AuthViewProps {
@@ -7,21 +7,37 @@ interface AuthViewProps {
 }
 
 const AuthView: React.FC<AuthViewProps> = ({ auth }) => {
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   const handleGoogleLogin = async () => {
+    setErrorMsg(null);
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login failed", error);
-      alert("登录失败，请检查网络或 Firebase 配置。");
+      
+      if (error.code === 'auth/unauthorized-domain') {
+        setErrorMsg("域名未授权：请前往 Firebase 控制台 -> Authentication -> Settings -> Authorized domains，添加您当前的 GitHub Pages 域名。");
+      } else {
+        setErrorMsg("登录失败，请检查网络或 Firebase 配置。错误码: " + error.code);
+      }
     }
   };
 
   const handleAnonymousLogin = async () => {
+    setErrorMsg(null);
     try {
       await signInAnonymously(auth);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Guest login failed", error);
+      
+      // 针对匿名登录未开启的专项提示
+      if (error.code === 'auth/admin-restricted-operation') {
+        setErrorMsg("访客功能未开启：请前往 Firebase 控制台 -> Authentication -> Sign-in method -> 点击 Add new provider -> 启用 Anonymous (匿名) 并保存。");
+      } else {
+        setErrorMsg("访客登录失败: " + error.code);
+      }
     }
   };
 
@@ -42,6 +58,13 @@ const AuthView: React.FC<AuthViewProps> = ({ auth }) => {
               欢迎来到您的私人语言空间。在这里，每一篇日记都是一件珍贵的馆藏。
             </p>
           </div>
+
+          {errorMsg && (
+            <div className="bg-red-50 border border-red-100 text-red-600 p-4 rounded-2xl text-xs text-left leading-relaxed animate-in fade-in zoom-in">
+              <p className="font-bold mb-1">⚠️ 系统配置提醒：</p>
+              {errorMsg}
+            </div>
+          )}
 
           <div className="space-y-4">
             <button 
