@@ -28,7 +28,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
-      {/* Sidebar */}
+      {/* Sidebar (Desktop Only) */}
       <aside className="w-64 bg-white border-r border-slate-200 flex flex-col p-6 space-y-8 hidden md:flex">
         <div className="flex items-center space-x-3 px-2">
           <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-xl">
@@ -62,44 +62,38 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
               </button>
             </div>
           </div>
-          <div className="p-4 bg-slate-50 rounded-2xl">
-            <p className="text-xs font-semibold text-slate-400 uppercase mb-2">My Progress</p>
-            <div className="flex justify-between items-end">
-              <span className="text-2xl font-bold text-slate-800">...</span>
-              <span className="text-xs text-indigo-600 font-medium">云同步已开启</span>
-            </div>
-          </div>
         </div>
       </aside>
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        {/* Mobile Header */}
-        <header className="md:hidden flex items-center justify-between p-4 bg-white border-b border-slate-200">
+        {/* Mobile Header: Compact */}
+        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 shrink-0">
           <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-lg">
+            <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-sm">
               🖋️
             </div>
-            <h1 className="text-lg font-bold">Linguist</h1>
+            <h1 className="text-base font-bold text-slate-800 tracking-tight">Linguist</h1>
           </div>
           <div className="flex items-center space-x-3">
-             {user.photoURL && <img src={user.photoURL} className="w-8 h-8 rounded-full" alt="User" />}
-             <button onClick={() => signOut(auth)} className="text-xl">🚪</button>
+             {user.photoURL && <img src={user.photoURL} className="w-7 h-7 rounded-full" alt="User" />}
+             <button onClick={() => signOut(auth)} className="text-lg">🚪</button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-8">
-          <div className="max-w-5xl mx-auto h-full">
+        {/* Content Container: Removed excessive p-4 for better fit on mobile */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 md:p-8">
+          <div className="max-w-5xl mx-auto h-full flex flex-col">
             {children}
           </div>
         </div>
 
         {/* Mobile Nav Bar */}
-        <nav className="md:hidden flex items-center justify-around bg-white border-t border-slate-200 p-2 pb-6">
-           <button onClick={() => onViewChange('dashboard')} className={`p-2 ${activeView === 'dashboard' ? 'text-indigo-600' : 'text-slate-400'}`}>📊</button>
-           <button onClick={() => onViewChange('editor')} className={`p-2 ${activeView === 'editor' ? 'text-indigo-600' : 'text-slate-400'}`}>📝</button>
-           <button onClick={() => onViewChange('chat')} className={`p-2 ${activeView === 'chat' ? 'text-indigo-600' : 'text-slate-400'}`}>💬</button>
-           <button onClick={() => onViewChange('history')} className={`p-2 ${activeView === 'history' ? 'text-indigo-600' : 'text-slate-400'}`}>🏛️</button>
+        <nav className="md:hidden flex items-center justify-around bg-white border-t border-slate-200 p-2 pb-5 shrink-0">
+           <button onClick={() => onViewChange('dashboard')} className={`p-2 transition-all ${activeView === 'dashboard' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>📊</button>
+           <button onClick={() => onViewChange('editor')} className={`p-2 transition-all ${activeView === 'editor' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>📝</button>
+           <button onClick={() => onViewChange('chat')} className={`p-2 transition-all ${activeView === 'chat' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>💬</button>
+           <button onClick={() => onViewChange('history')} className={`p-2 transition-all ${activeView === 'history' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>🏛️</button>
         </nav>
       </main>
     </div>
