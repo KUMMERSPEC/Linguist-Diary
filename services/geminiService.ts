@@ -3,10 +3,21 @@ import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { DiaryAnalysis, ChatMessage } from "../types";
 
 /**
+ * 获取 AI 实例
+ */
+const getAiInstance = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("API key is missing. Please ensure process.env.API_KEY is configured.");
+  }
+  return new GoogleGenAI({ apiKey });
+};
+
+/**
  * 核心分析函数
  */
 export const analyzeDiaryEntry = async (text: string, language: string): Promise<DiaryAnalysis> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getAiInstance();
   const model = 'gemini-3-pro-preview';
   
   const isJapanese = language.toLowerCase() === 'japanese' || language === '日本語';
@@ -97,7 +108,7 @@ export const analyzeDiaryEntry = async (text: string, language: string): Promise
  * 文本转语音函数
  */
 export const generateDiaryAudio = async (text: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getAiInstance();
   
   // 清理日语注音标记 [汉字](假名) -> 汉字
   const cleanText = text.replace(/\[(.*?)\]\(.*?\)/g, '$1');
@@ -110,7 +121,7 @@ export const generateDiaryAudio = async (text: string): Promise<string> => {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Zephyr' }, // 优雅的叙述者声音
+            prebuiltVoiceConfig: { voiceName: 'Zephyr' }, 
           },
         },
       },
@@ -143,7 +154,7 @@ export const synthesizeDiary = async (history: ChatMessage[], language: string):
  * 启发式对话函数
  */
 export const getChatFollowUp = async (history: ChatMessage[], language: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getAiInstance();
   const model = 'gemini-3-flash-preview'; 
   const historyText = history.map(m => `${m.role}: ${m.content}`).join('\n');
   

@@ -11,22 +11,18 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry }) => 
   const [activeTab, setActiveTab] = useState<'gems' | 'flashback'>('gems');
   const [selectedLanguage, setSelectedLanguage] = useState<string>('All');
   
-  // 挑战相关状态
   const [challengeData, setChallengeData] = useState<{
     entry: DiaryEntry;
     correction: Correction;
     fullSentence: string;
-    maskedSentence: string;
   } | null>(null);
   const [showAnswer, setShowAnswer] = useState(false);
 
-  // 1. 获取所有出现的语种
   const availableLanguages = useMemo(() => {
     const langs = new Set(entries.map(e => e.language));
     return ['All', ...Array.from(langs)];
   }, [entries]);
 
-  // 2. 聚合并过滤进阶词汇
   const filteredGems = useMemo(() => {
     const gems: (AdvancedVocab & { date: string, entryId: string, language: string })[] = [];
     entries.forEach(entry => {
@@ -41,9 +37,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry }) => 
     return gems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [entries, selectedLanguage]);
 
-  // 3. 句子级挑战逻辑
   const startChallenge = () => {
-    if (entries.length === 0) return;
     const entriesWithCorrections = entries.filter(e => e.analysis && e.analysis.corrections.length > 0);
     if (entriesWithCorrections.length === 0) return;
 
@@ -51,23 +45,29 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry }) => 
     const corrections = randomEntry.analysis!.corrections;
     const randomCorrection = corrections[Math.floor(Math.random() * corrections.length)];
 
-    // 尝试在原文中定位包含该错误的完整句子
-    const sentences = randomEntry.originalText.split(/[.!?。！？\n]/);
-    const fullSentence = sentences.find(s => s.includes(randomCorrection.original)) || randomCorrection.original;
-
-    // 将错误片段替换为 ⓘ 标识符
-    const maskedSentence = fullSentence.replace(randomCorrection.original, ' ⓘ ');
+    // 句子级分割：考虑多语种标点
+    const sentences = randomEntry.originalText.split(/([.!?。！？\n])/);
+    let fullSentence = "";
+    
+    // 重组句子，定位包含错误的片段
+    for (let i = 0; i < sentences.length; i++) {
+        if (sentences[i].includes(randomCorrection.original)) {
+            // 拼接标点符号
+            fullSentence = (sentences[i] + (sentences[i+1] || "")).trim();
+            break;
+        }
+    }
+    
+    if (!fullSentence) fullSentence = randomCorrection.original;
 
     setChallengeData({
       entry: randomEntry,
       correction: randomCorrection,
-      fullSentence,
-      maskedSentence
+      fullSentence
     });
     setShowAnswer(false);
   };
 
-  // 解析并渲染注音（Ruby）
   const renderRuby = (input: string) => {
     const rubyRegex = /\[(.*?)\]\((.*?)\)/g;
     const parts = [];
@@ -103,7 +103,6 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry }) => 
         <p className="text-slate-500 text-sm">以句为鉴，在语境中重温每一次精准的表达。</p>
       </header>
 
-      {/* 模式选择 */}
       <div className="flex p-1 bg-slate-200/50 rounded-2xl w-full md:w-fit border border-slate-200">
         <button 
           onClick={() => setActiveTab('gems')}
@@ -173,26 +172,26 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry }) => 
         {activeTab === 'flashback' && (
           <div className="max-w-2xl mx-auto space-y-6 py-4">
             {challengeData ? (
-              <div className="bg-white p-8 md:p-14 rounded-[3.5rem] border-2 border-slate-100 shadow-2xl relative overflow-hidden animate-in zoom-in duration-500">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-600/5 -mr-12 -mt-12 rounded-full"></div>
-                <div className="absolute -top-4 left-10 bg-slate-900 text-white px-5 py-2 rounded-full text-[10px] font-black tracking-[0.2em] shadow-lg uppercase">
+              <div className="bg-white p-8 md:p-14 md:pt-20 rounded-[3.5rem] border-2 border-slate-100 shadow-2xl relative animate-in zoom-in duration-500">
+                {/* 修正后的标签位置 */}
+                <div className="absolute top-6 left-10 bg-slate-900 text-white px-5 py-2 rounded-full text-[10px] font-black tracking-[0.2em] shadow-lg uppercase z-20">
                    Sentence Lab • {challengeData.entry.language}
                 </div>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-600/5 -mr-12 -mt-12 rounded-full pointer-events-none"></div>
                 
-                <div className="space-y-10 relative z-10">
+                <div className="space-y-10 relative z-10 mt-4 md:mt-0">
                   <div className="space-y-6 text-center">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">这段表达在 ⓘ 处可以如何优化？</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">这段表达可以如何优化？</p>
                     
                     <div className="relative group">
                        <p className="text-2xl md:text-3xl serif-font italic text-slate-800 leading-relaxed px-4">
-                        “{challengeData.maskedSentence}”
+                        “{challengeData.fullSentence}”
                       </p>
-                      {/* 气泡提示 */}
                       {!showAnswer && (
                         <div className="mt-6 flex justify-center">
-                          <div className="inline-flex items-center space-x-2 bg-indigo-50 px-4 py-2 rounded-full border border-indigo-100">
-                            <span className="animate-pulse">💡</span>
-                            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">思考一下地道的句式...</span>
+                          <div className="inline-flex items-center space-x-2 bg-indigo-50 px-4 py-2 rounded-full border border-indigo-100 animate-bounce">
+                            <span className="">💡</span>
+                            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">回忆一下当时的修正...</span>
                           </div>
                         </div>
                       )}
@@ -212,8 +211,8 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry }) => 
                     <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-700">
                       <div className="grid grid-cols-1 gap-4">
                         <div className="p-6 bg-red-50/50 rounded-3xl border border-red-100/50">
-                          <p className="text-[10px] font-black text-red-300 uppercase mb-2">原始片段 (Original)</p>
-                          <p className="text-lg serif-font text-red-700 italic line-through decoration-red-300/50">
+                          <p className="text-[10px] font-black text-red-300 uppercase mb-2">待优化的片段 (Original)</p>
+                          <p className="text-lg serif-font text-red-700 italic">
                             {challengeData.correction.original}
                           </p>
                         </div>

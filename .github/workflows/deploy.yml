@@ -30,8 +30,8 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          VITE_GEMINI_API_KEY: ${{ secrets.API_KEY }}
-          VITE_GOOGLE_API_KEY: ${{ secrets.API_KEY }}
+          # 核心修正：对应你截图中的 GOOGLE_API_KEY
+          API_KEY: ${{ secrets.GOOGLE_API_KEY }}
       - name: Setup Pages
         uses: actions/configure-pages@v4
       - name: Upload artifact
