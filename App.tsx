@@ -11,9 +11,9 @@ import ReviewVault from './components/ReviewVault';
 import { ViewState, DiaryEntry, ChatMessage } from './types';
 import { analyzeDiaryEntry, synthesizeDiary } from './services/geminiService';
 
-// Firebase 初始化
+// Firebase
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, onSnapshot, query, where, doc, deleteDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, onSnapshot, query, where, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -32,9 +32,7 @@ try {
   const app = initializeApp(firebaseConfig);
   db = getFirestore(app);
   auth = getAuth(app);
-} catch (e) {
-  console.warn("Firebase Init Failed", e);
-}
+} catch (e) { console.warn("Firebase Init Failed", e); }
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -45,28 +43,18 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState('正在镌刻记忆...');
 
-  // 1. 认证状态监听
   useEffect(() => {
     if (!auth) { setAuthChecking(false); return; }
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setAuthChecking(false);
-    });
-    return () => unsubscribe();
+    return onAuthStateChanged(auth, (u) => { setUser(u); setAuthChecking(false); });
   }, []);
 
-  // 2. 数据同步
   useEffect(() => {
     if (db && user) {
       const q = query(collection(db, "entries"), where("userId", "==", user.uid));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
+      return onSnapshot(q, (snapshot) => {
         const cloudEntries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as DiaryEntry[];
-        const sortedEntries = cloudEntries.sort((a, b) => b.timestamp - a.timestamp);
-        setEntries(sortedEntries);
-      }, (err) => {
-        console.error("Firestore 同步错误:", err);
+        setEntries(cloudEntries.sort((a, b) => b.timestamp - a.timestamp));
       });
-      return () => unsubscribe();
     }
   }, [user]);
 
@@ -76,41 +64,22 @@ const App: React.FC = () => {
     try {
       const analysis = await analyzeDiaryEntry(text, language);
       const now = new Date();
-      const newEntry: DiaryEntry = {
+      setCurrentEntry({
         id: Date.now().toString(),
         timestamp: Date.now(),
         date: now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
         originalText: text,
         language,
         analysis
-      };
-      setCurrentEntry(newEntry);
+      });
       setView('review');
-    } catch (error: any) {
-      console.error(error);
-      alert(`⚠️ 分析失败：${error.message || 'Unknown error'}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleFinishChat = async (transcript: ChatMessage[], language: string) => {
-    setIsLoading(true);
-    setLoadingText('正在将对话片段整理成册...');
-    try {
-      const synthesizedText = await synthesizeDiary(transcript, language);
-      if (synthesizedText === "Synthesis failed.") throw new Error("对话整理失败");
-      await handleAnalyze(synthesizedText, language);
-    } catch (error: any) {
-      alert("对话整理失败：" + error.message);
-      setIsLoading(false);
-    }
+    } catch (error: any) { alert(`⚠️ 分析失败：${error.message}`); }
+    finally { setIsLoading(false); }
   };
 
   const handleSave = async () => {
     if (currentEntry && user && db) {
       setIsLoading(true);
-      setLoadingText('正在存入云端博物馆...');
       try {
         await addDoc(collection(db, "entries"), {
           userId: user.uid,
@@ -122,31 +91,43 @@ const App: React.FC = () => {
         });
         setView('history');
         setCurrentEntry(null);
-      } catch (e: any) {
-        alert("保存失败！");
-      } finally {
-        setIsLoading(false);
-      }
+      } catch (e) { alert("保存失败！"); }
+      finally { setIsLoading(false); }
     }
   };
 
   const handleDelete = async (entryId: string) => {
     if (!db || !user) return;
-    if (window.confirm("确定要永久销毁这件馆藏吗？此操作无法撤销。")) {
+    if (window.confirm("确定要销毁这件馆藏吗？")) {
       setIsLoading(true);
-      setLoadingText('正在从时间线上抹除...');
       try {
         await deleteDoc(doc(db, "entries", entryId));
-        if (currentEntry?.id === entryId) {
-          setCurrentEntry(null);
-          setView('history');
-        }
-      } catch (e) {
-        console.error("Delete error:", e);
-        alert("删除失败，请重试。");
-      } finally {
-        setIsLoading(false);
-      }
+        if (currentEntry?.id === entryId) { setCurrentEntry(null); setView('history'); }
+      } catch (e) { alert("删除失败"); }
+      finally { setIsLoading(false); }
+    }
+  };
+
+  /**
+   * 更新词汇熟练度
+   */
+  const handleUpdateMastery = async (entryId: string, word: string, newMastery: number) => {
+    if (!db || !user) return;
+    const entry = entries.find(e => e.id === entryId);
+    if (!entry || !entry.analysis) return;
+
+    // 局部更新数组
+    const updatedVocab = entry.analysis.advancedVocab.map(v => 
+      v.word === word ? { ...v, mastery: newMastery } : v
+    );
+
+    try {
+      const entryRef = doc(db, "entries", entryId);
+      await updateDoc(entryRef, {
+        "analysis.advancedVocab": updatedVocab
+      });
+    } catch (e) {
+      console.error("Mastery update failed", e);
     }
   };
 
@@ -157,25 +138,23 @@ const App: React.FC = () => {
     <Layout activeView={view} onViewChange={setView} user={user} auth={auth}>
       {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} entries={entries} />}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} isLoading={isLoading} />}
-      {view === 'chat' && <ChatEditor onFinish={handleFinishChat} />}
+      {view === 'chat' && <ChatEditor onFinish={async (t, l) => {
+        setIsLoading(true);
+        const text = await synthesizeDiary(t, l);
+        await handleAnalyze(text, l);
+      }} />}
       {view === 'review' && currentEntry && <Review entry={currentEntry} onSave={handleSave} onDelete={handleDelete} />}
       {view === 'history' && <History entries={entries} onSelect={(e) => { setCurrentEntry(e); setView('review'); }} onDelete={handleDelete} />}
-      {view === 'review_vault' && <ReviewVault entries={entries} onReviewEntry={(e) => { setCurrentEntry(e); setView('review'); }} />}
+      {view === 'review_vault' && <ReviewVault entries={entries} onReviewEntry={(e) => { setCurrentEntry(e); setView('review'); }} onUpdateMastery={handleUpdateMastery} />}
       
       {isLoading && (
         <div className="fixed inset-0 bg-white/80 backdrop-blur-xl z-[100] flex flex-col items-center justify-center space-y-10 animate-in fade-in duration-500">
-          <div className="relative">
-             <div className="absolute inset-0 bg-indigo-500/20 blur-[60px] rounded-full scale-150 animate-pulse"></div>
-             <div className="relative w-24 h-24">
-                <div className="absolute inset-0 border-[6px] border-indigo-100 rounded-full"></div>
-                <div className="absolute inset-0 border-[6px] border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-             </div>
-             <div className="absolute inset-0 flex items-center justify-center text-3xl">🖋️</div>
+          <div className="relative w-24 h-24">
+            <div className="absolute inset-0 border-[6px] border-indigo-100 rounded-full"></div>
+            <div className="absolute inset-0 border-[6px] border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+            <div className="absolute inset-0 flex items-center justify-center text-3xl">🖋️</div>
           </div>
-          <div className="text-center space-y-3 px-6">
-            <p className="text-2xl font-bold text-slate-800 serif-font tracking-tight">{loadingText}</p>
-            <p className="text-slate-400 text-sm font-medium animate-pulse">AI 正在进行跨时空的重塑...</p>
-          </div>
+          <p className="text-2xl font-bold text-slate-800 serif-font">{loadingText}</p>
         </div>
       )}
     </Layout>

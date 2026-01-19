@@ -11,6 +11,7 @@ export interface AdvancedVocab {
   meaning: string;
   usage: string;
   level: 'Intermediate' | 'Advanced' | 'Native';
+  mastery?: number; // 熟练度：0-3
 }
 
 export interface TransitionSuggestion {
