@@ -12,7 +12,7 @@ import { analyzeDiaryEntry, synthesizeDiary } from './services/geminiService';
 
 // Firebase 初始化
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, onSnapshot, query, where } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, onSnapshot, query, where, doc, deleteDoc } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -55,15 +55,13 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (db && user) {
-      // 核心改动：移除 orderBy 以避免“需要索引 (Requires Index)”报错
       const q = query(collection(db, "entries"), where("userId", "==", user.uid));
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const cloudEntries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as DiaryEntry[];
-        // 在前端进行排序：按时间戳倒序
         const sortedEntries = cloudEntries.sort((a, b) => b.timestamp - a.timestamp);
         setEntries(sortedEntries);
       }, (err) => {
-        console.error("Firestore 同步错误 (请检查数据库 Rules 设置):", err);
+        console.error("Firestore 同步错误:", err);
       });
       return () => unsubscribe();
     }
@@ -87,7 +85,7 @@ const App: React.FC = () => {
       setView('review');
     } catch (error: any) {
       console.error(error);
-      alert(`⚠️ 分析失败：\n${error.message}\n\n请确保已在设置中正确配置 API_KEY。`);
+      alert(`⚠️ 分析失败：${error.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -122,8 +120,27 @@ const App: React.FC = () => {
         setView('history');
         setCurrentEntry(null);
       } catch (e: any) {
-        console.error("Save Error:", e);
-        alert(`保存失败！可能是权限不足。\n请确保 Firebase Rules 已设为: allow read, write: if request.auth != null;`);
+        alert("保存失败！");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
+  const handleDelete = async (entryId: string) => {
+    if (!db || !user) return;
+    if (window.confirm("确定要永久销毁这件馆藏吗？此操作无法撤销。")) {
+      setIsLoading(true);
+      setLoadingText('正在从时间线上抹除...');
+      try {
+        await deleteDoc(doc(db, "entries", entryId));
+        if (currentEntry?.id === entryId) {
+          setCurrentEntry(null);
+          setView('history');
+        }
+      } catch (e) {
+        console.error("Delete error:", e);
+        alert("删除失败，请重试。");
       } finally {
         setIsLoading(false);
       }
@@ -138,8 +155,8 @@ const App: React.FC = () => {
       {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} entries={entries} />}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} isLoading={isLoading} />}
       {view === 'chat' && <ChatEditor onFinish={handleFinishChat} />}
-      {view === 'review' && currentEntry && <Review entry={currentEntry} onSave={handleSave} />}
-      {view === 'history' && <History entries={entries} onSelect={(e) => { setCurrentEntry(e); setView('review'); }} />}
+      {view === 'review' && currentEntry && <Review entry={currentEntry} onSave={handleSave} onDelete={handleDelete} />}
+      {view === 'history' && <History entries={entries} onSelect={(e) => { setCurrentEntry(e); setView('review'); }} onDelete={handleDelete} />}
       
       {isLoading && (
         <div className="fixed inset-0 bg-white/80 backdrop-blur-xl z-[100] flex flex-col items-center justify-center space-y-10 animate-in fade-in duration-500">
@@ -151,12 +168,9 @@ const App: React.FC = () => {
              </div>
              <div className="absolute inset-0 flex items-center justify-center text-3xl">🖋️</div>
           </div>
-          <div className="text-center space-y-3">
+          <div className="text-center space-y-3 px-6">
             <p className="text-2xl font-bold text-slate-800 serif-font tracking-tight">{loadingText}</p>
-            <p className="text-slate-400 text-sm font-medium animate-pulse">AI 正在进行跨时空的语法重塑...</p>
-          </div>
-          <div className="w-64 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-             <div className="h-full bg-indigo-600 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+            <p className="text-slate-400 text-sm font-medium animate-pulse">AI 正在进行跨时空的重塑...</p>
           </div>
         </div>
       )}

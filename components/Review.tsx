@@ -5,13 +5,18 @@ import { DiaryAnalysis, DiaryEntry } from '../types';
 interface ReviewProps {
   entry: DiaryEntry;
   onSave: () => void;
+  onDelete: (id: string) => void;
 }
 
-const Review: React.FC<ReviewProps> = ({ entry, onSave }) => {
+const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
   const [activeTab, setActiveTab] = useState<'text' | 'corrections' | 'vocab'>('text');
   
   if (!entry.analysis) return null;
   const { analysis } = entry;
+
+  // 这里的 entry.id 如果包含字母或较长，说明是 Firestore 生成的 doc ID
+  // 如果是纯数字 Date.now() 生成的，说明是分析阶段尚未保存到 Firestore
+  const isSaved = entry.id.length > 15; 
 
   const renderDiffedText = (text: string) => {
     const parts = text.split(/(<rem>.*?<\/rem>|<add>.*?<\/add>)/g);
@@ -40,21 +45,35 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave }) => {
   };
 
   return (
-    <div className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-500 pb-10">
+    <div className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-500 pb-20">
       <header className="flex items-center justify-between gap-2 shrink-0">
         <div className="min-w-0">
           <h2 className="text-lg md:text-3xl font-bold text-slate-900 serif-font truncate">评估报告</h2>
           <p className="text-[10px] md:text-sm text-slate-500 truncate mt-0.5">记录生命力的精雕细琢。</p>
         </div>
-        <button 
-          onClick={onSave}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs md:text-base font-bold shadow-md transition-all active:scale-95 flex-shrink-0"
-        >
-          🏛️ 存入博物馆
-        </button>
+        
+        <div className="flex items-center space-x-2 shrink-0">
+          {isSaved && (
+            <button 
+              onClick={() => onDelete(entry.id)}
+              className="bg-white border-2 border-slate-100 text-slate-400 hover:text-red-500 hover:border-red-100 p-2.5 md:px-4 rounded-xl text-xs md:text-base font-bold transition-all active:scale-95 flex items-center space-x-1"
+            >
+              <span>🗑️</span>
+              <span className="hidden md:inline">销毁记录</span>
+            </button>
+          )}
+          
+          {!isSaved && (
+            <button 
+              onClick={onSave}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs md:text-base font-bold shadow-md transition-all active:scale-95 flex-shrink-0"
+            >
+              🏛️ 存入博物馆
+            </button>
+          )}
+        </div>
       </header>
 
-      {/* Tab Switcher: Reduced size */}
       <div className="flex space-x-1 bg-slate-200/40 p-1 rounded-xl w-full md:w-fit border border-slate-200/50">
         {[
           { id: 'text', label: '修订', icon: '🖋️' },
@@ -111,7 +130,6 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave }) => {
           </div>
         )}
         
-        {/* ... (Corrections and Vocab sections already fit reasonably well as they use grid/scroll) ... */}
         {activeTab === 'corrections' && (
           <div className="grid grid-cols-1 gap-3">
             {analysis.corrections.map((corr, idx) => (

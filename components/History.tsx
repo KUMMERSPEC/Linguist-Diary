@@ -5,12 +5,12 @@ import { DiaryEntry } from '../types';
 interface HistoryProps {
   entries: DiaryEntry[];
   onSelect: (entry: DiaryEntry) => void;
+  onDelete: (id: string) => void;
 }
 
-const History: React.FC<HistoryProps> = ({ entries, onSelect }) => {
+const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 1. Filter entries based on search query
   const filteredEntries = useMemo(() => {
     return entries.filter(e => 
       e.originalText.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -19,7 +19,6 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect }) => {
     ).sort((a, b) => b.timestamp - a.timestamp);
   }, [entries, searchQuery]);
 
-  // 2. Group entries by Month Year
   const groupedEntries = useMemo(() => {
     const groups: { [key: string]: DiaryEntry[] } = {};
     filteredEntries.forEach(entry => {
@@ -44,14 +43,13 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect }) => {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">日记收藏馆</h2>
           <p className="text-slate-500">按时间线浏览您的成长轨迹。</p>
         </div>
         
-        {/* Search Bar */}
         <div className="relative group">
           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">🔍</span>
           <input 
@@ -70,7 +68,6 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect }) => {
         </div>
       ) : (
         <div className="space-y-12">
-          {/* Fix: Cast Object.entries to ensure monthEntries is correctly typed as DiaryEntry[] instead of unknown */}
           {(Object.entries(groupedEntries) as [string, DiaryEntry[]][]).map(([monthYear, monthEntries]) => (
             <section key={monthYear} className="space-y-6">
               <div className="flex items-center space-x-4">
@@ -86,10 +83,23 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect }) => {
                     onClick={() => onSelect(entry)}
                     className="group relative text-left bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-indigo-200 transition-all duration-300"
                   >
-                    {/* Floating Date Tag */}
                     <div className="absolute -top-3 left-6 px-3 py-1 bg-indigo-600 text-white text-[10px] font-bold rounded-lg shadow-lg shadow-indigo-100">
                       {new Date(entry.timestamp).getDate()}日
                     </div>
+
+                    {/* Delete Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(entry.id);
+                      }}
+                      className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-300 hover:bg-red-50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all active:scale-90"
+                      title="删除此条目"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
 
                     <div className="flex items-center justify-between mb-4 mt-2">
                       <div className="flex items-center space-x-2">
