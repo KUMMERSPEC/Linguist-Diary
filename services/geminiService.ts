@@ -4,12 +4,17 @@ import { DiaryAnalysis, ChatMessage } from "../types";
 
 /**
  * 核心分析函数
- * 输入：可能是单篇日记，也可能是由聊天产生的多个原文片段
  */
 export const analyzeDiaryEntry = async (text: string, language: string): Promise<DiaryAnalysis> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = 'gemini-3-pro-preview';
   
+  // 日语注音特定指令
+  const isJapanese = language.toLowerCase() === 'japanese' || language === '日本語';
+  const japaneseInstruction = isJapanese 
+    ? "IMPORTANT for Japanese: For BOTH 'modifiedText' and 'diffedText', provide Furigana for ALL Kanji using the syntax '[Kanji](furigana)'. For example: '[先生](せんせい)'. Ensure the reading is contextually correct."
+    : "";
+
   try {
     const response = await ai.models.generateContent({
       model,
@@ -17,11 +22,12 @@ export const analyzeDiaryEntry = async (text: string, language: string): Promise
       Input: A raw diary entry or a collection of raw thoughts in ${language}.
       
       Tasks:
-      1. CRITICAL: Correct the text for grammar and naturalness. Use <rem>text</rem> for original errors and <add>text</add> for improvements. You MUST respect the user's original phrasing while fixing errors.
+      1. CRITICAL: Correct the text for grammar and naturalness. Use <rem>text</rem> for original errors and <add>text</add> for improvements. Respect the user's original phrasing while fixing errors.
       2. LOGIC & TRANSITIONS: Suggest 3-5 specific transition words or phrases (in ${language}) that could help connect these potentially fragmented thoughts into a cohesive narrative.
-      3. INTEGRATED MASTERPIECE: Produce a final, polished, and cohesive diary entry (as 'modifiedText') that incorporates all corrected fragments and appropriate transition logic to make it read like a professional essay/diary.
+      3. INTEGRATED MASTERPIECE: Produce a final, polished, and cohesive diary entry (as 'modifiedText') that incorporates all corrected fragments and appropriate transition logic.
       4. EXPLAIN: Categorize corrections and provide explanations in Chinese.
       5. VOCABULARY: Suggest 3-5 advanced vocabulary items.
+      ${japaneseInstruction}
       
       Input text:
       "${text}"`,
@@ -30,9 +36,9 @@ export const analyzeDiaryEntry = async (text: string, language: string): Promise
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            modifiedText: { type: Type.STRING, description: "The final, integrated, and cohesive diary entry." },
-            diffedText: { type: Type.STRING, description: "The corrected original text with <rem> and <add> tags." },
-            overallFeedback: { type: Type.STRING, description: "General summary of the writing style and logical improvements." },
+            modifiedText: { type: Type.STRING },
+            diffedText: { type: Type.STRING },
+            overallFeedback: { type: Type.STRING },
             corrections: {
               type: Type.ARRAY,
               items: {
@@ -64,9 +70,9 @@ export const analyzeDiaryEntry = async (text: string, language: string): Promise
               items: {
                 type: Type.OBJECT,
                 properties: {
-                  word: { type: Type.STRING, description: "The transition word/phrase in the target language" },
-                  explanation: { type: Type.STRING, description: "How this helps the logic of the entry, in Chinese" },
-                  example: { type: Type.STRING, description: "A sentence showing how to bridge two user ideas" }
+                  word: { type: Type.STRING },
+                  explanation: { type: Type.STRING },
+                  example: { type: Type.STRING }
                 },
                 required: ["word", "explanation", "example"]
               }
@@ -89,8 +95,7 @@ export const analyzeDiaryEntry = async (text: string, language: string): Promise
 };
 
 /**
- * 综合对话生成日记 - 纯原文提取逻辑
- * 不再调用 AI，确保 100% 保留用户在对话中的原始输入
+ * 综合对话生成日记
  */
 export const synthesizeDiary = async (history: ChatMessage[], language: string): Promise<string> => {
   const userMessages = history
@@ -99,9 +104,6 @@ export const synthesizeDiary = async (history: ChatMessage[], language: string):
     .filter(content => content.length > 0);
   
   if (userMessages.length === 0) return "Synthesis failed.";
-  
-  // 将用户的所有回复按顺序用双换行符连接
-  // 这种“手稿片段”格式会被 analyzeDiaryEntry 识别并进行精准的 diff 纠错和衔接建议
   return userMessages.join('\n\n');
 };
 
