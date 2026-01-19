@@ -45,14 +45,12 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry }) => 
     const corrections = randomEntry.analysis!.corrections;
     const randomCorrection = corrections[Math.floor(Math.random() * corrections.length)];
 
-    // 句子级分割：考虑多语种标点
+    // 寻找包含该错误的完整句子
     const sentences = randomEntry.originalText.split(/([.!?。！？\n])/);
     let fullSentence = "";
     
-    // 重组句子，定位包含错误的片段
     for (let i = 0; i < sentences.length; i++) {
         if (sentences[i].includes(randomCorrection.original)) {
-            // 拼接标点符号
             fullSentence = (sentences[i] + (sentences[i+1] || "")).trim();
             break;
         }
@@ -172,14 +170,15 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry }) => 
         {activeTab === 'flashback' && (
           <div className="max-w-2xl mx-auto space-y-6 py-4">
             {challengeData ? (
-              <div className="bg-white p-8 md:p-14 md:pt-20 rounded-[3.5rem] border-2 border-slate-100 shadow-2xl relative animate-in zoom-in duration-500">
-                {/* 修正后的标签位置 */}
-                <div className="absolute top-6 left-10 bg-slate-900 text-white px-5 py-2 rounded-full text-[10px] font-black tracking-[0.2em] shadow-lg uppercase z-20">
+              <div className="bg-white p-8 md:p-14 md:pt-24 rounded-[3.5rem] border-2 border-slate-100 shadow-2xl relative animate-in zoom-in duration-500">
+                {/* 黑色标签修正：通过绝对定位和 z-index 确保显示 */}
+                <div className="absolute top-8 left-10 bg-slate-900 text-white px-5 py-2 rounded-full text-[10px] font-black tracking-[0.2em] shadow-lg uppercase z-30">
                    Sentence Lab • {challengeData.entry.language}
                 </div>
+                
                 <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-600/5 -mr-12 -mt-12 rounded-full pointer-events-none"></div>
                 
-                <div className="space-y-10 relative z-10 mt-4 md:mt-0">
+                <div className="space-y-10 relative z-10">
                   <div className="space-y-6 text-center">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">这段表达可以如何优化？</p>
                     
@@ -188,10 +187,10 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry }) => 
                         “{challengeData.fullSentence}”
                       </p>
                       {!showAnswer && (
-                        <div className="mt-6 flex justify-center">
-                          <div className="inline-flex items-center space-x-2 bg-indigo-50 px-4 py-2 rounded-full border border-indigo-100 animate-bounce">
+                        <div className="mt-8 flex justify-center">
+                          <div className="inline-flex items-center space-x-2 bg-indigo-50 px-5 py-2.5 rounded-full border border-indigo-100 animate-bounce">
                             <span className="">💡</span>
-                            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">回忆一下当时的修正...</span>
+                            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">思考更好的词汇或句法...</span>
                           </div>
                         </div>
                       )}
@@ -211,13 +210,13 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry }) => 
                     <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-700">
                       <div className="grid grid-cols-1 gap-4">
                         <div className="p-6 bg-red-50/50 rounded-3xl border border-red-100/50">
-                          <p className="text-[10px] font-black text-red-300 uppercase mb-2">待优化的片段 (Original)</p>
+                          <p className="text-[10px] font-black text-red-300 uppercase mb-2">您的表达片段 (Original)</p>
                           <p className="text-lg serif-font text-red-700 italic">
                             {challengeData.correction.original}
                           </p>
                         </div>
                         <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100">
-                          <p className="text-[10px] font-black text-emerald-400 uppercase mb-2">进阶表达 (Refined)</p>
+                          <p className="text-[10px] font-black text-emerald-400 uppercase mb-2">进阶地道表达 (Refined)</p>
                           <p className="text-xl md:text-2xl serif-font font-bold text-slate-900">
                             {renderRuby(challengeData.correction.improved)}
                           </p>
