@@ -57,7 +57,7 @@
 </head>
 <body>
     <div id="root"></div>
-    <!-- 指向源码入口，Vite 在 build 时会自动将其替换为打包后的 js 文件路径 -->
-    <script type="module" src="/index.tsx"></script>
+    <!-- 使用相对路径引用入口文件，确保 Vite 打包正确 -->
+    <script type="module" src="./index.tsx"></script>
 </body>
 </html>

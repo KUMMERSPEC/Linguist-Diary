@@ -4,23 +4,23 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  // 必须设置为 './'，这样打包后的 index.html 才会以相对路径引用 JS 和 CSS
+  // 必须设置为 './'，确保打包后的静态资源引用路径正确
   base: './',
   define: {
+    // 注入 API_KEY 环境变量
     'process.env.API_KEY': JSON.stringify(process.env.API_KEY || '')
   },
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
-    // 确保 CSS 不会被内联到 JS 中，方便调试 404 问题
-    cssCodeSplit: true,
     sourcemap: false,
+    emptyOutDir: true,
     rollupOptions: {
       output: {
-        // 固定命名结构，减少部署时的缓存或路径混乱
-        chunkFileNames: 'assets/js/[name]-[hash].js',
-        entryFileNames: 'assets/js/[name]-[hash].js',
-        assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
+        // 使用标准的命名约定，减少构建错误
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
       },
     },
   },

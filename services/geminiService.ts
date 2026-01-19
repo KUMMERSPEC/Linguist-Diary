@@ -3,8 +3,13 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { DiaryAnalysis, ChatMessage } from "../types";
 
 // 辅助函数：从环境变量中获取 API Key
+// Vite 会在构建时根据 vite.config.ts 中的 define 替换此变量
 const getApiKey = () => {
-  return process.env.API_KEY || "";
+  try {
+    return process.env.API_KEY || "";
+  } catch (e) {
+    return "";
+  }
 };
 
 /**
@@ -12,6 +17,9 @@ const getApiKey = () => {
  */
 export const analyzeDiaryEntry = async (text: string, language: string): Promise<DiaryAnalysis> => {
   const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new Error("API Key is missing. Please check your configuration.");
+  }
   const ai = new GoogleGenAI({ apiKey });
   // 统一使用 Flash 模型以确保最高兼容性和速度
   const model = 'gemini-3-flash-preview';
