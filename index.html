@@ -18,6 +18,14 @@
         .serif-font {
             font-family: 'Playfair Display', serif;
         }
+        /* 隐藏滚动条但保留滚动功能 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
         ::-webkit-scrollbar {
             width: 6px;
         }
