@@ -15,11 +15,12 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry }) => 
   const [challengeData, setChallengeData] = useState<{
     entry: DiaryEntry;
     correction: Correction;
+    fullSentence: string;
+    maskedSentence: string;
   } | null>(null);
   const [showAnswer, setShowAnswer] = useState(false);
-  const [showFullContext, setShowFullContext] = useState(false);
 
-  // 1. 获取所有出现的语种用于过滤
+  // 1. 获取所有出现的语种
   const availableLanguages = useMemo(() => {
     const langs = new Set(entries.map(e => e.language));
     return ['All', ...Array.from(langs)];
@@ -40,7 +41,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry }) => 
     return gems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [entries, selectedLanguage]);
 
-  // 3. 碎片化挑战逻辑：抽取一个具体的修正点
+  // 3. 句子级挑战逻辑
   const startChallenge = () => {
     if (entries.length === 0) return;
     const entriesWithCorrections = entries.filter(e => e.analysis && e.analysis.corrections.length > 0);
@@ -50,15 +51,23 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry }) => 
     const corrections = randomEntry.analysis!.corrections;
     const randomCorrection = corrections[Math.floor(Math.random() * corrections.length)];
 
+    // 尝试在原文中定位包含该错误的完整句子
+    const sentences = randomEntry.originalText.split(/[.!?。！？\n]/);
+    const fullSentence = sentences.find(s => s.includes(randomCorrection.original)) || randomCorrection.original;
+
+    // 将错误片段替换为 ⓘ 标识符
+    const maskedSentence = fullSentence.replace(randomCorrection.original, ' ⓘ ');
+
     setChallengeData({
       entry: randomEntry,
-      correction: randomCorrection
+      correction: randomCorrection,
+      fullSentence,
+      maskedSentence
     });
     setShowAnswer(false);
-    setShowFullContext(false);
   };
 
-  // 解析并渲染注音（Ruby）适配函数
+  // 解析并渲染注音（Ruby）
   const renderRuby = (input: string) => {
     const rubyRegex = /\[(.*?)\]\((.*?)\)/g;
     const parts = [];
@@ -91,7 +100,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry }) => 
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       <header className="space-y-1">
         <h2 className="text-2xl md:text-3xl font-bold text-slate-900 serif-font">珍宝复习馆</h2>
-        <p className="text-slate-500 text-sm">碎片化复习，让每一个修正过的细节都化为肌肉记忆。</p>
+        <p className="text-slate-500 text-sm">以句为鉴，在语境中重温每一次精准的表达。</p>
       </header>
 
       {/* 模式选择 */}
@@ -106,14 +115,13 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry }) => 
           onClick={() => { setActiveTab('flashback'); if(!challengeData) startChallenge(); }}
           className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'flashback' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
         >
-          ⏳ 碎片挑战模式
+          ⏳ 句子挑战
         </button>
       </div>
 
       <div className="mt-4">
         {activeTab === 'gems' && (
           <div className="space-y-6">
-            {/* 语种过滤器 */}
             <div className="flex items-center space-x-2 overflow-x-auto no-scrollbar pb-2">
               {availableLanguages.map(lang => (
                 <button
@@ -159,92 +167,92 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry }) => 
                 </div>
               ))}
             </div>
-            {filteredGems.length === 0 && <p className="text-center py-20 text-slate-400 italic">该语种下尚未收集到词汇...</p>}
           </div>
         )}
 
         {activeTab === 'flashback' && (
-          <div className="max-w-2xl mx-auto space-y-8 py-4">
+          <div className="max-w-2xl mx-auto space-y-6 py-4">
             {challengeData ? (
-              <div className="space-y-6">
-                <div className="bg-white p-8 md:p-12 rounded-[3.5rem] border-2 border-slate-100 shadow-xl relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-600/5 -mr-8 -mt-8 rounded-full"></div>
-                  <div className="absolute -top-4 left-10 bg-indigo-600 text-white px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest shadow-lg uppercase">
-                    Challenge: {challengeData.entry.language}
-                  </div>
-                  
-                  <div className="space-y-8 relative z-10">
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">待优化片段 (Original)</h4>
-                        <span className="text-[9px] bg-red-50 text-red-500 px-2 py-0.5 rounded-md font-bold uppercase">{challengeData.correction.category}</span>
-                      </div>
-                      <p className="text-xl md:text-3xl serif-font italic text-slate-700 leading-relaxed bg-slate-50/50 p-6 rounded-3xl border border-slate-100">
-                        “{challengeData.correction.original}”
+              <div className="bg-white p-8 md:p-14 rounded-[3.5rem] border-2 border-slate-100 shadow-2xl relative overflow-hidden animate-in zoom-in duration-500">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-600/5 -mr-12 -mt-12 rounded-full"></div>
+                <div className="absolute -top-4 left-10 bg-slate-900 text-white px-5 py-2 rounded-full text-[10px] font-black tracking-[0.2em] shadow-lg uppercase">
+                   Sentence Lab • {challengeData.entry.language}
+                </div>
+                
+                <div className="space-y-10 relative z-10">
+                  <div className="space-y-6 text-center">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">这段表达在 ⓘ 处可以如何优化？</p>
+                    
+                    <div className="relative group">
+                       <p className="text-2xl md:text-3xl serif-font italic text-slate-800 leading-relaxed px-4">
+                        “{challengeData.maskedSentence}”
                       </p>
-                    </div>
-
-                    {!showAnswer ? (
-                      <div className="pt-4 space-y-4">
-                        <div className="flex flex-col items-center space-y-4">
-                          <p className="text-sm text-slate-500 font-medium">你能回想起教授建议的“更地道”表达吗？</p>
-                          <button 
-                            onClick={() => setShowAnswer(true)}
-                            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-indigo-100 active:scale-95 transition-all"
-                          >
-                            🔮 揭晓地道表达
-                          </button>
-                          <button 
-                            onClick={() => setShowFullContext(!showFullContext)}
-                            className="text-[10px] font-bold text-slate-400 hover:text-indigo-500 transition-colors"
-                          >
-                            {showFullContext ? '🔼 隐藏上下文' : '🔽 查看日记原文背景'}
-                          </button>
-                        </div>
-                        
-                        {showFullContext && (
-                          <div className="mt-4 p-5 bg-slate-50 rounded-2xl border border-slate-100 animate-in fade-in slide-in-from-top-2">
-                             <p className="text-xs text-slate-400 font-bold uppercase mb-2">Full Context:</p>
-                             <p className="text-sm text-slate-600 italic leading-relaxed">...{challengeData.entry.originalText}...</p>
+                      {/* 气泡提示 */}
+                      {!showAnswer && (
+                        <div className="mt-6 flex justify-center">
+                          <div className="inline-flex items-center space-x-2 bg-indigo-50 px-4 py-2 rounded-full border border-indigo-100">
+                            <span className="animate-pulse">💡</span>
+                            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">思考一下地道的句式...</span>
                           </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="pt-8 border-t-2 border-dashed border-indigo-100 animate-in fade-in zoom-in duration-500 space-y-6">
-                         <div>
-                          <h4 className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-4">地道表达 (Masterpiece Fragment)</h4>
-                          <p className="text-xl md:text-3xl serif-font font-bold text-indigo-900 leading-relaxed">
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {!showAnswer ? (
+                    <div className="pt-6">
+                      <button 
+                        onClick={() => setShowAnswer(true)}
+                        className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm shadow-xl shadow-indigo-200 active:scale-95 hover:bg-indigo-700 transition-all flex items-center justify-center space-x-3"
+                      >
+                        <span>🔮 揭晓馆长建议</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-700">
+                      <div className="grid grid-cols-1 gap-4">
+                        <div className="p-6 bg-red-50/50 rounded-3xl border border-red-100/50">
+                          <p className="text-[10px] font-black text-red-300 uppercase mb-2">原始片段 (Original)</p>
+                          <p className="text-lg serif-font text-red-700 italic line-through decoration-red-300/50">
+                            {challengeData.correction.original}
+                          </p>
+                        </div>
+                        <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100">
+                          <p className="text-[10px] font-black text-emerald-400 uppercase mb-2">进阶表达 (Refined)</p>
+                          <p className="text-xl md:text-2xl serif-font font-bold text-slate-900">
                             {renderRuby(challengeData.correction.improved)}
                           </p>
                         </div>
-
-                        <div className="bg-indigo-50/50 p-6 rounded-3xl border border-indigo-100">
-                           <p className="text-[10px] font-black text-indigo-300 uppercase mb-2">Professor's Advice</p>
-                           <p className="text-sm text-indigo-700 leading-relaxed font-medium">{challengeData.correction.explanation}</p>
-                        </div>
-
-                        <div className="flex flex-col md:flex-row gap-3 pt-4">
-                          <button 
-                            onClick={startChallenge}
-                            className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-bold text-sm hover:bg-slate-800 transition-colors shadow-lg"
-                          >
-                            🔄 下一个碎片
-                          </button>
-                          <button 
-                            onClick={() => onReviewEntry(challengeData.entry)}
-                            className="flex-1 py-4 border-2 border-slate-200 text-slate-600 rounded-2xl font-bold text-sm hover:border-indigo-200 hover:text-indigo-600 transition-all"
-                          >
-                            🧐 回看全篇批注
-                          </button>
-                        </div>
                       </div>
-                    )}
-                  </div>
+
+                      <div className="bg-indigo-50/30 p-8 rounded-[2.5rem] border border-indigo-100 relative">
+                         <div className="absolute -top-3 left-8 bg-indigo-600 text-white px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest">Professor's Insight</div>
+                         <p className="text-sm md:text-base text-indigo-900 leading-relaxed serif-font italic">
+                           “{challengeData.correction.explanation}”
+                         </p>
+                      </div>
+
+                      <div className="flex flex-col md:flex-row gap-4 pt-4">
+                        <button 
+                          onClick={startChallenge}
+                          className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-bold text-xs hover:bg-slate-800 transition-colors shadow-lg flex items-center justify-center space-x-2"
+                        >
+                          <span>🔄 下一个挑战</span>
+                        </button>
+                        <button 
+                          onClick={() => onReviewEntry(challengeData.entry)}
+                          className="flex-1 py-4 border-2 border-slate-200 text-slate-500 rounded-2xl font-bold text-xs hover:border-indigo-300 hover:text-indigo-600 transition-all flex items-center justify-center space-x-2"
+                        >
+                          <span>📖 回看完整日记</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
-              <div className="text-center py-20">
-                <button onClick={startChallenge} className="text-indigo-600 font-bold underline">开启挑战</button>
+              <div className="text-center py-20 animate-pulse">
+                <p className="text-slate-400 font-bold">正在搜寻最具挑战性的句子...</p>
               </div>
             )}
           </div>
