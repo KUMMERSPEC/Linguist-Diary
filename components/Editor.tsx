@@ -25,20 +25,23 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, isLoading }) => {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col">
-      <header className="flex items-center justify-between">
+    <div className="flex flex-col h-full max-h-[calc(100vh-160px)] md:max-h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <header className="mb-4 flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">新篇章</h2>
-          <p className="text-slate-500">记录你的生活，让 AI 协助你表达更完美。</p>
+          <h2 className="text-xl md:text-2xl font-bold text-slate-900">新篇章</h2>
+          <p className="text-xs md:text-sm text-slate-500">记录生活，让 AI 完善你的表达。</p>
         </div>
-        <div className="flex items-center space-x-2 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+        
+        {/* 语言选择器：手机端横向滚动 */}
+        <div className="flex items-center space-x-1 overflow-x-auto no-scrollbar pb-1 md:pb-0 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
           {LANGUAGES.map((lang) => (
             <button
               key={lang.code}
+              type="button"
               onClick={() => setLanguage(lang.code)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all ${
                 language === lang.code 
-                  ? 'bg-indigo-600 text-white' 
+                  ? 'bg-indigo-600 text-white shadow-sm' 
                   : 'text-slate-500 hover:bg-slate-50'
               }`}
             >
@@ -49,40 +52,53 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, isLoading }) => {
         </div>
       </header>
 
-      <form onSubmit={handleSubmit} className="flex-1 flex flex-col space-y-4">
-        <div className="flex-1 bg-white rounded-3xl border border-slate-200 shadow-sm p-8 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
+      <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 space-y-4">
+        {/* 输入区域：自适应高度 */}
+        <div className="flex-1 bg-white rounded-[2rem] border border-slate-200 shadow-sm p-5 md:p-8 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all flex flex-col">
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="今天发生了什么？有什么想表达的吗..."
-            className="w-full h-full resize-none border-none focus:ring-0 text-slate-700 text-lg leading-relaxed serif-font"
+            className="w-full flex-1 resize-none border-none focus:ring-0 text-slate-700 text-base md:text-lg leading-relaxed serif-font"
             disabled={isLoading}
           />
         </div>
 
-        <div className="flex items-center justify-between pt-2">
-          <div className="text-slate-400 text-sm">
-            {text.length} 字符
+        {/* 底部操作栏：手机端更紧凑 */}
+        <div className="flex items-center justify-between px-2">
+          <div className="flex flex-col">
+            <span className="text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-widest">Character Count</span>
+            <span className={`text-sm font-bold ${text.length < 10 ? 'text-slate-300' : 'text-indigo-600'}`}>
+              {text.length} <span className="text-[10px] opacity-60">CHARS</span>
+            </span>
           </div>
+          
           <button
             type="submit"
             disabled={isLoading || text.length < 10}
-            className={`px-8 py-4 rounded-2xl font-bold flex items-center space-x-3 transition-all ${
+            className={`relative group px-6 py-3 md:px-8 md:py-4 rounded-2xl font-bold flex items-center space-x-2 transition-all active:scale-95 ${
               isLoading 
                 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200'
+                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-100'
             }`}
           >
             {isLoading ? (
               <>
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-400 border-t-white" />
-                <span>AI 馆长正在审阅...</span>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-slate-400 border-t-white" />
+                <span className="text-sm">审阅中...</span>
               </>
             ) : (
               <>
-                <span>✨ 提交修改</span>
-                <span className="text-xs bg-indigo-500 px-2 py-0.5 rounded">Enter</span>
+                <span className="text-sm md:text-base">✨ 提交修改</span>
+                <span className="hidden md:inline-block text-[10px] bg-indigo-500 px-1.5 py-0.5 rounded ml-2">Enter</span>
               </>
+            )}
+            
+            {/* 提示信息：如果字数不够 */}
+            {text.length > 0 && text.length < 10 && (
+              <div className="absolute -top-10 right-0 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                需至少 10 个字符
+              </div>
             )}
           </button>
         </div>
