@@ -12,7 +12,7 @@ import { analyzeDiaryEntry, synthesizeDiary } from './services/geminiService';
 
 // Firebase 初始化
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, where } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -55,11 +55,16 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (db && user) {
-      const q = query(collection(db, "entries"), where("userId", "==", user.uid), orderBy("timestamp", "desc"));
+      // 核心改动：移除 orderBy 以避免“需要索引 (Requires Index)”报错
+      const q = query(collection(db, "entries"), where("userId", "==", user.uid));
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const cloudEntries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as DiaryEntry[];
-        setEntries(cloudEntries);
-      }, (err) => console.error("Firestore Error:", err));
+        // 在前端进行排序：按时间戳倒序
+        const sortedEntries = cloudEntries.sort((a, b) => b.timestamp - a.timestamp);
+        setEntries(sortedEntries);
+      }, (err) => {
+        console.error("Firestore 同步错误 (请检查数据库 Rules 设置):", err);
+      });
       return () => unsubscribe();
     }
   }, [user]);
@@ -82,8 +87,7 @@ const App: React.FC = () => {
       setView('review');
     } catch (error: any) {
       console.error(error);
-      alert(`⚠️ 分析过程中断：\n${error.message}\n\n我们将使用更稳定的 Flash 模型重试，或请检查您的 API 配置。`);
-      // 可以在这里做二次重试逻辑，但为了保持简洁先提示
+      alert(`⚠️ 分析失败：\n${error.message}\n\n请确保已在设置中正确配置 API_KEY。`);
     } finally {
       setIsLoading(false);
     }
@@ -117,8 +121,9 @@ const App: React.FC = () => {
         });
         setView('history');
         setCurrentEntry(null);
-      } catch (e) {
-        alert("保存失败，请检查数据库规则设置。");
+      } catch (e: any) {
+        console.error("Save Error:", e);
+        alert(`保存失败！可能是权限不足。\n请确保 Firebase Rules 已设为: allow read, write: if request.auth != null;`);
       } finally {
         setIsLoading(false);
       }
@@ -139,31 +144,23 @@ const App: React.FC = () => {
       {isLoading && (
         <div className="fixed inset-0 bg-white/80 backdrop-blur-xl z-[100] flex flex-col items-center justify-center space-y-10 animate-in fade-in duration-500">
           <div className="relative">
-             {/* Glowing background */}
              <div className="absolute inset-0 bg-indigo-500/20 blur-[60px] rounded-full scale-150 animate-pulse"></div>
-             
-             {/* Double ring loader */}
              <div className="relative w-24 h-24">
                 <div className="absolute inset-0 border-[6px] border-indigo-100 rounded-full"></div>
                 <div className="absolute inset-0 border-[6px] border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
              </div>
-             
-             {/* Center icon */}
              <div className="absolute inset-0 flex items-center justify-center text-3xl">🖋️</div>
           </div>
-          
           <div className="text-center space-y-3">
             <p className="text-2xl font-bold text-slate-800 serif-font tracking-tight">{loadingText}</p>
             <p className="text-slate-400 text-sm font-medium animate-pulse">AI 正在进行跨时空的语法重塑...</p>
           </div>
-
-          {/* Progress hint */}
           <div className="w-64 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-             <div className="h-full bg-indigo-600 rounded-full animate-[loading_2s_ease-in-out_infinite]" style={{ width: '40%' }}></div>
+             <div className="h-full bg-indigo-600 rounded-full animate-pulse" style={{ width: '60%' }}></div>
           </div>
         </div>
       )}
-    </div>
+    </Layout>
   );
 };
 
