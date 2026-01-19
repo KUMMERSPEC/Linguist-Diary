@@ -13,11 +13,18 @@ export interface AdvancedVocab {
   level: 'Intermediate' | 'Advanced' | 'Native';
 }
 
+export interface TransitionSuggestion {
+  word: string;
+  explanation: string;
+  example: string;
+}
+
 export interface DiaryAnalysis {
   modifiedText: string;
   diffedText: string;
   corrections: Correction[];
   advancedVocab: AdvancedVocab[];
+  transitionSuggestions: TransitionSuggestion[];
   overallFeedback: string;
 }
 
