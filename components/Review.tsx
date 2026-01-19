@@ -1,6 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { DiaryAnalysis, DiaryEntry } from '../types';
+import { generateDiaryAudio } from '../services/geminiService';
 
 interface ReviewProps {
   entry: DiaryEntry;
@@ -10,11 +11,73 @@ interface ReviewProps {
 
 const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
   const [activeTab, setActiveTab] = useState<'text' | 'logic' | 'vocab'>('text');
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   
   if (!entry.analysis) return null;
   const { analysis } = entry;
 
   const isSaved = entry.id.length > 15; 
+
+  // --- Audio Logic ---
+  const decodeBase64 = (base64: string) => {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  };
+
+  const decodeAudioData = async (data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number) => {
+    const dataInt16 = new Int16Array(data.buffer);
+    const frameCount = dataInt16.length / numChannels;
+    const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+    for (let channel = 0; channel < numChannels; channel++) {
+      const channelData = buffer.getChannelData(channel);
+      for (let i = 0; i < frameCount; i++) {
+        channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+      }
+    }
+    return buffer;
+  };
+
+  const handlePlayAudio = async () => {
+    if (isPlaying) {
+      audioSourceRef.current?.stop();
+      setIsPlaying(false);
+      return;
+    }
+
+    setIsAudioLoading(true);
+    try {
+      const base64Audio = await generateDiaryAudio(analysis.modifiedText);
+      const bytes = decodeBase64(base64Audio);
+      
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      audioContextRef.current = audioCtx;
+      
+      const audioBuffer = await decodeAudioData(bytes, audioCtx, 24000, 1);
+      const source = audioCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioCtx.destination);
+      
+      source.onended = () => {
+        setIsPlaying(false);
+      };
+
+      source.start();
+      audioSourceRef.current = source;
+      setIsPlaying(true);
+    } catch (error) {
+      console.error("Audio playback error:", error);
+      alert("音频生成失败，请稍后重试。");
+    } finally {
+      setIsAudioLoading(false);
+    }
+  };
 
   // 解析并渲染注音（Ruby）
   const renderRuby = (input: string) => {
@@ -137,14 +200,44 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
               </div>
             </div>
 
-            <div className="bg-slate-900 p-8 md:p-12 rounded-[2.5rem] text-slate-300 border border-slate-800 shadow-2xl relative">
+            <div className="bg-slate-900 p-8 md:p-12 rounded-[2.5rem] text-slate-300 border border-slate-800 shadow-2xl relative overflow-hidden">
               <div className="absolute top-0 right-10 transform -translate-y-1/2 bg-indigo-600 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg">
                 Integrated Masterpiece
               </div>
-              <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6 flex items-center space-x-2">
-                <span>✨</span>
-                <span>馆藏成品（附假名注音）</span>
-              </h4>
+              
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center space-x-2">
+                  <span>✨</span>
+                  <span>馆藏成品（附假名注音）</span>
+                </h4>
+                
+                {/* 有声朗读按钮 */}
+                <button
+                  onClick={handlePlayAudio}
+                  disabled={isAudioLoading}
+                  className={`flex items-center space-x-3 px-5 py-2.5 rounded-2xl transition-all font-bold text-xs shadow-lg ${
+                    isPlaying 
+                    ? 'bg-emerald-500 text-white ring-4 ring-emerald-500/20' 
+                    : 'bg-white/10 text-white hover:bg-white/20'
+                  }`}
+                >
+                  {isAudioLoading ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  ) : (
+                    <span className="text-lg">{isPlaying ? '⏹️' : '🎧'}</span>
+                  )}
+                  <span>{isPlaying ? '正在朗读...' : '有声朗读'}</span>
+                  
+                  {isPlaying && (
+                    <div className="flex items-end space-x-0.5 h-3 ml-2">
+                      <div className="w-0.5 bg-white animate-audio-bar-1"></div>
+                      <div className="w-0.5 bg-white animate-audio-bar-2"></div>
+                      <div className="w-0.5 bg-white animate-audio-bar-3"></div>
+                    </div>
+                  )}
+                </button>
+              </div>
+
               <div className="text-base md:text-2xl serif-font italic leading-[2.5] md:leading-[3] text-white">
                 {renderRuby(analysis.modifiedText)}
               </div>
@@ -152,7 +245,7 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
               <div className="mt-8 pt-8 border-t border-slate-800 flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                  <span className="text-[10px] font-bold text-slate-500">已自动完成汉字注音</span>
+                  <span className="text-[10px] font-bold text-slate-500">已自动完成汉字注音与语音同步</span>
                 </div>
                 <span className="text-[10px] font-bold text-slate-500 serif-font italic">— Linguist Curator</span>
               </div>

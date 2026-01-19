@@ -8,6 +8,7 @@ import History from './components/History';
 import ChatEditor from './components/ChatEditor';
 import AuthView from './components/AuthView';
 import ReviewVault from './components/ReviewVault';
+import ApiKeySelector from './components/ApiKeySelector';
 import { ViewState, DiaryEntry, ChatMessage } from './types';
 import { analyzeDiaryEntry, synthesizeDiary } from './services/geminiService';
 
@@ -36,24 +37,55 @@ try {
   console.warn("Firebase Init Failed", e);
 }
 
+// 扩展 Window 接口以支持 AIStudio API
+declare global {
+  interface AIStudio {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
+  }
+  interface Window {
+    aistudio?: AIStudio;
+  }
+}
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
+  const [hasKey, setHasKey] = useState<boolean | null>(null); // null 表示正在检测
   const [view, setView] = useState<ViewState>('dashboard');
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [currentEntry, setCurrentEntry] = useState<DiaryEntry | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState('正在镌刻记忆...');
 
+  // 1. 认证状态监听
   useEffect(() => {
     if (!auth) { setAuthChecking(false); return; }
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setAuthChecking(false);
+      checkApiKey();
     });
     return () => unsubscribe();
   }, []);
 
+  // 2. 检测 API Key 状态
+  const checkApiKey = async () => {
+    if (window.aistudio && window.aistudio.hasSelectedApiKey) {
+      try {
+        const selected = await window.aistudio.hasSelectedApiKey();
+        setHasKey(selected);
+      } catch (e) {
+        console.error("API Key check error", e);
+        setHasKey(false);
+      }
+    } else {
+      // 如果不在 AI Studio 环境下，假设 key 已通过 process.env.API_KEY 注入
+      setHasKey(true);
+    }
+  };
+
+  // 3. 数据同步
   useEffect(() => {
     if (db && user) {
       const q = query(collection(db, "entries"), where("userId", "==", user.uid));
@@ -86,7 +118,13 @@ const App: React.FC = () => {
       setView('review');
     } catch (error: any) {
       console.error(error);
-      alert(`⚠️ 分析失败：${error.message || 'Unknown error'}`);
+      // 如果报错 Requested entity was not found，通常是 API Key 失效或项目不对
+      if (error.message && error.message.includes("Requested entity was not found.")) {
+        setHasKey(false);
+        alert("检测到 API Key 异常，请重新配置馆长权限。");
+      } else {
+        alert(`⚠️ 分析失败：${error.message || 'Unknown error'}`);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -148,8 +186,14 @@ const App: React.FC = () => {
     }
   };
 
+  // 渲染逻辑
   if (authChecking) return <div className="h-screen w-screen flex items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-8 w-8 border-4 border-indigo-600 border-t-transparent"></div></div>;
   if (!user) return <AuthView auth={auth} />;
+  
+  // 如果 API Key 缺失且在检测后确认没有，显示选择器
+  if (hasKey === false) {
+    return <ApiKeySelector onActivate={() => setHasKey(true)} />;
+  }
 
   return (
     <Layout activeView={view} onViewChange={setView} user={user} auth={auth}>

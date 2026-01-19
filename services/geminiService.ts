@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { DiaryAnalysis, ChatMessage } from "../types";
 
 /**
@@ -9,7 +9,6 @@ export const analyzeDiaryEntry = async (text: string, language: string): Promise
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = 'gemini-3-pro-preview';
   
-  // 日语注音特定指令
   const isJapanese = language.toLowerCase() === 'japanese' || language === '日本語';
   const japaneseInstruction = isJapanese 
     ? "IMPORTANT for Japanese: For BOTH 'modifiedText' and 'diffedText', provide Furigana for ALL Kanji using the syntax '[Kanji](furigana)'. For example: '[先生](せんせい)'. Ensure the reading is contextually correct."
@@ -91,6 +90,39 @@ export const analyzeDiaryEntry = async (text: string, language: string): Promise
   } catch (error: any) {
     console.error("Gemini Analysis Error:", error);
     throw new Error(error.message || "Analysis failed.");
+  }
+};
+
+/**
+ * 文本转语音函数
+ */
+export const generateDiaryAudio = async (text: string): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  // 清理日语注音标记 [汉字](假名) -> 汉字
+  const cleanText = text.replace(/\[(.*?)\]\(.*?\)/g, '$1');
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: `Please read this diary entry with a calm, natural, and expressive voice: ${cleanText}` }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: 'Zephyr' }, // 优雅的叙述者声音
+          },
+        },
+      },
+    });
+
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!base64Audio) throw new Error("Audio data is missing in the response.");
+    
+    return base64Audio;
+  } catch (error) {
+    console.error("TTS Generation Error:", error);
+    throw error;
   }
 };
 
