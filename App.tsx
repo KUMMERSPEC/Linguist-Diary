@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
@@ -7,6 +6,7 @@ import Review from './components/Review';
 import History from './components/History';
 import ChatEditor from './components/ChatEditor';
 import AuthView from './components/AuthView';
+import ApiKeySelector from './components/ApiKeySelector';
 import { ViewState, DiaryEntry, ChatMessage } from './types';
 import { analyzeDiaryEntry, synthesizeDiary } from './services/geminiService';
 
@@ -35,9 +35,22 @@ try {
   console.warn("Firebase Init Failed", e);
 }
 
+// Fix: Redefine the expected AIStudio interface and extend Window with identical modifiers (optional property).
+declare global {
+  interface AIStudio {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
+  }
+
+  interface Window {
+    aistudio?: AIStudio;
+  }
+}
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
+  const [hasKey, setHasKey] = useState<boolean | null>(null);
   const [view, setView] = useState<ViewState>('dashboard');
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [currentEntry, setCurrentEntry] = useState<DiaryEntry | null>(null);
@@ -49,9 +62,22 @@ const App: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setAuthChecking(false);
+      // 用户登录后，检查是否有 API Key
+      checkApiKey();
     });
     return () => unsubscribe();
   }, []);
+
+  const checkApiKey = async () => {
+    // Fix: Use optional chaining or safe check for window.aistudio.
+    if (window.aistudio && window.aistudio.hasSelectedApiKey) {
+      const selected = await window.aistudio.hasSelectedApiKey();
+      setHasKey(selected);
+    } else {
+      // 如果环境不支持选择 Key，则默认 true（使用全局注入的）
+      setHasKey(true);
+    }
+  };
 
   useEffect(() => {
     if (db && user) {
@@ -85,7 +111,13 @@ const App: React.FC = () => {
       setView('review');
     } catch (error: any) {
       console.error(error);
-      alert(`⚠️ 分析失败：${error.message}`);
+      // Fix: Safely check error message and reset key selection if needed.
+      if (error.message && typeof error.message === 'string' && error.message.includes("Requested entity was not found.")) {
+        setHasKey(false);
+        alert("API Key 验证失败，请重新选择有效的付费项目密钥。");
+      } else {
+        alert(`⚠️ 分析失败：${error.message || 'Unknown error'}`);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -149,6 +181,9 @@ const App: React.FC = () => {
 
   if (authChecking) return <div className="h-screen w-screen flex items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-8 w-8 border-4 border-indigo-600 border-t-transparent"></div></div>;
   if (!user) return <AuthView auth={auth} />;
+  
+  // 核心逻辑：如果用户已登录但没有 API Key，显示选择器
+  if (hasKey === false) return <ApiKeySelector onActivate={() => setHasKey(true)} />;
 
   return (
     <Layout activeView={view} onViewChange={setView} user={user} auth={auth}>

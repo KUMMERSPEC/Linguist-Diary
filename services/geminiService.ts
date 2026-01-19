@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { DiaryAnalysis, ChatMessage } from "../types";
 
@@ -6,9 +5,9 @@ import { DiaryAnalysis, ChatMessage } from "../types";
  * 核心分析函数
  */
 export const analyzeDiaryEntry = async (text: string, language: string): Promise<DiaryAnalysis> => {
-  // 必须直接使用 process.env.API_KEY 进行初始化
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
-  const model = 'gemini-3-flash-preview';
+  // Fix: Use process.env.API_KEY directly for initialization and upgrade to gemini-3-pro-preview for complex reasoning tasks.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const model = 'gemini-3-pro-preview';
   
   try {
     const response = await ai.models.generateContent({
@@ -87,7 +86,8 @@ export const analyzeDiaryEntry = async (text: string, language: string): Promise
  * 启发式对话函数
  */
 export const getChatFollowUp = async (history: ChatMessage[], language: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+  // Fix: Always use process.env.API_KEY directly for GoogleGenAI initialization.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = 'gemini-3-flash-preview'; 
   const historyText = history.map(m => `${m.role}: ${m.content}`).join('\n');
   
@@ -111,7 +111,8 @@ export const getChatFollowUp = async (history: ChatMessage[], language: string):
  * 综合对话生成日记
  */
 export const synthesizeDiary = async (history: ChatMessage[], language: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+  // Fix: Always use process.env.API_KEY directly for GoogleGenAI initialization.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = 'gemini-3-flash-preview';
   const historyText = history.map(m => `${m.role}: ${m.content}`).join('\n');
   
