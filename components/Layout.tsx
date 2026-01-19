@@ -27,7 +27,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
   );
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className="flex h-screen h-[100dvh] bg-slate-50 overflow-hidden">
       {/* Sidebar (Desktop Only) */}
       <aside className="w-64 bg-white border-r border-slate-200 flex flex-col p-6 space-y-8 hidden md:flex">
         <div className="flex items-center space-x-3 px-2">
@@ -67,29 +67,29 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        {/* Mobile Header: Compact */}
-        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 shrink-0">
+        {/* Mobile Header: Ultra Compact */}
+        <header className="md:hidden flex items-center justify-between px-4 py-1.5 bg-white border-b border-slate-200 shrink-0">
           <div className="flex items-center space-x-2">
-            <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-sm">
+            <div className="w-6 h-6 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-xs">
               🖋️
             </div>
-            <h1 className="text-base font-bold text-slate-800 tracking-tight">Linguist</h1>
+            <h1 className="text-sm font-bold text-slate-800 tracking-tight">Linguist</h1>
           </div>
           <div className="flex items-center space-x-3">
-             {user.photoURL && <img src={user.photoURL} className="w-7 h-7 rounded-full" alt="User" />}
-             <button onClick={() => signOut(auth)} className="text-lg">🚪</button>
+             {user.photoURL && <img src={user.photoURL} className="w-6 h-6 rounded-full" alt="User" />}
+             <button onClick={() => signOut(auth)} className="text-base">🚪</button>
           </div>
         </header>
 
-        {/* Content Container: Removed excessive p-4 for better fit on mobile */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 md:p-8">
+        {/* Content Container: Adjusted padding for mobile to save space */}
+        <div className="flex-1 overflow-y-auto px-3 py-2 md:px-8 md:py-8">
           <div className="max-w-5xl mx-auto h-full flex flex-col">
             {children}
           </div>
         </div>
 
-        {/* Mobile Nav Bar */}
-        <nav className="md:hidden flex items-center justify-around bg-white border-t border-slate-200 p-2 pb-5 shrink-0">
+        {/* Mobile Nav Bar: Ultra Compact */}
+        <nav className="md:hidden flex items-center justify-around bg-white border-t border-slate-200 p-1 pb-3 shrink-0 shadow-lg">
            <button onClick={() => onViewChange('dashboard')} className={`p-2 transition-all ${activeView === 'dashboard' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>📊</button>
            <button onClick={() => onViewChange('editor')} className={`p-2 transition-all ${activeView === 'editor' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>📝</button>
            <button onClick={() => onViewChange('chat')} className={`p-2 transition-all ${activeView === 'chat' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>💬</button>

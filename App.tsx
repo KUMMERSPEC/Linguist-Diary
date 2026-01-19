@@ -137,20 +137,19 @@ const App: React.FC = () => {
       {view === 'history' && <History entries={entries} onSelect={(e) => { setCurrentEntry(e); setView('review'); }} />}
       
       {isLoading && (
-        {loading && (
         <div className="fixed inset-0 bg-white/80 backdrop-blur-xl z-[100] flex flex-col items-center justify-center space-y-10 animate-in fade-in duration-500">
           <div className="relative">
-            {/* Glowing background */}
-            <div className="absolute inset-0 bg-indigo-500/20 blur-[60px] rounded-full scale-150 animate-pulse"></div>
-            
-            {/* Double ring loader */}
-            <div className="relative w-24 h-24">
-              <div className="absolute inset-0 border-[6px] border-indigo-100 rounded-full"></div>
-              <div className="absolute inset-0 border-[6px] border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-            
-            {/* Center icon */}
-            <div className="absolute inset-0 flex items-center justify-center text-3xl">🖋️</div>
+             {/* Glowing background */}
+             <div className="absolute inset-0 bg-indigo-500/20 blur-[60px] rounded-full scale-150 animate-pulse"></div>
+             
+             {/* Double ring loader */}
+             <div className="relative w-24 h-24">
+                <div className="absolute inset-0 border-[6px] border-indigo-100 rounded-full"></div>
+                <div className="absolute inset-0 border-[6px] border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+             </div>
+             
+             {/* Center icon */}
+             <div className="absolute inset-0 flex items-center justify-center text-3xl">🖋️</div>
           </div>
           
           <div className="text-center space-y-3">
