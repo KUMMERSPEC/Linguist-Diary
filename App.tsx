@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
@@ -7,6 +8,7 @@ import History from './components/History';
 import ChatEditor from './components/ChatEditor';
 import AuthView from './components/AuthView';
 import ApiKeySelector from './components/ApiKeySelector';
+import ReviewVault from './components/ReviewVault';
 import { ViewState, DiaryEntry, ChatMessage } from './types';
 import { analyzeDiaryEntry, synthesizeDiary } from './services/geminiService';
 
@@ -62,19 +64,16 @@ const App: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setAuthChecking(false);
-      // 用户登录后，检查是否有 API Key
       checkApiKey();
     });
     return () => unsubscribe();
   }, []);
 
   const checkApiKey = async () => {
-    // Fix: Use optional chaining or safe check for window.aistudio.
     if (window.aistudio && window.aistudio.hasSelectedApiKey) {
       const selected = await window.aistudio.hasSelectedApiKey();
       setHasKey(selected);
     } else {
-      // 如果环境不支持选择 Key，则默认 true（使用全局注入的）
       setHasKey(true);
     }
   };
@@ -111,7 +110,6 @@ const App: React.FC = () => {
       setView('review');
     } catch (error: any) {
       console.error(error);
-      // Fix: Safely check error message and reset key selection if needed.
       if (error.message && typeof error.message === 'string' && error.message.includes("Requested entity was not found.")) {
         setHasKey(false);
         alert("API Key 验证失败，请重新选择有效的付费项目密钥。");
@@ -181,8 +179,6 @@ const App: React.FC = () => {
 
   if (authChecking) return <div className="h-screen w-screen flex items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-8 w-8 border-4 border-indigo-600 border-t-transparent"></div></div>;
   if (!user) return <AuthView auth={auth} />;
-  
-  // 核心逻辑：如果用户已登录但没有 API Key，显示选择器
   if (hasKey === false) return <ApiKeySelector onActivate={() => setHasKey(true)} />;
 
   return (
@@ -192,6 +188,7 @@ const App: React.FC = () => {
       {view === 'chat' && <ChatEditor onFinish={handleFinishChat} />}
       {view === 'review' && currentEntry && <Review entry={currentEntry} onSave={handleSave} onDelete={handleDelete} />}
       {view === 'history' && <History entries={entries} onSelect={(e) => { setCurrentEntry(e); setView('review'); }} onDelete={handleDelete} />}
+      {view === 'review_vault' && <ReviewVault entries={entries} onReviewEntry={(e) => { setCurrentEntry(e); setView('review'); }} />}
       
       {isLoading && (
         <div className="fixed inset-0 bg-white/80 backdrop-blur-xl z-[100] flex flex-col items-center justify-center space-y-10 animate-in fade-in duration-500">

@@ -39,8 +39,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
 
         <nav className="flex-1 space-y-2">
           <NavItem view="dashboard" label="概览 / Dashboard" icon="📊" />
-          <NavItem view="editor" label="普通写信 / Standard" icon="📝" />
+          <NavItem view="editor" label="标准写信 / Standard" icon="📝" />
           <NavItem view="chat" label="启发聊天 / Guided Chat" icon="💬" />
+          <NavItem view="review_vault" label="珍宝复习 / Review" icon="💎" />
           <NavItem view="history" label="博物馆 / Collection" icon="🏛️" />
         </nav>
 
@@ -67,7 +68,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        {/* Mobile Header: Ultra Compact */}
         <header className="md:hidden flex items-center justify-between px-4 py-1.5 bg-white border-b border-slate-200 shrink-0">
           <div className="flex items-center space-x-2">
             <div className="w-6 h-6 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-xs">
@@ -81,18 +81,18 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
           </div>
         </header>
 
-        {/* Content Container: Adjusted padding for mobile to save space */}
         <div className="flex-1 overflow-y-auto px-3 py-2 md:px-8 md:py-8">
           <div className="max-w-5xl mx-auto h-full flex flex-col">
             {children}
           </div>
         </div>
 
-        {/* Mobile Nav Bar: Ultra Compact */}
+        {/* Mobile Nav Bar */}
         <nav className="md:hidden flex items-center justify-around bg-white border-t border-slate-200 p-1 pb-3 shrink-0 shadow-lg">
            <button onClick={() => onViewChange('dashboard')} className={`p-2 transition-all ${activeView === 'dashboard' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>📊</button>
            <button onClick={() => onViewChange('editor')} className={`p-2 transition-all ${activeView === 'editor' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>📝</button>
            <button onClick={() => onViewChange('chat')} className={`p-2 transition-all ${activeView === 'chat' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>💬</button>
+           <button onClick={() => onViewChange('review_vault')} className={`p-2 transition-all ${activeView === 'review_vault' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>💎</button>
            <button onClick={() => onViewChange('history')} className={`p-2 transition-all ${activeView === 'history' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>🏛️</button>
         </nav>
       </main>
