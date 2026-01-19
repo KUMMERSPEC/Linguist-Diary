@@ -8,28 +8,27 @@ const getApiKey = () => {
 };
 
 /**
- * 核心分析函数：增加了详细的错误捕获
+ * 核心分析函数
  */
 export const analyzeDiaryEntry = async (text: string, language: string): Promise<DiaryAnalysis> => {
   const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error("未检测到 API Key。请确保在 GitHub Secrets 或本地环境变量中配置了 API_KEY。");
-  }
-
   const ai = new GoogleGenAI({ apiKey });
-  const model = 'gemini-3-pro-preview';
+  // 统一使用 Flash 模型以确保最高兼容性和速度
+  const model = 'gemini-3-flash-preview';
   
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `Please act as a professional language teacher. Analyze this diary entry written in ${language}. 
+      contents: `You are an elite language professor and literary critic. Analyze this diary entry written in ${language}. 
       
-      1. Correct the text for grammar, flow, and naturalness.
-      2. Provide a "diffed" version of the original text using custom tags:
-         - Use <rem>text</rem> for parts that should be removed or corrected.
-         - Use <add>text</add> for the corrected/new parts.
-      3. Provide specific corrections with explanations in Chinese.
-      4. Suggest advanced vocabulary that could replace common words used in the text.
+      Tasks:
+      1. Correct the text for grammar, naturalness, and elegance.
+      2. Produce a "diffed" version of the original text using:
+         - <rem>text</rem> for errors or sub-optimal parts to be removed.
+         - <add>text</add> for corrected or improved parts.
+         Ensure EVERY change is captured in these tags so the user can see exactly what changed in the original context.
+      3. Categorize and explain each major correction in Chinese.
+      4. Suggest 3-5 high-level, sophisticated vocabulary items (Advanced/Native level) that could elevate the user's specific writing style in this entry.
       
       Diary text:
       "${text}"`,
@@ -80,25 +79,13 @@ export const analyzeDiaryEntry = async (text: string, language: string): Promise
     });
 
     if (!response.text) {
-      throw new Error("AI 返回了空响应，请检查输入内容或模型状态。");
+      throw new Error("AI returned an empty response.");
     }
 
     return JSON.parse(response.text) as DiaryAnalysis;
   } catch (error: any) {
-    console.error("Gemini API Error Detail:", error);
-    
-    // 针对常见错误的友好提示
-    if (error.message?.includes('403')) {
-      throw new Error("API 访问被拒绝 (403)。原因可能是：1. 您的 Key 未绑定结算信息；2. 您的地区不支持此模型；3. API Key 无效。");
-    }
-    if (error.message?.includes('429')) {
-      throw new Error("请求过于频繁 (429)。免费层级限额较低，请稍后再试。");
-    }
-    if (error.message?.includes('500')) {
-      throw new Error("Google 服务器内部错误 (500)。请稍后重试。");
-    }
-    
-    throw new Error(error.message || "AI 分析过程中发生了未知错误。");
+    console.error("Gemini Analysis Error:", error);
+    throw new Error(error.message || "Analysis failed.");
   }
 };
 
@@ -115,15 +102,15 @@ export const getChatFollowUp = async (history: ChatMessage[], language: string):
     const response = await ai.models.generateContent({
       model,
       contents: `You are an empathetic and creative language tutor. The user is writing a diary in ${language}. 
-      Based on the history, ask ONE short, engaging follow-up question in ${language}. NO CHINESE.
+      Based on the history, ask ONE short, engaging follow-up question in ${language} to encourage them to write more. 
+      DO NOT use Chinese.
       
       History:
       ${historyText}`,
     });
-    return response.text?.trim() || "Can you tell me more?";
+    return response.text?.trim() || "Can you tell me more about that?";
   } catch (e) {
-    console.error("Chat API Error:", e);
-    return "That's interesting. What happened next?";
+    return "That sounds interesting. Could you expand on that?";
   }
 };
 
@@ -133,16 +120,20 @@ export const getChatFollowUp = async (history: ChatMessage[], language: string):
 export const synthesizeDiary = async (history: ChatMessage[], language: string): Promise<string> => {
   const apiKey = getApiKey();
   const ai = new GoogleGenAI({ apiKey });
-  const model = 'gemini-3-pro-preview';
+  const model = 'gemini-3-flash-preview';
   const historyText = history.map(m => `${m.role}: ${m.content}`).join('\n');
   
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `Convert this conversation into a first-person diary in ${language}:
+      contents: `Strictly convert the following conversation history into a formal, first-person diary entry in ${language}. 
+      Combine all user inputs into a cohesive narrative. 
+      Do not include any AI dialogue or introduction. Just the diary text.
+      
+      Conversation:
       ${historyText}`,
     });
-    return response.text?.trim() || "";
+    return response.text?.trim() || "Synthesis failed.";
   } catch (e) {
     return history.filter(m => m.role === 'user').map(m => m.content).join('\n');
   }

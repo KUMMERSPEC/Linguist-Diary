@@ -10,7 +10,7 @@ import AuthView from './components/AuthView';
 import { ViewState, DiaryEntry, ChatMessage } from './types';
 import { analyzeDiaryEntry, synthesizeDiary } from './services/geminiService';
 
-// Firebase 初始化 (保持用户提供的配置)
+// Firebase 初始化
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, where } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
@@ -32,7 +32,7 @@ try {
   db = getFirestore(app);
   auth = getAuth(app);
 } catch (e) {
-  console.warn("Firebase 初始化失败", e);
+  console.warn("Firebase Init Failed", e);
 }
 
 const App: React.FC = () => {
@@ -42,6 +42,7 @@ const App: React.FC = () => {
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [currentEntry, setCurrentEntry] = useState<DiaryEntry | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState('正在镌刻记忆...');
 
   useEffect(() => {
     if (!auth) { setAuthChecking(false); return; }
@@ -65,6 +66,7 @@ const App: React.FC = () => {
 
   const handleAnalyze = async (text: string, language: string) => {
     setIsLoading(true);
+    setLoadingText('语言教授正在审阅您的手稿...');
     try {
       const analysis = await analyzeDiaryEntry(text, language);
       const now = new Date();
@@ -79,8 +81,9 @@ const App: React.FC = () => {
       setCurrentEntry(newEntry);
       setView('review');
     } catch (error: any) {
-      // 展示更详细的错误
-      alert(`⚠️ 馆藏分析失败：\n${error.message}\n\n建议：检查 API Key 权限或绑定结算信息。`);
+      console.error(error);
+      alert(`⚠️ 分析过程中断：\n${error.message}\n\n我们将使用更稳定的 Flash 模型重试，或请检查您的 API 配置。`);
+      // 可以在这里做二次重试逻辑，但为了保持简洁先提示
     } finally {
       setIsLoading(false);
     }
@@ -88,8 +91,10 @@ const App: React.FC = () => {
 
   const handleFinishChat = async (transcript: ChatMessage[], language: string) => {
     setIsLoading(true);
+    setLoadingText('正在将对话片段整理成册...');
     try {
       const synthesizedText = await synthesizeDiary(transcript, language);
+      if (synthesizedText === "Synthesis failed.") throw new Error("对话整理失败");
       await handleAnalyze(synthesizedText, language);
     } catch (error: any) {
       alert("对话整理失败：" + error.message);
@@ -100,6 +105,7 @@ const App: React.FC = () => {
   const handleSave = async () => {
     if (currentEntry && user && db) {
       setIsLoading(true);
+      setLoadingText('正在存入云端博物馆...');
       try {
         await addDoc(collection(db, "entries"), {
           userId: user.uid,
@@ -131,15 +137,33 @@ const App: React.FC = () => {
       {view === 'history' && <History entries={entries} onSelect={(e) => { setCurrentEntry(e); setView('review'); }} />}
       
       {isLoading && (
-        <div className="fixed inset-0 bg-white/60 backdrop-blur-md z-[100] flex flex-col items-center justify-center space-y-6">
+        <div className="fixed inset-0 bg-white/80 backdrop-blur-xl z-[100] flex flex-col items-center justify-center space-y-10 animate-in fade-in duration-500">
           <div className="relative">
-             <div className="w-20 h-20 border-4 border-indigo-100 rounded-full"></div>
-             <div className="w-20 h-20 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
+             {/* Glowing background */}
+             <div className="absolute inset-0 bg-indigo-500/20 blur-[60px] rounded-full scale-150 animate-pulse"></div>
+             
+             {/* Double ring loader */}
+             <div className="relative w-24 h-24">
+                <div className="absolute inset-0 border-[6px] border-indigo-100 rounded-full"></div>
+                <div className="absolute inset-0 border-[6px] border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+             </div>
+             
+             {/* Center icon */}
+             <div className="absolute inset-0 flex items-center justify-center text-3xl">🖋️</div>
           </div>
-          <p className="text-xl font-bold text-slate-800 serif-font">正在镌刻记忆...</p>
+          
+          <div className="text-center space-y-3">
+            <p className="text-2xl font-bold text-slate-800 serif-font tracking-tight">{loadingText}</p>
+            <p className="text-slate-400 text-sm font-medium animate-pulse">AI 正在进行跨时空的语法重塑...</p>
+          </div>
+
+          {/* Progress hint */}
+          <div className="w-64 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+             <div className="h-full bg-indigo-600 rounded-full animate-[loading_2s_ease-in-out_infinite]" style={{ width: '40%' }}></div>
+          </div>
         </div>
       )}
-    </Layout>
+    </div>
   );
 };
 
