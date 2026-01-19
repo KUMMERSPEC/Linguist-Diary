@@ -31,7 +31,7 @@ jobs:
         run: npm run build
         env:
           # 核心修正：对应你截图中的 GOOGLE_API_KEY
-          API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          API_KEY: ${{ secrets.API_KEY }}
       - name: Setup Pages
         uses: actions/configure-pages@v4
       - name: Upload artifact
