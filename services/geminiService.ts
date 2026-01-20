@@ -1,6 +1,5 @@
-
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { DiaryAnalysis, ChatMessage, RehearsalEvaluation } from "../types";
+import { DiaryAnalysis, ChatMessage, RehearsalEvaluation, DiaryEntry } from "../types";
 
 const getAiInstance = () => {
   const apiKey = process.env.API_KEY;
@@ -10,11 +9,15 @@ const getAiInstance = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-export const analyzeDiaryEntry = async (text: string, language: string): Promise<DiaryAnalysis> => {
+export const analyzeDiaryEntry = async (text: string, language: string, history: DiaryEntry[] = []): Promise<DiaryAnalysis> => {
   const ai = getAiInstance();
   const model = 'gemini-3-pro-preview';
   const isJapanese = language.toLowerCase() === 'japanese' || language === '日本語';
   
+  const historyContext = history.length > 0 
+    ? `\n[USER MUSEUM HISTORY]\n${history.map(h => `- Date: ${h.date}, Lang: ${h.language}, Key Corrections: ${h.analysis?.corrections.map(c => c.improved).join(', ')}`).join('\n')}`
+    : "";
+
   const japaneseInstruction = isJapanese 
     ? "IMPORTANT for Japanese: For BOTH 'modifiedText' and 'diffedText', provide Furigana for ALL Kanji using the syntax '[Kanji](furigana)'. Example: [今日](きょう)."
     : "";
@@ -24,7 +27,12 @@ export const analyzeDiaryEntry = async (text: string, language: string): Promise
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `You are an elite language professor. Analyze this ${language} diary: "${text}". 
+      contents: `You are an elite language professor and museum curator. Analyze this ${language} diary: "${text}". 
+      ${historyContext}
+      
+      CRITICAL INSTRUCTION (MEMORY CHAIN):
+      Look at the provided [USER MUSEUM HISTORY]. If you find recurring grammar mistakes or overused simple words compared to previous entries, explicitly mention this in 'overallFeedback' as a "Memory Link". Use a warm, observant tone.
+      
       ${diffInstruction}
       ${japaneseInstruction}`,
       config: {
@@ -34,7 +42,7 @@ export const analyzeDiaryEntry = async (text: string, language: string): Promise
           properties: {
             modifiedText: { type: Type.STRING },
             diffedText: { type: Type.STRING },
-            overallFeedback: { type: Type.STRING },
+            overallFeedback: { type: Type.STRING, description: "Include Memory Link insights here if applicable." },
             corrections: {
               type: Type.ARRAY,
               items: {
@@ -200,7 +208,15 @@ export const getChatFollowUp = async (history: ChatMessage[], language: string):
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Ask a follow-up in ${language} for this chat: ${JSON.stringify(history)}`,
+      contents: `You are a warm, curious, and sympathetic conversation partner. 
+      Analyze this chat history (in ${language}): ${JSON.stringify(history)}.
+      
+      CRITICAL INSTRUCTIONS:
+      1. Provide EXACTLY ONE single conversational response or follow-up question. 
+      2. ABSOLUTELY DO NOT provide options, lists (Option 1, Option 2...), or multiple versions.
+      3. Respond DIRECTLY and ONLY in ${language}.
+      4. Keep the tone natural, human-like, and supportive.
+      5. Your output should be ready to be shown directly to the user as a single message bubble.`,
     });
     return response.text?.trim() || "Tell me more.";
   } catch (e) { return "Go on..."; }

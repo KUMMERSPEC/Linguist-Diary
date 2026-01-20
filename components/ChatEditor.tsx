@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChatMessage } from '../types';
 import { getChatFollowUp } from '../services/geminiService';
@@ -88,7 +87,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish }) => {
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
   }, [inputValue]);
 
@@ -160,10 +159,10 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish }) => {
       </header>
 
       <div className="flex-1 bg-white rounded-xl md:rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden relative min-h-0">
-        <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2.5 relative z-10 no-scrollbar">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-6 relative z-10 no-scrollbar">
           {messages.map((msg, idx) => (
             <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in`}>
-              <div className={`max-w-[88%] p-3 rounded-xl text-xs md:text-sm leading-relaxed whitespace-pre-wrap ${
+              <div className={`max-w-[90%] p-5 md:p-6 rounded-2xl text-xl md:text-2xl leading-relaxed whitespace-pre-wrap ${
                 msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none shadow-sm' : 'bg-slate-50 text-slate-800 rounded-tl-none border border-slate-100'
               }`}>
                 {msg.content}
@@ -181,8 +180,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish }) => {
           )}
         </div>
 
-        {/* 升级后的自适应高度输入区域 */}
-        <div className="p-3 bg-slate-50/90 backdrop-blur-md border-t border-slate-100 flex items-end space-x-2 shrink-0">
+        <div className="p-4 bg-slate-50/90 backdrop-blur-md border-t border-slate-100 flex items-end space-x-2 shrink-0">
           <div className="flex-1 relative">
             <textarea 
               ref={textareaRef}
@@ -190,22 +188,5 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish }) => {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="在此输入内容回复... (Enter 发送, Shift+Enter 换行)"
-              className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-2.5 text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none transition-all duration-100 leading-relaxed max-h-[120px]"
-              style={{ minHeight: '42px' }}
-            />
-          </div>
-          <button 
-            onClick={handleSend}
-            disabled={!inputValue.trim() || isTyping}
-            className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center disabled:bg-slate-300 transition-all active:scale-95 shadow-md flex-shrink-0"
-          >
-            <span className="text-xl">✦</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default ChatEditor;
+              placeholder="用该语言聊聊你的想法..."
+              className="w-full p-5 md:p-6 pr-14 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 focus

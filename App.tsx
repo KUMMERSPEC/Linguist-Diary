@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
@@ -63,10 +62,12 @@ const App: React.FC = () => {
     setIsLoading(true);
     setLoadingText('语言教授正在审阅您的手稿...');
     try {
-      const analysis = await analyzeDiaryEntry(text, language);
+      // 提取最近5条记录作为上下文
+      const recentHistory = entries.slice(0, 5);
+      const analysis = await analyzeDiaryEntry(text, language, recentHistory);
       const now = new Date();
       setCurrentEntry({
-        id: `temp_${Date.now()}`, // 使用临时ID
+        id: `temp_${Date.now()}`,
         timestamp: Date.now(),
         date: now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
         originalText: text,
@@ -110,7 +111,6 @@ const App: React.FC = () => {
     setIsLoading(true);
     setLoadingText('正在正式收录入馆...');
     try {
-      // 关键修复：动态构建对象，移除 undefined 字段，Firestore 不接受 undefined
       const docData: any = {
         userId: user.uid,
         timestamp: currentEntry.timestamp,

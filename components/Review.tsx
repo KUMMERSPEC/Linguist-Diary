@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { DiaryAnalysis, DiaryEntry, RehearsalEvaluation } from '../types';
 import { generateDiaryAudio } from '../services/geminiService';
@@ -15,10 +14,8 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   
-  // 核心修复：临时 ID 以 temp_ 开头，正式 ID 不含 temp_
   const isSaved = !entry.id.startsWith('temp_'); 
 
-  // --- Audio Logic ---
   const handlePlayAudio = async (text: string) => {
     if (isPlaying) {
       audioSourceRef.current?.stop();
@@ -93,7 +90,6 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
     );
   };
 
-  // 演练报告渲染逻辑
   if (entry.type === 'rehearsal' && entry.rehearsal) {
     const rev = entry.rehearsal;
     const getGrade = (score: number) => {
@@ -173,7 +169,6 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
     );
   }
 
-  // 日记分析渲染逻辑
   if (!entry.analysis) return null;
   const { analysis } = entry;
 
@@ -339,14 +334,22 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
               </div>
             </div>
 
-            <div className="bg-indigo-50/50 p-6 rounded-[2rem] border border-indigo-100 flex items-start space-x-4">
-              <div className="text-3xl">💡</div>
-              <div>
-                <h5 className="font-bold text-indigo-900 text-sm mb-1">馆长总评 (Overall)</h5>
-                <p className="text-indigo-800 italic leading-relaxed text-sm md:text-base serif-font">
-                  {analysis.overallFeedback}
-                </p>
+            {/* 改进：馆长总评区域 - 增加“记忆共鸣”视觉效果 */}
+            <div className="relative overflow-hidden bg-white p-1 rounded-[2.5rem] border border-indigo-100 shadow-sm">
+              <div className="bg-indigo-50/40 p-8 rounded-[2.4rem] flex flex-col md:flex-row items-start space-y-4 md:space-y-0 md:space-x-6">
+                <div className="bg-white p-4 rounded-2xl shadow-sm text-3xl shrink-0 border border-indigo-50">🔗</div>
+                <div className="flex-1">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <h5 className="font-bold text-indigo-900 text-sm">馆长观察：记忆共鸣 (Memory Resonance)</h5>
+                    <span className="animate-pulse bg-indigo-500 w-2 h-2 rounded-full"></span>
+                  </div>
+                  <p className="text-indigo-800 italic leading-relaxed text-sm md:text-base serif-font">
+                    {analysis.overallFeedback}
+                  </p>
+                </div>
               </div>
+              {/* 背景装饰 */}
+              <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-indigo-200/20 rounded-full blur-3xl"></div>
             </div>
           </div>
         )}
