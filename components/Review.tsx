@@ -104,7 +104,8 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
   };
 
   const renderDiffedText = (text: string) => {
-    const parts = text.split(/(<rem>.*?<\/rem>|<add>.*?<\/add>)/g);
+    // 改进后的正则：支持不带 / 的标签形式，虽然 AI 通常会遵循标准
+    const parts = text.split(/(<rem>.*?<\/rem>|<add>.*?<\/add>)/gs);
     return (
       <div className="leading-[2.5] md:leading-[3] serif-font text-base md:text-xl space-y-4">
         {parts.map((part, i) => {
@@ -182,8 +183,8 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
 
       <div className="mt-2">
         {activeTab === 'text' && (
-          <div className="space-y-6">
-            <div className="bg-white p-6 md:p-12 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
+          <div className="space-y-12 mt-8">
+            <div className="bg-white p-6 md:p-12 rounded-[2.5rem] border border-slate-200 shadow-sm relative">
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center space-x-2">
                   <span className="w-1.5 h-6 bg-indigo-600 rounded-full"></span>
@@ -200,12 +201,13 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
               </div>
             </div>
 
-            <div className="bg-slate-900 p-8 md:p-12 rounded-[2.5rem] text-slate-300 border border-slate-800 shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-10 transform -translate-y-1/2 bg-indigo-600 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg">
+            <div className="bg-slate-900 p-8 md:p-12 rounded-[2.5rem] text-slate-300 border border-slate-800 shadow-2xl relative">
+              {/* 核心修正：移除 overflow-hidden 以显示此处的绝对定位标签 */}
+              <div className="absolute top-0 right-10 transform -translate-y-1/2 bg-indigo-600 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg z-20">
                 Integrated Masterpiece
               </div>
               
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 mt-4">
                 <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center space-x-2">
                   <span>✨</span>
                   <span>馆藏成品（附假名注音）</span>

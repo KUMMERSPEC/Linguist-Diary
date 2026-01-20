@@ -14,21 +14,28 @@ export const analyzeDiaryEntry = async (text: string, language: string): Promise
   const ai = getAiInstance();
   const model = 'gemini-3-pro-preview';
   const isJapanese = language.toLowerCase() === 'japanese' || language === '日本語';
+  
+  // 强化日语注音指令
   const japaneseInstruction = isJapanese 
-    ? "IMPORTANT for Japanese: For BOTH 'modifiedText' and 'diffedText', provide Furigana for ALL Kanji using the syntax '[Kanji](furigana)'."
+    ? "IMPORTANT for Japanese: For BOTH 'modifiedText' and 'diffedText', provide Furigana for ALL Kanji using the syntax '[Kanji](furigana)'. Example: [今日](きょう)."
     : "";
+
+  // 强制 Diff 标记格式
+  const diffInstruction = "In the 'diffedText' field, you MUST wrap deleted parts in '<rem>...</rem>' and added/corrected parts in '<add>...</add>'. DO NOT use any other symbols like '[-]' or '{+}'. Maintain the original sentence structure around these tags so it's readable.";
 
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `You are an elite language professor. Analyze this ${language} diary: "${text}". ${japaneseInstruction}`,
+      contents: `You are an elite language professor. Analyze this ${language} diary: "${text}". 
+      ${diffInstruction}
+      ${japaneseInstruction}`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
             modifiedText: { type: Type.STRING },
-            diffedText: { type: Type.STRING },
+            diffedText: { type: Type.STRING, description: "Text with <rem>deleted</rem> and <add>added</add> tags." },
             overallFeedback: { type: Type.STRING },
             corrections: {
               type: Type.ARRAY,
@@ -124,7 +131,7 @@ export const generateDiaryAudio = async (text: string): Promise<string> => {
       contents: [{ parts: [{ text: cleanText }] }],
       config: {
         responseModalities: [Modality.AUDIO],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
       },
     });
     return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
