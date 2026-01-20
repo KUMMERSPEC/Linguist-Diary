@@ -104,8 +104,17 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
   };
 
   const renderDiffedText = (text: string) => {
-    // 改进后的正则：支持不带 / 的标签形式，虽然 AI 通常会遵循标准
-    const parts = text.split(/(<rem>.*?<\/rem>|<add>.*?<\/add>)/gs);
+    // 核心自愈逻辑：将非标准格式自动修复为标准格式
+    let healedText = text
+      // 修复 -[内容-] 或 -内容- 模式
+      .replace(/-?\[?([^-[\]{}]+)-\]?/g, '<rem>$1</rem>')
+      // 修复 {+内容+} 模式
+      .replace(/\{\+?\s?([^\}]+)\+?\}/g, '<add>$1</add>')
+      // 修复可能存在的残留符号
+      .replace(/\]\{/g, '');
+
+    const parts = healedText.split(/(<rem>.*?<\/rem>|<add>.*?<\/add>)/gs);
+    
     return (
       <div className="leading-[2.5] md:leading-[3] serif-font text-base md:text-xl space-y-4">
         {parts.map((part, i) => {
@@ -202,7 +211,6 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
             </div>
 
             <div className="bg-slate-900 p-8 md:p-12 rounded-[2.5rem] text-slate-300 border border-slate-800 shadow-2xl relative">
-              {/* 核心修正：移除 overflow-hidden 以显示此处的绝对定位标签 */}
               <div className="absolute top-0 right-10 transform -translate-y-1/2 bg-indigo-600 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg z-20">
                 Integrated Masterpiece
               </div>
