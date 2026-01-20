@@ -74,6 +74,7 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
   };
 
   const renderDiffedText = (text: string) => {
+    if (!text) return null;
     let healedText = text.replace(/-?\[?([^-[\]{}]+)-\]?/g, '<rem>$1</rem>').replace(/\{\+?\s?([^\}]+)\+?\}/g, '<add>$1</add>').replace(/\]\{/g, '');
     const parts = healedText.split(/(<rem>.*?<\/rem>|<add>.*?<\/add>)/gs);
     return (
@@ -289,7 +290,7 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
                 <span>逻辑衔接建议 (Transitions)</span>
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {analysis.transitionSuggestions.map((item, idx) => (
+                {analysis.transitionSuggestions?.map((item, idx) => (
                   <div key={idx} className="bg-white p-6 rounded-2xl border border-indigo-100 shadow-sm hover:shadow-md transition-shadow group">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-lg font-black text-indigo-600 group-hover:scale-110 transition-transform origin-left">{renderRuby(item.word)}</span>
@@ -301,6 +302,9 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
                     </div>
                   </div>
                 ))}
+                {(!analysis.transitionSuggestions || analysis.transitionSuggestions.length === 0) && (
+                   <p className="col-span-full text-center py-10 text-slate-400 text-xs italic">馆长认为本篇逻辑通顺，无需额外衔接词。</p>
+                )}
               </div>
             </div>
 
@@ -310,7 +314,7 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
                 <span>语言点深度批注</span>
               </h4>
               <div className="grid grid-cols-1 gap-3">
-                {analysis.corrections.map((corr, idx) => (
+                {analysis.corrections?.map((corr, idx) => (
                   <div key={idx} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-start gap-4">
                     <div className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase text-center shrink-0 min-w-[70px] ${
                       corr.category === 'Grammar' ? 'bg-red-50 text-red-600' :
@@ -329,6 +333,9 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
                     </div>
                   </div>
                 ))}
+                {(!analysis.corrections || analysis.corrections.length === 0) && (
+                   <p className="text-center py-10 text-slate-400 text-xs italic">无明显语言瑕疵，表现完美。</p>
+                )}
               </div>
             </div>
 
@@ -346,7 +353,7 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
 
         {activeTab === 'vocab' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {analysis.advancedVocab.map((vocab, idx) => (
+            {analysis.advancedVocab?.map((vocab, idx) => (
               <div key={idx} className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm hover:border-indigo-300 transition-all group">
                 <div className="flex items-center justify-between mb-4">
                   <h5 className="text-xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{renderRuby(vocab.word)}</h5>
@@ -365,6 +372,9 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
                 </div>
               </div>
             ))}
+            {(!analysis.advancedVocab || analysis.advancedVocab.length === 0) && (
+              <p className="col-span-full text-center py-20 text-slate-400 text-xs italic">本篇未提取出进阶词汇，可以尝试写得更复杂一些。</p>
+            )}
           </div>
         )}
       </div>
