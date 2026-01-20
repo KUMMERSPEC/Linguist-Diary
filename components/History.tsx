@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { DiaryEntry } from '../types';
 
@@ -10,14 +9,22 @@ interface HistoryProps {
 
 const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedLanguage, setSelectedLanguage] = useState('All');
+
+  // 提取现有馆藏中的所有语言种类
+  const availableLanguages = useMemo(() => {
+    const langs = new Set(entries.map(e => e.language));
+    return ['All', ...Array.from(langs)];
+  }, [entries]);
 
   const filteredEntries = useMemo(() => {
-    return entries.filter(e => 
-      e.originalText.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      e.language.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      e.date.includes(searchQuery)
-    ).sort((a, b) => b.timestamp - a.timestamp);
-  }, [entries, searchQuery]);
+    return entries.filter(e => {
+      const matchesSearch = e.originalText.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                           e.date.includes(searchQuery);
+      const matchesLanguage = selectedLanguage === 'All' || e.language === selectedLanguage;
+      return matchesSearch && matchesLanguage;
+    }).sort((a, b) => b.timestamp - a.timestamp);
+  }, [entries, searchQuery, selectedLanguage]);
 
   const groupedEntries = useMemo(() => {
     const groups: { [key: string]: DiaryEntry[] } = {};
@@ -44,36 +51,70 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete }) => {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900">日记收藏馆</h2>
-          <p className="text-slate-500">按时间线浏览您的成长轨迹。</p>
+      <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+        <div className="space-y-1">
+          <h2 className="text-2xl md:text-3xl font-bold text-slate-900 serif-font">日记收藏馆</h2>
+          <p className="text-slate-500 text-sm">按时间线浏览您的成长轨迹。</p>
         </div>
         
-        <div className="relative group">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">🔍</span>
-          <input 
-            type="text"
-            placeholder="搜寻记忆或语言..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-full md:w-64"
-          />
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* 独立语言筛选器 */}
+          <div className="flex flex-col">
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">语言筛选 Language</label>
+            <div className="relative">
+              <select
+                value={selectedLanguage}
+                onChange={(e) => setSelectedLanguage(e.target.value)}
+                className="appearance-none pl-4 pr-10 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all w-full sm:w-32 cursor-pointer shadow-sm"
+              >
+                {availableLanguages.map(lang => (
+                  <option key={lang} value={lang}>{lang === 'All' ? '全部语言' : lang}</option>
+                ))}
+              </select>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[8px] opacity-70">
+                ▼
+              </div>
+            </div>
+          </div>
+
+          {/* 独立内容搜索框 */}
+          <div className="flex flex-col">
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">检索内容 Search</label>
+            <div className="relative group">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors text-sm">
+                🔍
+              </span>
+              <input 
+                type="text"
+                placeholder="搜寻记忆或日期..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all w-full sm:w-64 shadow-sm"
+              />
+            </div>
+          </div>
         </div>
       </header>
 
       {Object.keys(groupedEntries).length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-3xl border border-dashed border-slate-200">
-          <p className="text-slate-400">没有找到符合条件的馆藏...</p>
+        <div className="text-center py-20 bg-white rounded-[2.5rem] border border-dashed border-slate-200 animate-in fade-in duration-500">
+          <div className="text-4xl mb-4">🕵️‍♂️</div>
+          <p className="text-slate-400 font-bold">没有找到符合条件的馆藏...</p>
+          <button 
+            onClick={() => { setSearchQuery(''); setSelectedLanguage('All'); }}
+            className="mt-4 text-xs font-black text-indigo-600 uppercase hover:underline"
+          >
+            重置筛选条件
+          </button>
         </div>
       ) : (
         <div className="space-y-12">
           {(Object.entries(groupedEntries) as [string, DiaryEntry[]][]).map(([monthYear, monthEntries]) => (
             <section key={monthYear} className="space-y-6">
               <div className="flex items-center space-x-4">
-                <h3 className="text-lg font-bold text-slate-800 whitespace-nowrap">{monthYear}</h3>
+                <h3 className="text-lg font-bold text-slate-800 whitespace-nowrap serif-font">{monthYear}</h3>
                 <div className="h-[1px] w-full bg-slate-200"></div>
-                <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full">{monthEntries.length} 篇</span>
+                <span className="text-[10px] font-black text-slate-400 bg-white border border-slate-100 px-3 py-1 rounded-full uppercase tracking-widest shadow-sm">{monthEntries.length} 藏品</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -81,10 +122,10 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete }) => {
                   <button
                     key={entry.id}
                     onClick={() => onSelect(entry)}
-                    className="group relative text-left bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-indigo-200 transition-all duration-300"
+                    className="group relative text-left bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-indigo-200 transition-all duration-500"
                   >
-                    <div className="absolute -top-3 left-6 px-3 py-1 bg-indigo-600 text-white text-[10px] font-bold rounded-lg shadow-lg shadow-indigo-100">
-                      {new Date(entry.timestamp).getDate()}日
+                    <div className="absolute -top-3 left-8 px-4 py-1.5 bg-indigo-600 text-white text-[10px] font-black rounded-xl shadow-lg shadow-indigo-100 uppercase tracking-widest">
+                      {new Date(entry.timestamp).getDate()}nd {monthYear.split('年')[1]}
                     </div>
 
                     {/* Delete Button */}
@@ -93,7 +134,7 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete }) => {
                         e.stopPropagation();
                         onDelete(entry.id);
                       }}
-                      className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-300 hover:bg-red-50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all active:scale-90"
+                      className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-300 hover:bg-red-50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all active:scale-90 z-20"
                       title="删除此条目"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -101,19 +142,19 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete }) => {
                       </svg>
                     </button>
 
-                    <div className="flex items-center justify-between mb-4 mt-2">
+                    <div className="flex items-center justify-between mb-4 mt-6">
                       <div className="flex items-center space-x-2">
-                        <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></span>
-                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[10px] font-bold rounded uppercase tracking-wider">{entry.language}</span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
+                        <span className="px-2.5 py-1 bg-indigo-50 text-indigo-600 text-[9px] font-black rounded-lg uppercase tracking-widest">{entry.language}</span>
                       </div>
                     </div>
 
-                    <p className="text-slate-600 line-clamp-4 leading-relaxed serif-font mb-6 min-h-[6rem]">
+                    <p className="text-slate-600 line-clamp-4 leading-relaxed serif-font mb-6 min-h-[6rem] italic text-sm md:text-base">
                       {entry.originalText}
                     </p>
 
                     <div className="pt-4 border-t border-slate-50 flex items-center justify-between group-hover:text-indigo-600 transition-colors">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 group-hover:text-indigo-600">回顾此篇章</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-indigo-600">回顾此篇章 View Artifact</span>
                       <span className="transform group-hover:translate-x-1 transition-transform text-indigo-400">→</span>
                     </div>
                   </button>
