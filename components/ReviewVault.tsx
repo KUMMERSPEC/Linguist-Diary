@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { DiaryEntry, AdvancedVocab, Correction, PracticeRecord } from '../types';
-import { validateVocabUsage } from '../services/geminiService';
+import { validateVocabUsage, generateDiaryAudio } from '../services/geminiService';
 
 interface ReviewVaultProps {
   entries: DiaryEntry[];
@@ -14,6 +14,11 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
   const [activeTab, setActiveTab] = useState<'gems' | 'flashback' | 'daily'>('daily');
   const [selectedLanguage, setSelectedLanguage] = useState<string>('All');
   
+  // 音频状态
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
   // 每日特展池
   const [dailyPool, setDailyPool] = useState<ExtendedVocab[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -23,7 +28,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
   const [userSentence, setUserSentence] = useState('');
   const [isValidating, setIsValidating] = useState(false);
   const [testResult, setTestResult] = useState<{ isCorrect: boolean, feedback: string, betterVersion?: string } | null>(null);
-  const [originalAttempt, setOriginalAttempt] = useState<string>(''); // 记录第一次尝试的内容
+  const [originalAttempt, setOriginalAttempt] = useState<string>(''); 
 
   const [expandedWord, setExpandedWord] = useState<string | null>(null);
 
@@ -70,6 +75,48 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
     return gems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [entries, selectedLanguage]);
 
+  // --- 音频播放核心逻辑 ---
+  const handlePlayAudio = async (text: string, id: string) => {
+    if (playingAudioId === id) {
+      audioSourceRef.current?.stop();
+      setPlayingAudioId(null);
+      return;
+    }
+
+    setPlayingAudioId(id);
+    try {
+      const base64Audio = await generateDiaryAudio(text);
+      if (!base64Audio) throw new Error("Audio generation failed");
+      
+      const binaryString = atob(base64Audio);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      audioContextRef.current = audioCtx;
+
+      const dataInt16 = new Int16Array(bytes.buffer);
+      const frameCount = dataInt16.length;
+      const buffer = audioCtx.createBuffer(1, frameCount, 24000);
+      const channelData = buffer.getChannelData(0);
+      for (let i = 0; i < frameCount; i++) {
+        channelData[i] = dataInt16[i] / 32768.0;
+      }
+
+      const source = audioCtx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioCtx.destination);
+      source.onended = () => setPlayingAudioId(null);
+      source.start();
+      audioSourceRef.current = source;
+    } catch (error) {
+      console.error("Audio playback error:", error);
+      setPlayingAudioId(null);
+    }
+  };
+
   const startChallenge = () => {
     const entriesWithCorrections = entries.filter(e => e.analysis && e.analysis.corrections.length > 0);
     if (entriesWithCorrections.length === 0) return;
@@ -92,17 +139,11 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
   const handleTestSubmit = async (wordObj: ExtendedVocab) => {
     if (!userSentence.trim() || isValidating) return;
     setIsValidating(true);
-    
-    // 如果是第一次提交，记录原始尝试的内容，用于后面对比
-    if (!originalAttempt) {
-      setOriginalAttempt(userSentence);
-    }
+    if (!originalAttempt) setOriginalAttempt(userSentence);
 
     try {
       const result = await validateVocabUsage(wordObj.word, wordObj.meaning, userSentence, wordObj.language);
       setTestResult(result);
-      
-      // 如果完全正确，自动通过
       if (result.isCorrect) {
         setTimeout(() => finalizeRecord(wordObj, result, 'Perfect'), 1500);
       }
@@ -115,7 +156,6 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
 
   const finalizeRecord = (wordObj: ExtendedVocab, result: any, status: 'Perfect' | 'Polished') => {
     const currentMastery = wordObj.mastery || 0;
-    // 完美通过增加更多熟练度 (1)，修正通过增加较少 (0.5)
     const increment = status === 'Perfect' ? 1 : 0.5;
     const newMastery = Math.min(3, currentMastery + increment);
     
@@ -196,7 +236,15 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
               </div>
 
               <div className="text-center space-y-4">
-                <h3 className="text-4xl font-black text-slate-900">{renderRuby(dailyPool[currentIndex].word)}</h3>
+                <div className="flex items-center justify-center space-x-3">
+                  <h3 className="text-4xl font-black text-slate-900">{renderRuby(dailyPool[currentIndex].word)}</h3>
+                  <button 
+                    onClick={() => handlePlayAudio(dailyPool[currentIndex].word, `daily-${currentIndex}`)}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${playingAudioId === `daily-${currentIndex}` ? 'bg-indigo-600 text-white animate-pulse' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
+                  >
+                    {playingAudioId === `daily-${currentIndex}` ? '🔊' : '🎧'}
+                  </button>
+                </div>
                 <div className="inline-block bg-slate-50 px-4 py-2 rounded-2xl">
                   <p className="text-slate-500 font-bold italic text-sm">{dailyPool[currentIndex].meaning}</p>
                 </div>
@@ -233,7 +281,15 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                           <p className="text-[10px] font-black text-amber-600 uppercase mb-2">对比确认 (Contrast)：</p>
                           <div className="space-y-2">
                             <p className="text-xs text-slate-400 line-through">您的原文：{originalAttempt}</p>
-                            <p className="text-sm font-bold serif-font text-emerald-700">修正建议：{testResult.betterVersion}</p>
+                            <div className="flex items-start justify-between">
+                              <p className="text-sm font-bold serif-font text-emerald-700 flex-1">修正建议：{testResult.betterVersion}</p>
+                              <button 
+                                onClick={() => handlePlayAudio(testResult.betterVersion || "", "suggestion")}
+                                className="ml-2 text-indigo-500 hover:text-indigo-700"
+                              >
+                                {playingAudioId === "suggestion" ? '🔊' : '🎧'}
+                              </button>
+                            </div>
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
@@ -250,7 +306,6 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                             收录并跳过
                           </button>
                         </div>
-                        <p className="text-[9px] text-center text-slate-400 font-bold uppercase tracking-tight">点击“收录并跳过”将记录此次错误对比作为学习笔记</p>
                       </div>
                     )}
                     
@@ -287,15 +342,24 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
             {filteredGems.length > 0 ? filteredGems.map((vocab, idx) => (
               <div key={idx} className="flex flex-col">
                 <div 
-                  onClick={() => setExpandedWord(expandedWord === vocab.word ? null : vocab.word)}
-                  className={`bg-white p-5 rounded-[2rem] border transition-all cursor-pointer group flex flex-col justify-between h-full ${
+                  className={`bg-white p-5 rounded-[2rem] border transition-all group flex flex-col justify-between h-full ${
                     expandedWord === vocab.word ? 'border-indigo-400 ring-4 ring-indigo-50/50 shadow-lg z-10' : 'border-slate-200 hover:border-indigo-200'
                   }`}
                 >
                     <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h4 className="text-lg font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{renderRuby(vocab.word)}</h4>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{vocab.language} · {vocab.level}</p>
+                      <div className="flex items-center space-x-2">
+                        <h4 
+                          onClick={() => setExpandedWord(expandedWord === vocab.word ? null : vocab.word)}
+                          className="text-lg font-black text-slate-900 group-hover:text-indigo-600 transition-colors cursor-pointer"
+                        >
+                          {renderRuby(vocab.word)}
+                        </h4>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handlePlayAudio(vocab.word, `gem-${idx}`); }}
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] ${playingAudioId === `gem-${idx}` ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-500'}`}
+                        >
+                          {playingAudioId === `gem-${idx}` ? '🔊' : '🎧'}
+                        </button>
                       </div>
                       <div className="flex space-x-0.5">
                         {[1, 2, 3].map(i => (
@@ -306,13 +370,15 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                     <p className="text-sm text-slate-600 font-medium mb-4 line-clamp-2">{vocab.meaning}</p>
                     <div className="flex items-center justify-between pt-3 border-t border-slate-50">
                         <span className="text-[9px] font-bold text-slate-400 uppercase">{vocab.date}</span>
-                        <span className="text-[9px] font-black text-indigo-500 uppercase flex items-center">
+                        <span 
+                          onClick={() => setExpandedWord(expandedWord === vocab.word ? null : vocab.word)}
+                          className="text-[9px] font-black text-indigo-500 uppercase flex items-center cursor-pointer"
+                        >
                           {vocab.practices?.length || 0} 磨炼记 {expandedWord === vocab.word ? '▴' : '▾'}
                         </span>
                     </div>
                 </div>
 
-                {/* 展开的磨炼记录 */}
                 {expandedWord === vocab.word && (
                   <div className="mt-2 bg-slate-50 rounded-[2rem] p-5 border border-slate-200 space-y-4 animate-in slide-in-from-top-2 duration-300">
                     <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center space-x-2">
@@ -328,7 +394,15 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                               <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase ${p.status === 'Perfect' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
                                 {p.status === 'Perfect' ? 'Perfectly Expressed' : 'Polished & Refined'}
                               </span>
-                              <span className="text-[8px] text-slate-300 font-bold">{new Date(p.timestamp).toLocaleDateString()}</span>
+                              <div className="flex items-center space-x-2">
+                                <button 
+                                  onClick={() => handlePlayAudio(p.sentence, `practice-${idx}-${pIdx}`)}
+                                  className={`text-[10px] ${playingAudioId === `practice-${idx}-${pIdx}` ? 'text-indigo-600' : 'text-slate-400'}`}
+                                >
+                                  {playingAudioId === `practice-${idx}-${pIdx}` ? '🔊' : '🎧'}
+                                </button>
+                                <span className="text-[8px] text-slate-300 font-bold">{new Date(p.timestamp).toLocaleDateString()}</span>
+                              </div>
                             </div>
                             
                             {p.originalAttempt && (
@@ -340,18 +414,12 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                             <p className={`text-sm serif-font leading-relaxed ${p.status === 'Perfect' ? 'text-slate-800' : 'text-indigo-700 font-bold'}`}>
                               {renderRuby(p.sentence)}
                             </p>
-                            
-                            {p.feedback && (
-                              <div className="pt-2 mt-2 border-t border-slate-50">
-                                <p className="text-[10px] text-slate-500 leading-relaxed italic">AI: {p.feedback}</p>
-                              </div>
-                            )}
                           </div>
                         ))}
                       </div>
                     ) : (
                       <div className="text-center py-6">
-                        <p className="text-[10px] text-slate-400 font-bold uppercase">暂无练习记录，去“每日特展”试试吧！</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase">暂无练习记录</p>
                       </div>
                     )}
                   </div>
@@ -392,8 +460,14 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
 
             {showAnswer ? (
                 <div className="space-y-6 animate-in slide-in-from-top-4">
-                    <div className="p-8 bg-indigo-600 rounded-[2.5rem] text-white serif-font text-xl leading-relaxed shadow-xl shadow-indigo-200">
-                        {renderRuby(challengeData.correction.improved)}
+                    <div className="p-8 bg-indigo-600 rounded-[2.5rem] text-white serif-font text-xl leading-relaxed shadow-xl shadow-indigo-200 flex items-start justify-between">
+                        <div className="flex-1">{renderRuby(challengeData.correction.improved)}</div>
+                        <button 
+                          onClick={() => handlePlayAudio(challengeData.correction.improved, "flashback-ans")}
+                          className="ml-4 bg-white/20 p-2 rounded-full"
+                        >
+                          {playingAudioId === "flashback-ans" ? '🔊' : '🎧'}
+                        </button>
                     </div>
                     <div className="flex space-x-3">
                         <button onClick={startChallenge} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all">换一个挑战</button>
