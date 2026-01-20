@@ -7,10 +7,12 @@ export interface Correction {
 }
 
 export interface PracticeRecord {
-  sentence: string;
+  sentence: string; // 最终版本或修正版本
+  originalAttempt?: string; // 用户最初的错误尝试
   feedback: string;
   betterVersion?: string;
   timestamp: number;
+  status: 'Perfect' | 'Polished'; 
 }
 
 export interface AdvancedVocab {

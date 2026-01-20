@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { DiaryEntry, AdvancedVocab, Correction, PracticeRecord } from '../types';
 import { validateVocabUsage } from '../services/geminiService';
@@ -15,20 +14,20 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
   const [activeTab, setActiveTab] = useState<'gems' | 'flashback' | 'daily'>('daily');
   const [selectedLanguage, setSelectedLanguage] = useState<string>('All');
   
-  // 每日特展状态
+  // 每日特展池
   const [dailyPool, setDailyPool] = useState<ExtendedVocab[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showCompletion, setShowCompletion] = useState(false);
 
-  // 单词测试状态
+  // 练习过程状态
   const [userSentence, setUserSentence] = useState('');
   const [isValidating, setIsValidating] = useState(false);
   const [testResult, setTestResult] = useState<{ isCorrect: boolean, feedback: string, betterVersion?: string } | null>(null);
+  const [originalAttempt, setOriginalAttempt] = useState<string>(''); // 记录第一次尝试的内容
 
-  // 展开词汇详情
   const [expandedWord, setExpandedWord] = useState<string | null>(null);
 
-  // 句子挑战状态 (旧功能)
+  // 句子挑战
   const [challengeData, setChallengeData] = useState<{
     entry: DiaryEntry;
     correction: Correction;
@@ -36,7 +35,6 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
   } | null>(null);
   const [showAnswer, setShowAnswer] = useState(false);
 
-  // 初始化每日特展池
   useEffect(() => {
     if (activeTab === 'daily' && dailyPool.length === 0) {
       const allGems: ExtendedVocab[] = [];
@@ -57,11 +55,6 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
       setDailyPool(pool);
     }
   }, [activeTab, entries, dailyPool.length]);
-
-  const availableLanguages = useMemo(() => {
-    const langs = new Set(entries.map(e => e.language));
-    return ['All', ...Array.from(langs)];
-  }, [entries]);
 
   const filteredGems = useMemo(() => {
     const gems: ExtendedVocab[] = [];
@@ -99,30 +92,50 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
   const handleTestSubmit = async (wordObj: ExtendedVocab) => {
     if (!userSentence.trim() || isValidating) return;
     setIsValidating(true);
-    setTestResult(null);
-
-    const result = await validateVocabUsage(wordObj.word, wordObj.meaning, userSentence, wordObj.language);
-    setTestResult(result);
-    setIsValidating(false);
-
-    if (result.isCorrect) {
-      const currentMastery = wordObj.mastery || 0;
-      const newMastery = Math.min(3, currentMastery + 1);
-      
-      const record: PracticeRecord = {
-        sentence: userSentence,
-        feedback: result.feedback,
-        betterVersion: result.betterVersion,
-        timestamp: Date.now()
-      };
-      
-      onUpdateMastery(wordObj.entryId, wordObj.word, newMastery, record);
+    
+    // 如果是第一次提交，记录原始尝试的内容，用于后面对比
+    if (!originalAttempt) {
+      setOriginalAttempt(userSentence);
     }
+
+    try {
+      const result = await validateVocabUsage(wordObj.word, wordObj.meaning, userSentence, wordObj.language);
+      setTestResult(result);
+      
+      // 如果完全正确，自动通过
+      if (result.isCorrect) {
+        setTimeout(() => finalizeRecord(wordObj, result, 'Perfect'), 1500);
+      }
+    } catch (e) {
+      alert("评审失败，请重试。");
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  const finalizeRecord = (wordObj: ExtendedVocab, result: any, status: 'Perfect' | 'Polished') => {
+    const currentMastery = wordObj.mastery || 0;
+    // 完美通过增加更多熟练度 (1)，修正通过增加较少 (0.5)
+    const increment = status === 'Perfect' ? 1 : 0.5;
+    const newMastery = Math.min(3, currentMastery + increment);
+    
+    const record: PracticeRecord = {
+      sentence: status === 'Perfect' ? userSentence : (result.betterVersion || userSentence),
+      originalAttempt: status === 'Polished' ? originalAttempt : undefined,
+      feedback: result.feedback,
+      betterVersion: result.betterVersion,
+      timestamp: Date.now(),
+      status: status
+    };
+    
+    onUpdateMastery(wordObj.entryId, wordObj.word, newMastery, record);
+    nextWord();
   };
 
   const nextWord = () => {
     setTestResult(null);
     setUserSentence('');
+    setOriginalAttempt('');
     if (currentIndex < dailyPool.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
@@ -148,42 +161,17 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
     return parts.length > 0 ? parts : input;
   };
 
-  if (entries.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-center space-y-4">
-        <div className="text-6xl grayscale opacity-50">🏛️</div>
-        <h3 className="text-xl font-bold text-slate-900">珍宝阁尚未开启</h3>
-        <p className="text-slate-500 max-w-xs text-sm">记录第一篇日记后，系统将为您自动收录词汇珍宝。</p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 pb-20">
       <header className="space-y-1">
         <h2 className="text-2xl md:text-3xl font-bold text-slate-900 serif-font">珍宝复习馆</h2>
-        <p className="text-slate-500 text-sm">在这里，知识将被凝固为永恒的馆藏。</p>
+        <p className="text-slate-500 text-sm">记录每一次从生疏到精准的跨越。</p>
       </header>
 
       <div className="flex p-1 bg-slate-200/50 rounded-2xl w-full md:w-fit border border-slate-200">
-        <button 
-          onClick={() => { setActiveTab('daily'); setShowCompletion(false); setDailyPool([]); setCurrentIndex(0); }}
-          className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'daily' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-        >
-          ✨ 每日特展
-        </button>
-        <button 
-          onClick={() => setActiveTab('gems')}
-          className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'gems' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-        >
-          💎 词汇总览
-        </button>
-        <button 
-          onClick={() => { setActiveTab('flashback'); if(!challengeData) startChallenge(); }}
-          className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'flashback' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-        >
-          ⏳ 句子挑战
-        </button>
+        <button onClick={() => { setActiveTab('daily'); setShowCompletion(false); setDailyPool([]); setCurrentIndex(0); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'daily' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>✨ 每日特展</button>
+        <button onClick={() => setActiveTab('gems')} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'gems' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>💎 词汇总览</button>
+        <button onClick={() => { setActiveTab('flashback'); if(!challengeData) startChallenge(); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-xs font-black transition-all ${activeTab === 'flashback' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>⏳ 句子挑战</button>
       </div>
 
       {activeTab === 'daily' && (
@@ -193,24 +181,18 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
               <div className="text-7xl">🏆</div>
               <div className="space-y-2">
                 <h3 className="text-3xl font-black text-slate-900 serif-font">今日策展完成！</h3>
-                <p className="text-slate-500 font-bold">您已完成了今日 10 个核心词汇的深度练习。</p>
+                <p className="text-slate-500 font-bold">错误是进步的阶梯，您的每一次“淬炼”都已录入馆藏。</p>
               </div>
               <div className="pt-8 border-t border-slate-50 flex justify-center space-x-4">
-                 <button onClick={() => { setActiveTab('gems'); }} className="px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs hover:bg-slate-200 transition-all">返回词库</button>
-                 <button onClick={() => { setDailyPool([]); setShowCompletion(false); setCurrentIndex(0); }} className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-xs hover:bg-indigo-700 transition-all">再练 10 个</button>
+                 <button onClick={() => setActiveTab('gems')} className="px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs hover:bg-slate-200 transition-all">查看学习足迹</button>
+                 <button onClick={() => { setDailyPool([]); setShowCompletion(false); setCurrentIndex(0); }} className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-xs hover:bg-indigo-700 transition-all">开启新一轮特展</button>
               </div>
             </div>
           ) : dailyPool.length > 0 ? (
             <div className="bg-white p-8 rounded-[3rem] border-2 border-slate-100 shadow-xl space-y-8 relative">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <span className="text-[10px] font-black bg-indigo-600 text-white px-3 py-1 rounded-full uppercase tracking-widest">Exhibition {currentIndex + 1}/10</span>
-                </div>
-                <div className="flex space-x-1">
-                  {dailyPool.map((_, i) => (
-                    <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === currentIndex ? 'bg-indigo-600 scale-125' : i < currentIndex ? 'bg-emerald-400' : 'bg-slate-100'}`}></div>
-                  ))}
-                </div>
+                <span className="text-[10px] font-black bg-indigo-600 text-white px-3 py-1 rounded-full uppercase tracking-widest">Exhibition {currentIndex + 1}/10</span>
+                <div className="flex space-x-1">{dailyPool.map((_, i) => <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === currentIndex ? 'bg-indigo-600 scale-125' : i < currentIndex ? 'bg-emerald-400' : 'bg-slate-100'}`}></div>)}</div>
               </div>
 
               <div className="text-center space-y-4">
@@ -221,158 +203,212 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
               </div>
 
               <div className="space-y-4">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center space-x-2">
-                  <span>🖋️</span>
-                  <span>请尝试为该词造句：</span>
-                </p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center space-x-2"><span>🖋️</span><span>请尝试为该词造句：</span></p>
                 <textarea 
                   value={userSentence}
                   onChange={(e) => setUserSentence(e.target.value)}
-                  placeholder={`写下你的句子...`}
+                  placeholder={`在此输入您的表达...`}
                   className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl text-base serif-font italic min-h-[120px] focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all no-scrollbar"
+                  disabled={isValidating || (testResult !== null && testResult.isCorrect)}
                 />
                 
                 {!testResult ? (
                    <button 
-                    disabled={!userSentence.trim() || isValidating}
-                    onClick={() => handleTestSubmit(dailyPool[currentIndex])}
+                    disabled={!userSentence.trim() || isValidating} 
+                    onClick={() => handleTestSubmit(dailyPool[currentIndex])} 
                     className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-indigo-100 disabled:bg-slate-200 transition-all active:scale-95"
-                  >
+                   >
                     {isValidating ? '馆长评审中...' : '提交 AI 评审'}
                   </button>
                 ) : (
-                  <div className={`p-6 rounded-3xl border animate-in slide-in-from-top-4 ${testResult.isCorrect ? 'bg-emerald-50 border-emerald-100 text-emerald-900' : 'bg-red-50 border-red-100 text-red-900'}`}>
+                  <div className={`p-6 rounded-3xl border animate-in slide-in-from-top-4 ${testResult.isCorrect ? 'bg-emerald-50 border-emerald-100 text-emerald-900' : 'bg-amber-50 border-amber-100 text-amber-900'}`}>
                     <div className="flex items-center space-x-2 mb-3">
-                      <span className="text-xl">{testResult.isCorrect ? '✨ 表达精准！' : '🔬 建议优化'}</span>
+                      <span className="text-xl">{testResult.isCorrect ? '✨ 表达精准！' : '⚖️ 发现瑕疵'}</span>
                     </div>
                     <p className="text-sm italic mb-4 leading-relaxed">{testResult.feedback}</p>
-                    {testResult.betterVersion && (
-                      <div className="pt-4 border-t border-black/5 mb-4">
-                        <p className="text-[10px] font-black uppercase mb-1.5 opacity-40">更地道的方案 (Native Suggestion)：</p>
-                        <p className="text-sm font-bold serif-font">{testResult.betterVersion}</p>
+                    
+                    {!testResult.isCorrect && (
+                      <div className="space-y-4">
+                        <div className="p-4 bg-white/50 rounded-2xl border border-amber-200">
+                          <p className="text-[10px] font-black text-amber-600 uppercase mb-2">对比确认 (Contrast)：</p>
+                          <div className="space-y-2">
+                            <p className="text-xs text-slate-400 line-through">您的原文：{originalAttempt}</p>
+                            <p className="text-sm font-bold serif-font text-emerald-700">修正建议：{testResult.betterVersion}</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <button 
+                            onClick={() => setTestResult(null)} 
+                            className="py-4 bg-white text-amber-600 border border-amber-200 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-100 transition-all shadow-sm"
+                          >
+                            重新尝试
+                          </button>
+                          <button 
+                            onClick={() => finalizeRecord(dailyPool[currentIndex], testResult, 'Polished')} 
+                            className="py-4 bg-amber-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-700 transition-all shadow-md"
+                          >
+                            收录并跳过
+                          </button>
+                        </div>
+                        <p className="text-[9px] text-center text-slate-400 font-bold uppercase tracking-tight">点击“收录并跳过”将记录此次错误对比作为学习笔记</p>
                       </div>
                     )}
-                    <button onClick={testResult.isCorrect ? nextWord : () => setTestResult(null)} className="w-full py-4 bg-white/60 hover:bg-white rounded-2xl text-xs font-black transition-all shadow-sm">
-                      {testResult.isCorrect ? (currentIndex === dailyPool.length - 1 ? '完成今日特展' : '进入下一个') : '重新修改'}
-                    </button>
+                    
+                    {testResult.isCorrect && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-center p-3 bg-emerald-100/50 rounded-xl">
+                          <span className="text-[10px] font-black text-emerald-600 uppercase">一次通过！正在进入下一项...</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             </div>
-          ) : (
-            <div className="text-center py-20 animate-pulse text-slate-400">馆长正在为您筹备特展...</div>
-          )}
+          ) : <div className="text-center py-20 animate-pulse text-slate-400">正在为您布展...</div>}
         </div>
       )}
 
       {activeTab === 'gems' && (
         <div className="space-y-6">
-          <div className="flex items-center space-x-2 overflow-x-auto no-scrollbar pb-2">
-            {availableLanguages.map(lang => (
-              <button
-                key={lang}
-                onClick={() => setSelectedLanguage(lang)}
-                className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border-2 ${
-                  selectedLanguage === lang ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-400'
-                }`}
-              >
-                {lang === 'All' ? '🌐 全部' : lang}
-              </button>
-            ))}
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-slate-800">全部词汇藏品</h3>
+            <select 
+                value={selectedLanguage}
+                onChange={(e) => setSelectedLanguage(e.target.value)}
+                className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10"
+            >
+                <option value="All">所有语言</option>
+                {Array.from(new Set(entries.map(e => e.language))).map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredGems.map((gem, idx) => {
-              const isExpanded = expandedWord === `${gem.word}-${gem.entryId}`;
-              return (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredGems.length > 0 ? filteredGems.map((vocab, idx) => (
+              <div key={idx} className="flex flex-col">
                 <div 
-                  key={idx} 
-                  onClick={() => setExpandedWord(isExpanded ? null : `${gem.word}-${gem.entryId}`)}
-                  className={`bg-white p-6 rounded-[2.5rem] border transition-all group relative cursor-pointer ${isExpanded ? 'ring-2 ring-indigo-500 shadow-2xl col-span-1 md:col-span-2' : 'hover:border-indigo-300 shadow-sm'}`}
+                  onClick={() => setExpandedWord(expandedWord === vocab.word ? null : vocab.word)}
+                  className={`bg-white p-5 rounded-[2rem] border transition-all cursor-pointer group flex flex-col justify-between h-full ${
+                    expandedWord === vocab.word ? 'border-indigo-400 ring-4 ring-indigo-50/50 shadow-lg z-10' : 'border-slate-200 hover:border-indigo-200'
+                  }`}
                 >
-                  {gem.mastery === 3 && <div className="absolute top-4 right-6 text-xl">🏆</div>}
-                  
-                  <div className="relative z-10 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xl font-black text-slate-900">{renderRuby(gem.word)}</h4>
-                      <div className="flex space-x-1">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h4 className="text-lg font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{renderRuby(vocab.word)}</h4>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{vocab.language} · {vocab.level}</p>
+                      </div>
+                      <div className="flex space-x-0.5">
                         {[1, 2, 3].map(i => (
-                          <div key={i} className={`w-2 h-2 rounded-full ${i <= (gem.mastery || 0) ? 'bg-indigo-500' : 'bg-slate-100'}`}></div>
+                          <div key={i} className={`w-2 h-2 rounded-full ${i <= (vocab.mastery || 0) ? 'bg-indigo-600' : 'bg-slate-100'}`}></div>
                         ))}
                       </div>
                     </div>
-                    
-                    <p className="text-sm text-slate-600 font-bold">{gem.meaning}</p>
-                    
-                    {isExpanded && (
-                      <div className="pt-6 border-t border-slate-100 space-y-6 animate-in fade-in slide-in-from-top-2">
-                        <div className="space-y-3">
-                          <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center space-x-2">
-                            <span>📜</span>
-                            <span>珍宝磨炼志 (Practice Records)</span>
-                          </h5>
-                          {(!gem.practices || gem.practices.length === 0) ? (
-                            <p className="text-xs text-slate-400 italic">尚未在每日特展中进行磨炼。</p>
-                          ) : (
-                            <div className="space-y-4">
-                              {gem.practices.map((rec, pIdx) => (
-                                <div key={pIdx} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2 relative">
-                                  <span className="absolute top-3 right-4 text-[8px] font-bold text-slate-300">#{pIdx + 1}</span>
-                                  <p className="text-sm font-medium text-slate-800 serif-font italic leading-relaxed">“{rec.sentence}”</p>
-                                  {rec.betterVersion && (
-                                    <div className="pt-2 mt-2 border-t border-slate-200">
-                                      <p className="text-[9px] font-black text-indigo-500 uppercase mb-1">地道表达建议：</p>
-                                      <p className="text-xs text-indigo-900 font-bold">{renderRuby(rec.betterVersion)}</p>
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                    <p className="text-sm text-slate-600 font-medium mb-4 line-clamp-2">{vocab.meaning}</p>
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-50">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">{vocab.date}</span>
+                        <span className="text-[9px] font-black text-indigo-500 uppercase flex items-center">
+                          {vocab.practices?.length || 0} 磨炼记 {expandedWord === vocab.word ? '▴' : '▾'}
+                        </span>
+                    </div>
+                </div>
 
-                        <div className="flex items-center justify-between">
-                           <button onClick={(e) => { e.stopPropagation(); const entry = entries.find(e => e.id === gem.entryId); if(entry) onReviewEntry(entry); }} className="text-[10px] font-black text-indigo-600 hover:underline">查看初次记录原文 →</button>
-                           <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">{gem.date}</span>
-                        </div>
+                {/* 展开的磨炼记录 */}
+                {expandedWord === vocab.word && (
+                  <div className="mt-2 bg-slate-50 rounded-[2rem] p-5 border border-slate-200 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                    <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center space-x-2">
+                      <span>🏛️</span>
+                      <span>历次淬炼记录 (Growth Marks)</span>
+                    </h5>
+                    
+                    {vocab.practices && vocab.practices.length > 0 ? (
+                      <div className="space-y-3">
+                        {vocab.practices.map((p, pIdx) => (
+                          <div key={pIdx} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-2 relative overflow-hidden">
+                            <div className="flex justify-between items-center mb-1">
+                              <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase ${p.status === 'Perfect' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+                                {p.status === 'Perfect' ? 'Perfectly Expressed' : 'Polished & Refined'}
+                              </span>
+                              <span className="text-[8px] text-slate-300 font-bold">{new Date(p.timestamp).toLocaleDateString()}</span>
+                            </div>
+                            
+                            {p.originalAttempt && (
+                              <p className="text-xs text-slate-400 line-through italic leading-relaxed">
+                                {p.originalAttempt}
+                              </p>
+                            )}
+                            
+                            <p className={`text-sm serif-font leading-relaxed ${p.status === 'Perfect' ? 'text-slate-800' : 'text-indigo-700 font-bold'}`}>
+                              {renderRuby(p.sentence)}
+                            </p>
+                            
+                            {p.feedback && (
+                              <div className="pt-2 mt-2 border-t border-slate-50">
+                                <p className="text-[10px] text-slate-500 leading-relaxed italic">AI: {p.feedback}</p>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6">
+                        <p className="text-[10px] text-slate-400 font-bold uppercase">暂无练习记录，去“每日特展”试试吧！</p>
                       </div>
                     )}
                   </div>
-                </div>
-              );
-            })}
+                )}
+              </div>
+            )) : (
+              <div className="col-span-full py-20 text-center bg-white rounded-3xl border border-dashed border-slate-200">
+                <p className="text-slate-400 font-bold">暂无此语言的词汇藏品...</p>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {activeTab === 'flashback' && (
-        <div className="max-w-2xl mx-auto space-y-6 py-4">
-          {challengeData ? (
-            <div className="bg-white p-8 md:p-14 md:pt-24 rounded-[3.5rem] border-2 border-slate-100 shadow-2xl relative animate-in zoom-in duration-500">
-              <div className="absolute top-8 left-10 bg-slate-900 text-white px-5 py-2 rounded-full text-[10px] font-black tracking-[0.2em] shadow-lg uppercase z-30">
-                 Sentence Lab • {challengeData.entry.language}
-              </div>
-              <div className="space-y-10 relative z-10">
-                <div className="space-y-6 text-center">
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">这段表达可以如何优化？</p>
-                  <p className="text-2xl md:text-3xl serif-font italic text-slate-800 leading-relaxed px-4">“{challengeData.fullSentence}”</p>
-                  {!showAnswer && (
-                    <button onClick={() => setShowAnswer(true)} className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-sm shadow-xl hover:bg-indigo-700 transition-all">揭晓馆长建议</button>
-                  )}
-                </div>
-                {showAnswer && (
-                  <div className="space-y-8 animate-in fade-in slide-in-from-top-4">
-                    <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100">
-                      <p className="text-[10px] font-black text-emerald-400 uppercase mb-2">进阶表达 (Refined)</p>
-                      <p className="text-xl md:text-2xl serif-font font-bold text-slate-900">{renderRuby(challengeData.correction.improved)}</p>
-                    </div>
-                    <p className="text-sm md:text-base text-indigo-900 italic">“{challengeData.correction.explanation}”</p>
-                    <button onClick={startChallenge} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold text-xs">下一个挑战</button>
-                  </div>
-                )}
-              </div>
+      {activeTab === 'flashback' && challengeData && (
+        <div className="max-w-xl mx-auto space-y-8 animate-in zoom-in duration-500">
+          <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-2xl space-y-8">
+            <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black bg-emerald-100 text-emerald-600 px-3 py-1 rounded-full uppercase tracking-widest">Random Flashback</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{challengeData.entry.language}</span>
             </div>
-          ) : <div className="text-center py-20 animate-pulse text-slate-400">正在寻找挑战...</div>}
+
+            <div className="space-y-6">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center space-x-2">
+                    <span>💡</span><span>这是您曾写下的句子，还记得怎么修正吗？</span>
+                </h4>
+                <div className="p-8 bg-slate-50 rounded-[2.5rem] border-l-4 border-indigo-400 italic serif-font text-xl text-slate-500 leading-relaxed">
+                   “ {challengeData.fullSentence.replace(challengeData.correction.improved, ' ______ ')} ”
+                </div>
+                
+                <div className="bg-indigo-50/50 p-4 rounded-2xl">
+                    <p className="text-xs font-bold text-indigo-900 leading-relaxed">
+                        <span className="opacity-50 mr-2 uppercase">Hint:</span>
+                        {challengeData.correction.explanation}
+                    </p>
+                </div>
+            </div>
+
+            {showAnswer ? (
+                <div className="space-y-6 animate-in slide-in-from-top-4">
+                    <div className="p-8 bg-indigo-600 rounded-[2.5rem] text-white serif-font text-xl leading-relaxed shadow-xl shadow-indigo-200">
+                        {renderRuby(challengeData.correction.improved)}
+                    </div>
+                    <div className="flex space-x-3">
+                        <button onClick={startChallenge} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all">换一个挑战</button>
+                        <button onClick={() => onReviewEntry(challengeData.entry)} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm hover:bg-indigo-700 transition-all shadow-lg">回顾全文分析</button>
+                    </div>
+                </div>
+            ) : (
+                <button 
+                  onClick={() => setShowAnswer(true)}
+                  className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-sm hover:bg-black transition-all shadow-xl active:scale-95"
+                >
+                    👀 揭晓精准表达
+                </button>
+            )}
+          </div>
         </div>
       )}
     </div>
