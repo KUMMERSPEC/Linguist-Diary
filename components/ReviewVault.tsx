@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { DiaryEntry, AdvancedVocab, Correction, PracticeRecord } from '../types';
 import { validateVocabUsage, generateDiaryAudio } from '../services/geminiService';
@@ -119,6 +118,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
       
       onUpdateMastery(currentGem.entryId, currentGem.word, newMastery, {
         sentence: result.isCorrect ? userSentence : (result.betterVersion || userSentence),
+        originalAttempt: userSentence,
         feedback: result.feedback,
         timestamp: Date.now(),
         status: result.isCorrect ? 'Perfect' : 'Polished'
@@ -214,81 +214,90 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
               <button onClick={() => { setShowCompletion(false); setCurrentIndex(0); setDailyPool([]); }} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold">再来一组</button>
             </div>
           ) : currentGem ? (
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-6 items-start animate-in slide-in-from-right-4 duration-500">
-              {/* 词汇信息区 */}
-              <div className="lg:col-span-2 space-y-4">
-                <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden h-full flex flex-col justify-center min-h-[160px] md:min-h-[200px]">
-                  <div className="absolute top-2 right-4 opacity-5 text-6xl font-serif">“</div>
-                  <div className="flex items-center space-x-2 mb-2">
-                    <span className="bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest">PROGRESS {currentIndex + 1}/5</span>
-                  </div>
-                  <h3 className="text-2xl md:text-3xl font-black text-slate-900 mb-1 serif-font">{currentGem.word}</h3>
-                  <p className="text-base md:text-lg text-slate-600 font-medium italic mb-4 leading-snug">{currentGem.meaning}</p>
-                  <div className="bg-slate-50/80 p-3 rounded-xl border-l-4 border-indigo-400">
-                    <p className="text-[11px] md:text-xs text-slate-500 italic leading-relaxed">“{currentGem.usage}”</p>
-                  </div>
+            <div className="grid grid-cols-1 gap-6 animate-in slide-in-from-right-4 duration-500">
+              {/* 词汇信息区 - 居中卡片 */}
+              <div className="bg-white p-6 md:p-10 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden flex flex-col items-center text-center">
+                <div className="absolute top-4 right-8 opacity-5 text-8xl font-serif">“</div>
+                <div className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-4">
+                  PROGRESS {currentIndex + 1}/5
+                </div>
+                <h3 className="text-2xl md:text-4xl font-black text-slate-900 mb-2 serif-font">{currentGem.word}</h3>
+                <p className="text-base md:text-xl text-slate-600 font-medium italic mb-6 leading-snug">{currentGem.meaning}</p>
+                <div className="bg-slate-50/80 p-5 rounded-2xl border-l-4 border-indigo-400 max-w-2xl">
+                  <p className="text-xs md:text-sm text-slate-500 italic leading-relaxed">“{currentGem.usage}”</p>
                 </div>
               </div>
 
-              {/* 输入与反馈区 */}
-              <div className="lg:col-span-3 space-y-4">
-                <div className="flex flex-col space-y-3">
-                  <div className="flex items-center justify-between px-2">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">练习造句 Practice</h4>
-                    {testResult && (
-                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase ${testResult.isCorrect ? 'bg-emerald-100 text-emerald-600' : 'bg-orange-100 text-orange-600'}`}>
-                        {testResult.isCorrect ? 'PERFECT' : 'POLISHED'}
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div className="relative group">
+              {/* 交互练习区 */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between px-2">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">练习造句 Practice</h4>
+                  {testResult && (
+                    <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest ${testResult.isCorrect ? 'bg-emerald-500 text-white shadow-md shadow-emerald-100' : 'bg-indigo-600 text-white shadow-md shadow-indigo-100'}`}>
+                      {testResult.isCorrect ? '✦ PERFECT' : '✦ POLISHED'}
+                    </span>
+                  )}
+                </div>
+                
+                {/* 动态布局：如果有结果，则显示反馈卡片，否则显示输入框 */}
+                {!testResult ? (
+                  <div className="space-y-4">
                     <textarea
                       value={userSentence}
                       onChange={(e) => setUserSentence(e.target.value)}
-                      disabled={testResult !== null || isValidating}
+                      disabled={isValidating}
                       placeholder={`在此尝试使用 "${currentGem.word}" ...`}
-                      className={`w-full bg-white border border-slate-200 rounded-[2rem] p-5 text-sm md:text-base md:p-6 serif-font focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all resize-none min-h-[100px] md:min-h-[140px] ${testResult ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`w-full bg-white border border-slate-200 rounded-[2.5rem] p-6 md:p-8 text-base md:text-xl md:p-6 serif-font focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all resize-none min-h-[140px] md:min-h-[160px] ${isValidating ? 'opacity-50 cursor-not-allowed' : ''}`}
                     />
-                    
-                    {testResult && (
-                      <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] rounded-[2rem] flex items-center justify-center p-4">
-                        <div className="w-full bg-white/95 p-4 rounded-2xl border border-slate-100 shadow-xl space-y-2 animate-in zoom-in duration-300">
-                           <p className="text-[11px] text-slate-600 leading-relaxed italic line-clamp-2">“ {testResult.feedback} ”</p>
-                           {testResult.betterVersion && !testResult.isCorrect && (
-                             <div className="pt-2 border-t border-slate-50">
-                               <p className="text-[8px] font-black text-slate-400 uppercase mb-1">精进版本:</p>
-                               <p className="text-xs font-bold text-indigo-600 serif-font">{testResult.betterVersion}</p>
-                             </div>
-                           )}
-                        </div>
-                      </div>
-                    )}
+                    <button
+                      disabled={isValidating || userSentence.trim().length < 2}
+                      onClick={handleValidation}
+                      className="w-full bg-indigo-600 text-white py-4 rounded-3xl font-bold shadow-xl shadow-indigo-100 disabled:bg-slate-100 disabled:text-slate-300 transition-all active:scale-95 flex items-center justify-center space-x-2"
+                    >
+                      {isValidating ? (
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : <span>✦ 提交并审阅造句</span>}
+                    </button>
                   </div>
+                ) : (
+                  <div className="space-y-6 animate-in slide-in-from-top-4 duration-500">
+                    {/* 用户造句的回显 */}
+                    <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-200">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">您的尝试 Attempt</p>
+                      <p className="text-base md:text-xl text-slate-800 serif-font italic leading-relaxed">“ {userSentence} ”</p>
+                    </div>
 
-                  <div className="flex gap-3">
-                    {testResult ? (
-                      <>
-                        {!testResult.isCorrect && (
-                          <button onClick={handleRetry} className="flex-1 bg-white border border-slate-200 text-slate-600 py-3 rounded-2xl text-xs font-bold hover:bg-slate-50 transition-all active:scale-95">🖋️ 重新挑战</button>
-                        )}
-                        <button onClick={handleNextWord} className="flex-1 bg-indigo-600 text-white py-3 rounded-2xl text-xs font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
-                          {currentIndex < dailyPool.length - 1 ? '下一个' : '完成特展'}
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        disabled={isValidating || userSentence.trim().length < 2}
-                        onClick={handleValidation}
-                        className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-indigo-100 disabled:bg-slate-100 disabled:text-slate-300 transition-all active:scale-95 flex items-center justify-center space-x-2"
-                      >
-                        {isValidating ? (
-                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        ) : <span>✦ 提交并审阅造句</span>}
+                    {/* AI 反馈详细卡片 - 移除 truncation，自然延伸 */}
+                    <div className="bg-white p-8 md:p-10 rounded-[2.5rem] border border-indigo-100 shadow-xl shadow-indigo-200/20 space-y-6">
+                       <div className="flex items-start space-x-4">
+                          <span className="text-3xl shrink-0">🏛️</span>
+                          <div className="space-y-2">
+                             <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">馆长评价 Curator's Appraisal</p>
+                             <div className="text-sm md:text-base text-slate-700 leading-[1.8] italic font-medium">
+                               {testResult.feedback}
+                             </div>
+                          </div>
+                       </div>
+                       
+                       {testResult.betterVersion && !testResult.isCorrect && (
+                         <div className="bg-indigo-50/50 p-6 md:p-8 rounded-[2rem] border border-indigo-100">
+                           <p className="text-[9px] font-black text-indigo-400 uppercase mb-3 tracking-widest">精进推荐 Mastery Version:</p>
+                           <p className="text-base md:text-lg font-bold text-indigo-700 serif-font leading-relaxed">{testResult.betterVersion}</p>
+                         </div>
+                       )}
+                    </div>
+
+                    {/* 操作按钮 */}
+                    <div className="flex gap-4">
+                      {!testResult.isCorrect && (
+                        <button onClick={handleRetry} className="flex-1 bg-white border-2 border-slate-200 text-slate-600 py-4 rounded-3xl text-sm font-bold hover:bg-slate-50 transition-all active:scale-95 shadow-sm">🖋️ 重新挑战</button>
+                      )}
+                      <button onClick={handleNextWord} className="flex-[2] bg-indigo-600 text-white py-4 rounded-3xl text-sm font-bold shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
+                        {currentIndex < dailyPool.length - 1 ? '下一个' : '完成特展'}
                       </button>
-                    )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           ) : (
@@ -335,7 +344,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
         </div>
       )}
 
-      {/* 词汇全集 - 优化后的收集回顾模式 */}
+      {/* 词汇全集 */}
       {activeTab === 'gems' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 animate-in fade-in duration-500 items-start">
           {allGems.length === 0 ? (
@@ -372,7 +381,6 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                     </h4>
                     <p className="text-[11px] text-slate-500 italic mt-1 line-clamp-1">{gem.meaning}</p>
                     
-                    {/* 状态提示圆点 - 保持精简预览 */}
                     {!isExpanded && gem.practices && gem.practices.length > 0 && (
                       <div className="mt-4 flex flex-wrap items-center gap-1.5">
                         {gem.practices.map((p, pIdx) => (
@@ -382,7 +390,6 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                       </div>
                     )}
 
-                    {/* 展开后的记录区域 */}
                     {isExpanded && (
                       <div className="mt-5 pt-5 border-t border-slate-100 space-y-4 animate-in slide-in-from-top-2 duration-300">
                          <div className="flex items-center justify-between">
@@ -421,7 +428,6 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                     )}
                   </div>
                   
-                  {/* 页脚日期 */}
                   {!isExpanded && (
                     <div className="px-6 py-3 bg-slate-50/50 mt-auto border-t border-slate-50 flex items-center justify-between">
                        <span className="text-[8px] font-bold text-slate-400 uppercase">{gem.date} 入馆</span>
