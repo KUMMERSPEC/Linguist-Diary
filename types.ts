@@ -6,12 +6,20 @@ export interface Correction {
   category: 'Grammar' | 'Vocabulary' | 'Style' | 'Spelling';
 }
 
+export interface PracticeRecord {
+  sentence: string;
+  feedback: string;
+  betterVersion?: string;
+  timestamp: number;
+}
+
 export interface AdvancedVocab {
   word: string;
   meaning: string;
   usage: string;
   level: 'Intermediate' | 'Advanced' | 'Native';
   mastery?: number; // 熟练度：0-3
+  practices?: PracticeRecord[]; // 历次造句记录
 }
 
 export interface TransitionSuggestion {

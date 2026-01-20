@@ -8,12 +8,12 @@ import History from './components/History';
 import ChatEditor from './components/ChatEditor';
 import AuthView from './components/AuthView';
 import ReviewVault from './components/ReviewVault';
-import { ViewState, DiaryEntry, ChatMessage } from './types';
+import { ViewState, DiaryEntry, ChatMessage, PracticeRecord } from './types';
 import { analyzeDiaryEntry, synthesizeDiary } from './services/geminiService';
 
 // Firebase
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, onSnapshot, query, where, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, onSnapshot, query, where, doc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -108,27 +108,27 @@ const App: React.FC = () => {
     }
   };
 
-  /**
-   * 更新词汇熟练度
-   */
-  const handleUpdateMastery = async (entryId: string, word: string, newMastery: number) => {
+  const handleUpdateMastery = async (entryId: string, word: string, newMastery: number, record?: PracticeRecord) => {
     if (!db || !user) return;
     const entry = entries.find(e => e.id === entryId);
     if (!entry || !entry.analysis) return;
-
-    // 局部更新数组
-    const updatedVocab = entry.analysis.advancedVocab.map(v => 
-      v.word === word ? { ...v, mastery: newMastery } : v
-    );
+    
+    const updatedVocab = entry.analysis.advancedVocab.map(v => {
+      if (v.word === word) {
+        const currentPractices = v.practices || [];
+        return { 
+          ...v, 
+          mastery: newMastery, 
+          practices: record ? [...currentPractices, record] : currentPractices 
+        };
+      }
+      return v;
+    });
 
     try {
       const entryRef = doc(db, "entries", entryId);
-      await updateDoc(entryRef, {
-        "analysis.advancedVocab": updatedVocab
-      });
-    } catch (e) {
-      console.error("Mastery update failed", e);
-    }
+      await updateDoc(entryRef, { "analysis.advancedVocab": updatedVocab });
+    } catch (e) { console.error("Update failed", e); }
   };
 
   if (authChecking) return <div className="h-screen w-screen flex items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-8 w-8 border-4 border-indigo-600 border-t-transparent"></div></div>;
@@ -136,7 +136,7 @@ const App: React.FC = () => {
 
   return (
     <Layout activeView={view} onViewChange={setView} user={user} auth={auth}>
-      {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} entries={entries} />}
+      {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={() => setView('review_vault')} entries={entries} />}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} isLoading={isLoading} />}
       {view === 'chat' && <ChatEditor onFinish={async (t, l) => {
         setIsLoading(true);

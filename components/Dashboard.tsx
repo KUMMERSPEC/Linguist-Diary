@@ -5,13 +5,13 @@ import { DiaryEntry } from '../types';
 
 interface DashboardProps {
   onNewEntry: () => void;
+  onStartReview: () => void;
   entries: DiaryEntry[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, entries }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, onStartReview, entries }) => {
   // --- 数据处理逻辑 ---
 
-  // 1. 生成最近7天的趋势图数据
   const chartData = React.useMemo(() => {
     const last7Days = Array.from({length: 7}, (_, i) => {
       const d = new Date();
@@ -32,83 +32,60 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, entries }) => {
     return last7Days;
   }, [entries]);
 
-  // 2. 生成热力图数据 (过去 365 天)
   const heatmapData = React.useMemo(() => {
     const today = new Date();
     const data: { [key: string]: number } = {};
-    
-    // 初始化过去一年的数据
     for (let i = 0; i < 365; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
       data[d.toDateString()] = 0;
     }
-
-    // 填充数据
     entries.forEach(entry => {
       const dateStr = new Date(entry.timestamp).toDateString();
-      if (data[dateStr] !== undefined) {
-        data[dateStr] += 1;
-      }
+      if (data[dateStr] !== undefined) data[dateStr] += 1;
     });
-
-    // 转换为按周排列的数组，方便渲染
     const weeks: { date: Date; count: number }[][] = [];
     let currentWeek: { date: Date; count: number }[] = [];
-    
     const startDate = new Date(today);
-    startDate.setDate(today.getDate() - 364); // 往前数 364 天凑齐 365
-    
-    // 补齐起始日到周一的空缺 (假设周日为一周开始)
+    startDate.setDate(today.getDate() - 364);
     const firstDayOfWeek = startDate.getDay();
-    for(let i = 0; i < firstDayOfWeek; i++) {
-        currentWeek.push({ date: new Date(0), count: -1 }); // 占位符
-    }
-
+    for(let i = 0; i < firstDayOfWeek; i++) currentWeek.push({ date: new Date(0), count: -1 });
     for (let i = 0; i < 365; i++) {
       const d = new Date(startDate);
       d.setDate(startDate.getDate() + i);
       currentWeek.push({ date: d, count: data[d.toDateString()] || 0 });
-      
-      if (currentWeek.length === 7) {
-        weeks.push(currentWeek);
-        currentWeek = [];
-      }
+      if (currentWeek.length === 7) { weeks.push(currentWeek); currentWeek = []; }
     }
     if (currentWeek.length > 0) weeks.push(currentWeek);
-    
     return weeks;
   }, [entries]);
 
-  // 3. 计算连续打卡
   const stats = React.useMemo(() => {
     const sortedEntries = [...entries].sort((a, b) => b.timestamp - a.timestamp);
     let streak = 0;
     let today = new Date();
     today.setHours(0, 0, 0, 0);
-
     const entryDates = new Set(entries.map(e => {
         const d = new Date(e.timestamp);
         d.setHours(0, 0, 0, 0);
         return d.getTime();
     }));
-
     let checkDate = new Date(today);
-    // 如果今天没写，检查昨天
-    if (!entryDates.has(checkDate.getTime())) {
-        checkDate.setDate(checkDate.getDate() - 1);
-    }
-
+    if (!entryDates.has(checkDate.getTime())) checkDate.setDate(checkDate.getDate() - 1);
     while (entryDates.has(checkDate.getTime())) {
       streak++;
       checkDate.setDate(checkDate.getDate() - 1);
     }
 
+    // 复习任务计算：假设每天目标是复习或掌握 10 个词
+    // 这里简单演示，实际可以通过 mastery 的变化来判断今日进度
+    const vocabCount = entries.reduce((acc, curr) => acc + (curr.analysis?.advancedVocab.length || 0), 0);
+
     return {
       total: entries.length,
       streak: streak,
       corrections: entries.reduce((acc, curr) => acc + (curr.analysis?.corrections.length || 0), 0),
-      vocab: entries.reduce((acc, curr) => acc + (curr.analysis?.advancedVocab.length || 0), 0)
+      vocab: vocabCount
     };
   }, [entries]);
 
@@ -137,7 +114,24 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, entries }) => {
         </button>
       </header>
 
-      {/* 顶部统计卡片 */}
+      {/* 每日特展任务卡片 */}
+      <div className="bg-gradient-to-br from-indigo-600 to-violet-700 p-8 rounded-[2.5rem] text-white shadow-xl shadow-indigo-200 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <span className="bg-white/20 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Daily Quest</span>
+            <h3 className="text-2xl font-bold serif-font">今日特展复习任务</h3>
+            <p className="text-indigo-100 text-sm opacity-80">系统已为您精选 10 个需要打磨的词汇珍宝。</p>
+          </div>
+          <button 
+            onClick={onStartReview}
+            className="bg-white text-indigo-600 px-8 py-4 rounded-2xl font-black text-sm hover:bg-indigo-50 transition-all shadow-lg active:scale-95 flex items-center space-x-2 shrink-0"
+          >
+            <span>🚀 立即开启练习</span>
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10 text-4xl group-hover:scale-110 transition-transform">🔥</div>
@@ -173,7 +167,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, entries }) => {
         </div>
       </div>
 
-      {/* 核心：年度热力图 */}
       <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
         <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-bold text-slate-900 flex items-center space-x-2">
@@ -189,10 +182,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, entries }) => {
                 <span>More</span>
             </div>
         </div>
-
         <div className="overflow-x-auto no-scrollbar pb-2">
             <div className="flex flex-col min-w-[700px]">
-                {/* 月份标识 */}
                 <div className="flex mb-2 ml-8">
                     {Array.from({length: 12}).map((_, i) => (
                         <div key={i} className="flex-1 text-[10px] text-slate-400 font-medium">
@@ -200,16 +191,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, entries }) => {
                         </div>
                     ))}
                 </div>
-                
                 <div className="flex space-x-1">
-                    {/* 周几标识 */}
                     <div className="flex flex-col justify-between py-1 pr-2 text-[8px] text-slate-300 font-bold h-24 uppercase">
-                        <span>Mon</span>
-                        <span>Wed</span>
-                        <span>Fri</span>
-                        <span>Sun</span>
+                        <span>Mon</span><span>Wed</span><span>Fri</span><span>Sun</span>
                     </div>
-                    {/* 热力格 */}
                     <div className="flex flex-1 space-x-1">
                         {heatmapData.map((week, wIdx) => (
                             <div key={wIdx} className="flex flex-col space-y-1">
@@ -249,15 +234,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, entries }) => {
                 contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '12px 16px', fontSize: '12px' }}
                 cursor={{ stroke: '#6366f1', strokeWidth: 2 }}
               />
-              <Area 
-                type="monotone" 
-                dataKey="entries" 
-                stroke="#6366f1" 
-                strokeWidth={3}
-                fillOpacity={1} 
-                fill="url(#colorEntries)" 
-                animationDuration={1500}
-              />
+              <Area type="monotone" dataKey="entries" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorEntries)" animationDuration={1500} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
