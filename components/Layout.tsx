@@ -40,6 +40,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
         <nav className="flex-1 space-y-2">
           <NavItem view="dashboard" label="概览 / Dashboard" icon="📊" />
           <NavItem view="editor" label="标准写信 / Standard" icon="📝" />
+          <NavItem view="rehearsal" label="展厅演练 / Rehearsal" icon="🎭" />
           <NavItem view="chat" label="启发聊天 / Guided Chat" icon="💬" />
           <NavItem view="review_vault" label="珍宝复习 / Review" icon="💎" />
           <NavItem view="history" label="博物馆 / Collection" icon="🏛️" />
@@ -91,6 +92,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
         <nav className="md:hidden flex items-center justify-around bg-white border-t border-slate-200 p-1 pb-3 shrink-0 shadow-lg">
            <button onClick={() => onViewChange('dashboard')} className={`p-2 transition-all ${activeView === 'dashboard' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>📊</button>
            <button onClick={() => onViewChange('editor')} className={`p-2 transition-all ${activeView === 'editor' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>📝</button>
+           <button onClick={() => onViewChange('rehearsal')} className={`p-2 transition-all ${activeView === 'rehearsal' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>🎭</button>
            <button onClick={() => onViewChange('chat')} className={`p-2 transition-all ${activeView === 'chat' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>💬</button>
            <button onClick={() => onViewChange('review_vault')} className={`p-2 transition-all ${activeView === 'review_vault' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>💎</button>
            <button onClick={() => onViewChange('history')} className={`p-2 transition-all ${activeView === 'history' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>🏛️</button>

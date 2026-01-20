@@ -8,7 +8,8 @@ import History from './components/History';
 import ChatEditor from './components/ChatEditor';
 import AuthView from './components/AuthView';
 import ReviewVault from './components/ReviewVault';
-import { ViewState, DiaryEntry, ChatMessage, PracticeRecord } from './types';
+import Rehearsal from './components/Rehearsal';
+import { ViewState, DiaryEntry, ChatMessage, PracticeRecord, RehearsalEvaluation } from './types';
 import { analyzeDiaryEntry, synthesizeDiary } from './services/geminiService';
 
 // Firebase
@@ -70,10 +71,31 @@ const App: React.FC = () => {
         date: now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
         originalText: text,
         language,
+        type: 'diary',
         analysis
       });
       setView('review');
     } catch (error: any) { alert(`⚠️ 分析失败：${error.message}`); }
+    finally { setIsLoading(false); }
+  };
+
+  const handleSaveRehearsal = async (language: string, evalResult: RehearsalEvaluation) => {
+    if (!user || !db) return;
+    setIsLoading(true);
+    setLoadingText('正在将演练成果存入收藏馆...');
+    try {
+      const now = new Date();
+      await addDoc(collection(db, "entries"), {
+        userId: user.uid,
+        timestamp: Date.now(),
+        date: now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
+        originalText: evalResult.userRetelling || "",
+        language,
+        type: 'rehearsal',
+        rehearsal: evalResult
+      });
+      setView('history');
+    } catch (e) { alert("保存失败！"); }
     finally { setIsLoading(false); }
   };
 
@@ -87,7 +109,9 @@ const App: React.FC = () => {
           date: currentEntry.date,
           originalText: currentEntry.originalText,
           language: currentEntry.language,
-          analysis: currentEntry.analysis
+          type: currentEntry.type,
+          analysis: currentEntry.analysis,
+          rehearsal: currentEntry.rehearsal
         });
         setView('history');
         setCurrentEntry(null);
@@ -138,6 +162,7 @@ const App: React.FC = () => {
     <Layout activeView={view} onViewChange={setView} user={user} auth={auth}>
       {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={() => setView('review_vault')} entries={entries} />}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} isLoading={isLoading} />}
+      {view === 'rehearsal' && <Rehearsal onSaveToMuseum={handleSaveRehearsal} />}
       {view === 'chat' && <ChatEditor onFinish={async (t, l) => {
         setIsLoading(true);
         const text = await synthesizeDiary(t, l);

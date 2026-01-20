@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { DiaryAnalysis, DiaryEntry } from '../types';
+import { DiaryAnalysis, DiaryEntry, RehearsalEvaluation } from '../types';
 import { generateDiaryAudio } from '../services/geminiService';
 
 interface ReviewProps {
@@ -14,37 +14,11 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
   
-  if (!entry.analysis) return null;
-  const { analysis } = entry;
-
   const isSaved = entry.id.length > 15; 
 
   // --- Audio Logic ---
-  const decodeBase64 = (base64: string) => {
-    const binaryString = atob(base64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    return bytes;
-  };
-
-  const decodeAudioData = async (data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number) => {
-    const dataInt16 = new Int16Array(data.buffer);
-    const frameCount = dataInt16.length / numChannels;
-    const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-    for (let channel = 0; channel < numChannels; channel++) {
-      const channelData = buffer.getChannelData(channel);
-      for (let i = 0; i < frameCount; i++) {
-        channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
-      }
-    }
-    return buffer;
-  };
-
-  const handlePlayAudio = async () => {
+  const handlePlayAudio = async (text: string) => {
     if (isPlaying) {
       audioSourceRef.current?.stop();
       setIsPlaying(false);
@@ -53,43 +27,40 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
 
     setIsAudioLoading(true);
     try {
-      const base64Audio = await generateDiaryAudio(analysis.modifiedText);
-      const bytes = decodeBase64(base64Audio);
+      const base64Audio = await generateDiaryAudio(text);
+      const binaryString = atob(base64Audio);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
       
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      audioContextRef.current = audioCtx;
-      
-      const audioBuffer = await decodeAudioData(bytes, audioCtx, 24000, 1);
-      const source = audioCtx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioCtx.destination);
-      
-      source.onended = () => {
-        setIsPlaying(false);
-      };
+      const dataInt16 = new Int16Array(bytes.buffer);
+      const buffer = audioCtx.createBuffer(1, dataInt16.length, 24000);
+      const channelData = buffer.getChannelData(0);
+      for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
 
+      const source = audioCtx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioCtx.destination);
+      source.onended = () => setIsPlaying(false);
       source.start();
       audioSourceRef.current = source;
       setIsPlaying(true);
     } catch (error) {
-      console.error("Audio playback error:", error);
-      alert("音频生成失败，请稍后重试。");
+      console.error(error);
+      alert("音频生成失败。");
     } finally {
       setIsAudioLoading(false);
     }
   };
 
-  // 解析并渲染注音（Ruby）
   const renderRuby = (input: string) => {
+    if (!input) return "";
     const rubyRegex = /\[(.*?)\]\((.*?)\)/g;
     const parts = [];
     let lastIndex = 0;
     let match;
-
     while ((match = rubyRegex.exec(input)) !== null) {
-      if (match.index > lastIndex) {
-        parts.push(input.substring(lastIndex, match.index));
-      }
+      if (match.index > lastIndex) parts.push(input.substring(lastIndex, match.index));
       parts.push(
         <ruby key={match.index} className="mx-[1px]">
           {match[1]}<rt className="text-[10px] md:text-[11px] opacity-60 font-medium select-none text-indigo-500/80">{match[2]}</rt>
@@ -97,47 +68,112 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
       );
       lastIndex = rubyRegex.lastIndex;
     }
-    if (lastIndex < input.length) {
-      parts.push(input.substring(lastIndex));
-    }
+    if (lastIndex < input.length) parts.push(input.substring(lastIndex));
     return parts.length > 0 ? parts : input;
   };
 
   const renderDiffedText = (text: string) => {
-    // 核心自愈逻辑：将非标准格式自动修复为标准格式
-    let healedText = text
-      // 修复 -[内容-] 或 -内容- 模式
-      .replace(/-?\[?([^-[\]{}]+)-\]?/g, '<rem>$1</rem>')
-      // 修复 {+内容+} 模式
-      .replace(/\{\+?\s?([^\}]+)\+?\}/g, '<add>$1</add>')
-      // 修复可能存在的残留符号
-      .replace(/\]\{/g, '');
-
+    let healedText = text.replace(/-?\[?([^-[\]{}]+)-\]?/g, '<rem>$1</rem>').replace(/\{\+?\s?([^\}]+)\+?\}/g, '<add>$1</add>').replace(/\]\{/g, '');
     const parts = healedText.split(/(<rem>.*?<\/rem>|<add>.*?<\/add>)/gs);
-    
     return (
       <div className="leading-[2.5] md:leading-[3] serif-font text-base md:text-xl space-y-4">
         {parts.map((part, i) => {
           if (part.startsWith('<rem>')) {
             const content = part.replace('<rem>', '').replace('</rem>', '');
-            return (
-              <span key={i} className="bg-red-50 text-red-500 line-through px-1 rounded-md mx-0.5 decoration-red-300">
-                {renderRuby(content)}
-              </span>
-            );
+            return <span key={i} className="bg-red-50 text-red-500 line-through px-1 rounded-md mx-0.5 decoration-red-300">{renderRuby(content)}</span>;
           } else if (part.startsWith('<add>')) {
             const content = part.replace('<add>', '').replace('</add>', '');
-            return (
-              <span key={i} className="bg-emerald-50 text-emerald-700 font-semibold px-1 rounded-md mx-0.5 border-b-2 border-emerald-300">
-                {renderRuby(content)}
-              </span>
-            );
+            return <span key={i} className="bg-emerald-50 text-emerald-700 font-semibold px-1 rounded-md mx-0.5 border-b-2 border-emerald-300">{renderRuby(content)}</span>;
           }
           return <span key={i} className="text-slate-700">{renderRuby(part)}</span>;
         })}
       </div>
     );
   };
+
+  // 演练报告渲染逻辑
+  if (entry.type === 'rehearsal' && entry.rehearsal) {
+    const rev = entry.rehearsal;
+    const getGrade = (score: number) => {
+      if (score >= 90) return { label: 'S', color: 'text-indigo-400' };
+      if (score >= 80) return { label: 'A', color: 'text-emerald-400' };
+      if (score >= 70) return { label: 'B', color: 'text-orange-400' };
+      return { label: 'C', color: 'text-slate-400' };
+    };
+
+    return (
+      <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-500 pb-24 max-w-4xl mx-auto">
+        <header className="flex items-center justify-between shrink-0">
+          <div className="min-w-0">
+            <h2 className="text-xl md:text-3xl font-bold text-slate-900 serif-font truncate tracking-tight">演练评估报告</h2>
+            <p className="text-[10px] md:text-sm text-slate-500 truncate mt-0.5">{entry.date} · {entry.language}</p>
+          </div>
+          <button 
+            onClick={() => onDelete(entry.id)}
+            className="bg-white border-2 border-slate-100 text-slate-400 hover:text-red-500 hover:border-red-100 p-2.5 rounded-xl transition-all active:scale-95"
+          >
+            🗑️
+          </button>
+        </header>
+
+        <div className="bg-slate-900 rounded-[3rem] p-8 md:p-12 text-white shadow-2xl relative overflow-hidden">
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+              <div className="space-y-8">
+                <div className="flex items-center justify-around">
+                   <div className="text-center group">
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">内容还原度</p>
+                      <div className={`text-6xl font-black serif-font ${getGrade(rev.accuracyScore).color}`}>
+                         {getGrade(rev.accuracyScore).label}
+                      </div>
+                      <p className="text-sm font-bold text-slate-400 mt-2">{rev.accuracyScore}%</p>
+                   </div>
+                   <div className="w-[1px] h-16 bg-slate-800"></div>
+                   <div className="text-center group">
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">语言表现力</p>
+                      <div className={`text-6xl font-black serif-font ${getGrade(rev.qualityScore).color}`}>
+                         {getGrade(rev.qualityScore).label}
+                      </div>
+                      <p className="text-sm font-bold text-slate-400 mt-2">{rev.qualityScore}%</p>
+                   </div>
+                </div>
+
+                <div className="space-y-4">
+                   <div className="bg-white/5 p-5 rounded-2xl border border-white/10">
+                      <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">🧩 内容建议</h4>
+                      <p className="text-sm text-slate-300 leading-relaxed">{rev.contentFeedback}</p>
+                   </div>
+                   <div className="bg-white/5 p-5 rounded-2xl border border-white/10">
+                      <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2">🖋️ 表达建议</h4>
+                      <p className="text-sm text-slate-300 leading-relaxed">{rev.languageFeedback}</p>
+                   </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                 <div>
+                   <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">原始素材 Original</h4>
+                   <p className="text-sm text-slate-400 italic bg-white/5 p-4 rounded-xl border border-white/5 leading-relaxed">{rev.sourceText}</p>
+                 </div>
+                 <div>
+                   <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">您的复述 Retelling</h4>
+                   <p className="text-sm text-slate-100 bg-white/10 p-4 rounded-xl border border-white/10 leading-relaxed">{rev.userRetelling}</p>
+                 </div>
+                 <div>
+                   <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">馆长建议示范 Masterwork</h4>
+                   <div className="bg-indigo-600/20 p-6 rounded-2xl border border-indigo-500/30 text-indigo-100 italic serif-font leading-relaxed">
+                      {rev.suggestedVersion}
+                   </div>
+                 </div>
+              </div>
+           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 日记分析渲染逻辑 (保持原样)
+  if (!entry.analysis) return null;
+  const { analysis } = entry;
 
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-500 pb-24">
@@ -221,9 +257,8 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
                   <span>馆藏成品（附假名注音）</span>
                 </h4>
                 
-                {/* 有声朗读按钮 */}
                 <button
-                  onClick={handlePlayAudio}
+                  onClick={() => handlePlayAudio(analysis.modifiedText)}
                   disabled={isAudioLoading}
                   className={`flex items-center space-x-3 px-5 py-2.5 rounded-2xl transition-all font-bold text-xs shadow-lg ${
                     isPlaying 
@@ -237,27 +272,11 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
                     <span className="text-lg">{isPlaying ? '⏹️' : '🎧'}</span>
                   )}
                   <span>{isPlaying ? '正在朗读...' : '有声朗读'}</span>
-                  
-                  {isPlaying && (
-                    <div className="flex items-end space-x-0.5 h-3 ml-2">
-                      <div className="w-0.5 bg-white animate-audio-bar-1"></div>
-                      <div className="w-0.5 bg-white animate-audio-bar-2"></div>
-                      <div className="w-0.5 bg-white animate-audio-bar-3"></div>
-                    </div>
-                  )}
                 </button>
               </div>
 
               <div className="text-base md:text-2xl serif-font italic leading-[2.5] md:leading-[3] text-white">
                 {renderRuby(analysis.modifiedText)}
-              </div>
-              
-              <div className="mt-8 pt-8 border-t border-slate-800 flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                  <span className="text-[10px] font-bold text-slate-500">已自动完成汉字注音与语音同步</span>
-                </div>
-                <span className="text-[10px] font-bold text-slate-500 serif-font italic">— Linguist Curator</span>
               </div>
             </div>
           </div>

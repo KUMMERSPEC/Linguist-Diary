@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { DiaryAnalysis, ChatMessage } from "../types";
+import { DiaryAnalysis, ChatMessage, RehearsalEvaluation } from "../types";
 
 const getAiInstance = () => {
   const apiKey = process.env.API_KEY;
@@ -15,13 +15,11 @@ export const analyzeDiaryEntry = async (text: string, language: string): Promise
   const model = 'gemini-3-pro-preview';
   const isJapanese = language.toLowerCase() === 'japanese' || language === '日本語';
   
-  // 强化日语注音指令
   const japaneseInstruction = isJapanese 
     ? "IMPORTANT for Japanese: For BOTH 'modifiedText' and 'diffedText', provide Furigana for ALL Kanji using the syntax '[Kanji](furigana)'. Example: [今日](きょう)."
     : "";
 
-  // 强制 Diff 标记格式
-  const diffInstruction = "In the 'diffedText' field, you MUST wrap deleted parts in '<rem>...</rem>' and added/corrected parts in '<add>...</add>'. DO NOT use any other symbols like '[-]' or '{+}'. Maintain the original sentence structure around these tags so it's readable.";
+  const diffInstruction = "In the 'diffedText' field, you MUST wrap deleted parts in '<rem>...</rem>' and added/corrected parts in '<add>...</add>'.";
 
   try {
     const response = await ai.models.generateContent({
@@ -35,7 +33,7 @@ export const analyzeDiaryEntry = async (text: string, language: string): Promise
           type: Type.OBJECT,
           properties: {
             modifiedText: { type: Type.STRING },
-            diffedText: { type: Type.STRING, description: "Text with <rem>deleted</rem> and <add>added</add> tags." },
+            diffedText: { type: Type.STRING },
             overallFeedback: { type: Type.STRING },
             corrections: {
               type: Type.ARRAY,
@@ -86,30 +84,82 @@ export const analyzeDiaryEntry = async (text: string, language: string): Promise
   }
 };
 
-/**
- * 造句挑战判定
- */
-export const validateVocabUsage = async (word: string, meaning: string, sentence: string, language: string) => {
+export const generatePracticeArtifact = async (language: string, keywords?: string): Promise<string> => {
   const ai = getAiInstance();
   const model = 'gemini-3-flash-preview';
+  
+  const keywordInstruction = keywords 
+    ? `CRITICAL: You MUST include these specific keywords in the text: "${keywords}". Ensure they are used naturally.` 
+    : "Generate a short description of a random daily object, culture fact, or tiny story.";
 
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `Act as a language tutor. The user is trying to use the word/phrase "${word}" (Meaning: ${meaning}) in a sentence: "${sentence}".
-      Language: ${language}.
-      Tasks:
-      1. Check if the usage is grammatically correct and semantically natural.
-      2. Provide a brief explanation (in Chinese).
-      3. If incorrect, provide a natural alternative.`,
+      contents: `${keywordInstruction} 
+      The text must be in ${language}.
+      
+      CONSTRAINTS:
+      1. Length: Approximately 40-50 words/characters. Keep it very short and simple.
+      2. Language: Output ONLY the text in ${language}. 
+      3. NO English: Do NOT include any English headers, descriptions, or translations.
+      4. NO Markdown headers: Just the plain text content.`,
+    });
+    return response.text?.replace(/#{1,6}\s.*?\n/g, '').trim() || "No text generated.";
+  } catch (e) {
+    return "Error generating practice text.";
+  }
+};
+
+export const evaluateRetelling = async (source: string, retelling: string, language: string): Promise<RehearsalEvaluation> => {
+  const ai = getAiInstance();
+  const model = 'gemini-3-pro-preview';
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: `Compare the user's retelling of a source text.
+      Source: "${source}"
+      Retelling: "${retelling}"
+      Language: ${language}
+      
+      Score Accuracy (0-100) based on content preservation.
+      Score Quality (0-100) based on grammar and style.
+      Provide helpful feedback in Chinese.`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            accuracyScore: { type: Type.NUMBER },
+            qualityScore: { type: Type.NUMBER },
+            contentFeedback: { type: Type.STRING },
+            languageFeedback: { type: Type.STRING },
+            suggestedVersion: { type: Type.STRING }
+          },
+          required: ["accuracyScore", "qualityScore", "contentFeedback", "languageFeedback", "suggestedVersion"]
+        }
+      }
+    });
+    return JSON.parse(response.text);
+  } catch (e) {
+    throw new Error("Evaluation failed.");
+  }
+};
+
+export const validateVocabUsage = async (word: string, meaning: string, sentence: string, language: string) => {
+  const ai = getAiInstance();
+  const model = 'gemini-3-flash-preview';
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: `Act as a language tutor. The user is trying to use "${word}" (${meaning}) in: "${sentence}". Language: ${language}.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
             isCorrect: { type: Type.BOOLEAN },
-            feedback: { type: Type.STRING, description: "Chinese explanation of the usage." },
-            betterVersion: { type: Type.STRING, description: "A more natural version if applicable." }
+            feedback: { type: Type.STRING },
+            betterVersion: { type: Type.STRING }
           },
           required: ["isCorrect", "feedback"]
         }
@@ -117,8 +167,7 @@ export const validateVocabUsage = async (word: string, meaning: string, sentence
     });
     return JSON.parse(response.text);
   } catch (error) {
-    console.error("Validation Error:", error);
-    return { isCorrect: false, feedback: "AI 判定暂时不可用，请稍后再试。" };
+    return { isCorrect: false, feedback: "Error." };
   }
 };
 
@@ -139,17 +188,15 @@ export const generateDiaryAudio = async (text: string): Promise<string> => {
 };
 
 export const synthesizeDiary = async (history: ChatMessage[], language: string): Promise<string> => {
-  const userMessages = history.filter(m => m.role === 'user').map(m => m.content.trim());
-  return userMessages.join('\n\n');
+  return history.filter(m => m.role === 'user').map(m => m.content.trim()).join('\n\n');
 };
 
 export const getChatFollowUp = async (history: ChatMessage[], language: string): Promise<string> => {
   const ai = getAiInstance();
-  const model = 'gemini-3-flash-preview';
   try {
     const response = await ai.models.generateContent({
-      model,
-      contents: `Ask a follow-up in ${language} for this diary chat: ${JSON.stringify(history)}`,
+      model: 'gemini-3-flash-preview',
+      contents: `Ask a follow-up in ${language} for this chat: ${JSON.stringify(history)}`,
     });
     return response.text?.trim() || "Tell me more.";
   } catch (e) { return "Go on..."; }

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { DiaryEntry } from '../types';
 
@@ -11,7 +12,6 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('All');
 
-  // 提取现有馆藏中的所有语言种类
   const availableLanguages = useMemo(() => {
     const langs = new Set(entries.map(e => e.language));
     return ['All', ...Array.from(langs)];
@@ -49,16 +49,22 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete }) => {
     );
   }
 
+  const getScoreBadge = (score: number) => {
+    if (score >= 90) return 'S';
+    if (score >= 80) return 'A';
+    if (score >= 70) return 'B';
+    return 'C';
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
         <div className="space-y-1">
-          <h2 className="text-2xl md:text-3xl font-bold text-slate-900 serif-font">日记收藏馆</h2>
-          <p className="text-slate-500 text-sm">按时间线浏览您的成长轨迹。</p>
+          <h2 className="text-2xl md:text-3xl font-bold text-slate-900 serif-font">馆藏展示 Collection</h2>
+          <p className="text-slate-500 text-sm">在这里珍藏着您的每一次练习与感悟。</p>
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3">
-          {/* 独立语言筛选器 */}
           <div className="flex flex-col">
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">语言筛选 Language</label>
             <div className="relative">
@@ -77,7 +83,6 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete }) => {
             </div>
           </div>
 
-          {/* 独立内容搜索框 */}
           <div className="flex flex-col">
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">检索内容 Search</label>
             <div className="relative group">
@@ -122,20 +127,23 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete }) => {
                   <button
                     key={entry.id}
                     onClick={() => onSelect(entry)}
-                    className="group relative text-left bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-indigo-200 transition-all duration-500"
+                    className="group relative text-left bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-indigo-200 transition-all duration-500 overflow-hidden"
                   >
-                    <div className="absolute -top-3 left-8 px-4 py-1.5 bg-indigo-600 text-white text-[10px] font-black rounded-xl shadow-lg shadow-indigo-100 uppercase tracking-widest">
+                    <div className="absolute -top-3 left-8 px-4 py-1.5 bg-indigo-600 text-white text-[10px] font-black rounded-xl shadow-lg shadow-indigo-100 uppercase tracking-widest z-10">
                       {new Date(entry.timestamp).getDate()}nd {monthYear.split('年')[1]}
                     </div>
 
-                    {/* Delete Button */}
+                    {/* Type Badge */}
+                    <div className={`absolute top-0 right-0 p-2 text-[8px] font-black uppercase tracking-tighter ${entry.type === 'rehearsal' ? 'bg-orange-500 text-white' : 'bg-indigo-500 text-white'}`}>
+                      {entry.type === 'rehearsal' ? 'Rehearsal 演练' : 'Diary 日记'}
+                    </div>
+
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         onDelete(entry.id);
                       }}
-                      className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-300 hover:bg-red-50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all active:scale-90 z-20"
-                      title="删除此条目"
+                      className="absolute top-8 right-12 w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-300 hover:bg-red-50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all active:scale-90 z-20"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -144,9 +152,17 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete }) => {
 
                     <div className="flex items-center justify-between mb-4 mt-6">
                       <div className="flex items-center space-x-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
                         <span className="px-2.5 py-1 bg-indigo-50 text-indigo-600 text-[9px] font-black rounded-lg uppercase tracking-widest">{entry.language}</span>
                       </div>
+                      
+                      {entry.type === 'rehearsal' && entry.rehearsal && (
+                        <div className="flex items-center space-x-1">
+                           <span className="text-[10px] font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-md">
+                             {getScoreBadge(entry.rehearsal.accuracyScore)}/{getScoreBadge(entry.rehearsal.qualityScore)}
+                           </span>
+                        </div>
+                      )}
                     </div>
 
                     <p className="text-slate-600 line-clamp-4 leading-relaxed serif-font mb-6 min-h-[6rem] italic text-sm md:text-base">
@@ -154,7 +170,9 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete }) => {
                     </p>
 
                     <div className="pt-4 border-t border-slate-50 flex items-center justify-between group-hover:text-indigo-600 transition-colors">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-indigo-600">回顾此篇章 View Artifact</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-indigo-600">
+                        {entry.type === 'rehearsal' ? '查看报告 Review Report' : '回顾篇章 View Artifact'}
+                      </span>
                       <span className="transform group-hover:translate-x-1 transition-transform text-indigo-400">→</span>
                     </div>
                   </button>

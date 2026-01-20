@@ -7,8 +7,8 @@ export interface Correction {
 }
 
 export interface PracticeRecord {
-  sentence: string; // 最终版本或修正版本
-  originalAttempt?: string; // 用户最初的错误尝试
+  sentence: string; 
+  originalAttempt?: string; 
   feedback: string;
   betterVersion?: string;
   timestamp: number;
@@ -20,8 +20,8 @@ export interface AdvancedVocab {
   meaning: string;
   usage: string;
   level: 'Intermediate' | 'Advanced' | 'Native';
-  mastery?: number; // 熟练度：0-3
-  practices?: PracticeRecord[]; // 历次造句记录
+  mastery?: number; 
+  practices?: PracticeRecord[]; 
 }
 
 export interface TransitionSuggestion {
@@ -39,13 +39,25 @@ export interface DiaryAnalysis {
   overallFeedback: string;
 }
 
+export interface RehearsalEvaluation {
+  accuracyScore: number;
+  qualityScore: number;
+  contentFeedback: string;
+  languageFeedback: string;
+  suggestedVersion: string;
+  sourceText?: string;
+  userRetelling?: string;
+}
+
 export interface DiaryEntry {
   id: string;
   timestamp: number; 
   date: string; 
   originalText: string;
   language: string;
+  type: 'diary' | 'rehearsal'; // 新增：区分类型
   analysis?: DiaryAnalysis;
+  rehearsal?: RehearsalEvaluation; // 新增：演练报告数据
 }
 
 export interface ChatMessage {
@@ -53,4 +65,4 @@ export interface ChatMessage {
   content: string;
 }
 
-export type ViewState = 'dashboard' | 'editor' | 'review' | 'history' | 'chat' | 'review_vault';
+export type ViewState = 'dashboard' | 'editor' | 'review' | 'history' | 'chat' | 'review_vault' | 'rehearsal';
