@@ -115,45 +115,47 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete }) => {
       ) : (
         <div className="space-y-12">
           {(Object.entries(groupedEntries) as [string, DiaryEntry[]][]).map(([monthYear, monthEntries]) => (
-            <section key={monthYear} className="space-y-6">
+            <section key={monthYear} className="space-y-10">
               <div className="flex items-center space-x-4">
                 <h3 className="text-lg font-bold text-slate-800 whitespace-nowrap serif-font">{monthYear}</h3>
                 <div className="h-[1px] w-full bg-slate-200"></div>
                 <span className="text-[10px] font-black text-slate-400 bg-white border border-slate-100 px-3 py-1 rounded-full uppercase tracking-widest shadow-sm">{monthEntries.length} 藏品</span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-12 gap-x-6">
                 {monthEntries.map((entry) => (
                   <button
                     key={entry.id}
                     onClick={() => onSelect(entry)}
-                    className="group relative text-left bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-indigo-200 transition-all duration-500 overflow-hidden"
+                    className="group relative text-left bg-white p-6 pt-10 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-indigo-200 transition-all duration-500"
                   >
-                    <div className="absolute -top-3 left-8 px-4 py-1.5 bg-indigo-600 text-white text-[10px] font-black rounded-xl shadow-lg shadow-indigo-100 uppercase tracking-widest z-10">
+                    {/* 日期悬浮标签 - 修复显示不全 */}
+                    <div className="absolute -top-3 left-6 px-4 py-1.5 bg-indigo-600 text-white text-[10px] font-black rounded-xl shadow-lg shadow-indigo-100 uppercase tracking-widest z-20">
                       {new Date(entry.timestamp).getDate()}nd {monthYear.split('年')[1]}
                     </div>
 
-                    {/* Type Badge */}
-                    <div className={`absolute top-0 right-0 p-2 text-[8px] font-black uppercase tracking-tighter ${entry.type === 'rehearsal' ? 'bg-orange-500 text-white' : 'bg-indigo-500 text-white'}`}>
-                      {entry.type === 'rehearsal' ? 'Rehearsal 演练' : 'Diary 日记'}
+                    {/* 类型标识标签 - 修复显示不全并移入内部 */}
+                    <div className={`absolute top-3 right-4 px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest z-20 ${entry.type === 'rehearsal' ? 'bg-orange-500 text-white shadow-md shadow-orange-100' : 'bg-indigo-500 text-white shadow-md shadow-indigo-100'}`}>
+                      {entry.type === 'rehearsal' ? 'Rehearsal' : 'Diary'}
                     </div>
 
+                    {/* 删除按钮 */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         onDelete(entry.id);
                       }}
-                      className="absolute top-8 right-12 w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-300 hover:bg-red-50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all active:scale-90 z-20"
+                      className="absolute top-12 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 text-slate-300 hover:bg-red-50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all active:scale-90 z-30"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     </button>
 
-                    <div className="flex items-center justify-between mb-4 mt-6">
+                    <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center space-x-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-                        <span className="px-2.5 py-1 bg-indigo-50 text-indigo-600 text-[9px] font-black rounded-lg uppercase tracking-widest">{entry.language}</span>
+                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-black rounded-md uppercase tracking-widest">{entry.language}</span>
                       </div>
                       
                       {entry.type === 'rehearsal' && entry.rehearsal && (

@@ -66,7 +66,7 @@ const App: React.FC = () => {
       const analysis = await analyzeDiaryEntry(text, language);
       const now = new Date();
       setCurrentEntry({
-        id: Date.now().toString(),
+        id: `temp_${Date.now()}`, // 使用临时ID
         timestamp: Date.now(),
         date: now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
         originalText: text,
@@ -80,12 +80,14 @@ const App: React.FC = () => {
   };
 
   const handleSaveRehearsal = async (language: string, evalResult: RehearsalEvaluation) => {
-    if (!user || !db) return;
+    if (!user) { alert("请先登录馆长账号。"); return; }
+    if (!db) { alert("博物馆数据库尚未连接，请检查网络。"); return; }
+    
     setIsLoading(true);
     setLoadingText('正在将演练成果存入收藏馆...');
     try {
       const now = new Date();
-      await addDoc(collection(db, "entries"), {
+      const docData: any = {
         userId: user.uid,
         timestamp: Date.now(),
         date: now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
@@ -93,31 +95,43 @@ const App: React.FC = () => {
         language,
         type: 'rehearsal',
         rehearsal: evalResult
-      });
+      };
+      await addDoc(collection(db, "entries"), docData);
       setView('history');
-    } catch (e) { alert("保存失败！"); }
+    } catch (e: any) { alert(`保存失败：${e.message}`); }
     finally { setIsLoading(false); }
   };
 
   const handleSave = async () => {
-    if (currentEntry && user && db) {
-      setIsLoading(true);
-      try {
-        await addDoc(collection(db, "entries"), {
-          userId: user.uid,
-          timestamp: currentEntry.timestamp,
-          date: currentEntry.date,
-          originalText: currentEntry.originalText,
-          language: currentEntry.language,
-          type: currentEntry.type,
-          analysis: currentEntry.analysis,
-          rehearsal: currentEntry.rehearsal
-        });
-        setView('history');
-        setCurrentEntry(null);
-      } catch (e) { alert("保存失败！"); }
-      finally { setIsLoading(false); }
+    if (!currentEntry) return;
+    if (!user) { alert("请先登录馆长账号。"); return; }
+    if (!db) { alert("博物馆数据库连接失败，请刷新页面。"); return; }
+
+    setIsLoading(true);
+    setLoadingText('正在正式收录入馆...');
+    try {
+      // 关键修复：动态构建对象，移除 undefined 字段，Firestore 不接受 undefined
+      const docData: any = {
+        userId: user.uid,
+        timestamp: currentEntry.timestamp,
+        date: currentEntry.date,
+        originalText: currentEntry.originalText,
+        language: currentEntry.language,
+        type: currentEntry.type
+      };
+
+      if (currentEntry.analysis) docData.analysis = currentEntry.analysis;
+      if (currentEntry.rehearsal) docData.rehearsal = currentEntry.rehearsal;
+
+      await addDoc(collection(db, "entries"), docData);
+      
+      setView('history');
+      setCurrentEntry(null);
+    } catch (e: any) { 
+      console.error("Save Error:", e);
+      alert(`入馆失败：${e.message || "未知原因"}`); 
     }
+    finally { setIsLoading(false); }
   };
 
   const handleDelete = async (entryId: string) => {

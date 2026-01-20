@@ -15,7 +15,8 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   
-  const isSaved = entry.id.length > 15; 
+  // 核心修复：临时 ID 以 temp_ 开头，正式 ID 不含 temp_
+  const isSaved = !entry.id.startsWith('temp_'); 
 
   // --- Audio Logic ---
   const handlePlayAudio = async (text: string) => {
@@ -171,7 +172,7 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
     );
   }
 
-  // 日记分析渲染逻辑 (保持原样)
+  // 日记分析渲染逻辑
   if (!entry.analysis) return null;
   const { analysis } = entry;
 
@@ -184,7 +185,7 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
         </div>
         
         <div className="flex items-center space-x-2 shrink-0">
-          {isSaved && (
+          {isSaved ? (
             <button 
               onClick={() => onDelete(entry.id)}
               className="bg-white border-2 border-slate-100 text-slate-400 hover:text-red-500 hover:border-red-100 p-2.5 md:px-4 rounded-xl text-xs md:text-base font-bold transition-all active:scale-95 flex items-center space-x-1"
@@ -192,9 +193,7 @@ const Review: React.FC<ReviewProps> = ({ entry, onSave, onDelete }) => {
               <span>🗑️</span>
               <span className="hidden md:inline">销毁</span>
             </button>
-          )}
-          
-          {!isSaved && (
+          ) : (
             <button 
               onClick={onSave}
               className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs md:text-base font-bold shadow-md transition-all active:scale-95"

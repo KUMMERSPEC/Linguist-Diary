@@ -151,15 +151,19 @@ export const validateVocabUsage = async (word: string, meaning: string, sentence
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `Act as a language tutor. The user is trying to use "${word}" (${meaning}) in: "${sentence}". Language: ${language}.`,
+      contents: `Act as a language tutor. The user is trying to use the word/phrase "${word}" (which means: ${meaning}) in a ${language} sentence: "${sentence}".
+      1. Check if the usage is naturally and grammatically correct.
+      2. If not correct, explain why and provide a better version.
+      3. Always encourage the user.
+      Provide feedback in Chinese.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
             isCorrect: { type: Type.BOOLEAN },
-            feedback: { type: Type.STRING },
-            betterVersion: { type: Type.STRING }
+            feedback: { type: Type.STRING, description: "Feedback for the user in Chinese." },
+            betterVersion: { type: Type.STRING, description: "A corrected or more natural version of the sentence." }
           },
           required: ["isCorrect", "feedback"]
         }
@@ -167,7 +171,7 @@ export const validateVocabUsage = async (word: string, meaning: string, sentence
     });
     return JSON.parse(response.text);
   } catch (error) {
-    return { isCorrect: false, feedback: "Error." };
+    return { isCorrect: false, feedback: "馆长刚才开了个小差，没能给出精准的建议。请检查网络并重试。" };
   }
 };
 

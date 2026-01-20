@@ -10,12 +10,12 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, onStartReview, entries }) => {
-  // --- 数据处理逻辑 ---
-
+  // --- 近 7 天趋势图数据 ---
   const chartData = React.useMemo(() => {
     const last7Days = Array.from({length: 7}, (_, i) => {
       const d = new Date();
       d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
       return { 
         name: d.toLocaleDateString('zh-CN', { weekday: 'short' }),
         dateStr: d.toDateString(),
@@ -24,221 +24,214 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, onStartReview, entrie
     }).reverse();
 
     entries.forEach(entry => {
-      const entryDate = new Date(entry.timestamp).toDateString();
-      const day = last7Days.find(d => d.dateStr === entryDate);
+      const entryDate = new Date(entry.timestamp);
+      entryDate.setHours(0, 0, 0, 0);
+      const day = last7Days.find(d => d.dateStr === entryDate.toDateString());
       if (day) day.entries += 1;
     });
 
     return last7Days;
   }, [entries]);
 
-  const heatmapData = React.useMemo(() => {
+  // --- 热力图数据 ---
+  const { columns, monthLabels } = React.useMemo(() => {
     const today = new Date();
-    const data: { [key: string]: number } = {};
-    for (let i = 0; i < 365; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      data[d.toDateString()] = 0;
-    }
+    today.setHours(0, 0, 0, 0);
+    const counts: { [key: string]: number } = {};
     entries.forEach(entry => {
-      const dateStr = new Date(entry.timestamp).toDateString();
-      if (data[dateStr] !== undefined) data[dateStr] += 1;
+      const d = new Date(entry.timestamp);
+      d.setHours(0, 0, 0, 0);
+      counts[d.toDateString()] = (counts[d.toDateString()] || 0) + 1;
     });
-    const weeks: { date: Date; count: number }[][] = [];
-    let currentWeek: { date: Date; count: number }[] = [];
+
     const startDate = new Date(today);
     startDate.setDate(today.getDate() - 364);
-    const firstDayOfWeek = startDate.getDay();
-    for(let i = 0; i < firstDayOfWeek; i++) currentWeek.push({ date: new Date(0), count: -1 });
-    for (let i = 0; i < 365; i++) {
-      const d = new Date(startDate);
-      d.setDate(startDate.getDate() + i);
-      currentWeek.push({ date: d, count: data[d.toDateString()] || 0 });
-      if (currentWeek.length === 7) { weeks.push(currentWeek); currentWeek = []; }
+    
+    // 找到对齐的那周的周日
+    const startOfGrid = new Date(startDate);
+    startOfGrid.setDate(startDate.getDate() - startDate.getDay());
+
+    const cols: { date: Date; count: number }[][] = [];
+    const labels: { text: string; index: number }[] = [];
+    let lastMonth = -1;
+
+    for (let w = 0; w < 53; w++) {
+      const week: { date: Date; count: number }[] = [];
+      for (let d = 0; d < 7; d++) {
+        const currentDate = new Date(startOfGrid);
+        currentDate.setDate(startOfGrid.getDate() + (w * 7) + d);
+        week.push({ date: currentDate, count: counts[currentDate.toDateString()] || 0 });
+        
+        // 逻辑修正：如果这周的第一天是新的一月
+        if (d === 0) {
+          const currentMonth = currentDate.getMonth();
+          if (currentMonth !== lastMonth) {
+            // 核心修复：如果当前周 index 距离末尾太近（少于4周），则不显示标签，防止首尾重复
+            if (w < 49) {
+              labels.push({ 
+                text: currentDate.toLocaleDateString('zh-CN', { month: 'short' }), 
+                index: w 
+              });
+            }
+            lastMonth = currentMonth;
+          }
+        }
+      }
+      cols.push(week);
     }
-    if (currentWeek.length > 0) weeks.push(currentWeek);
-    return weeks;
+    return { columns: cols, monthLabels: labels };
   }, [entries]);
 
   const stats = React.useMemo(() => {
-    const sortedEntries = [...entries].sort((a, b) => b.timestamp - a.timestamp);
-    let streak = 0;
-    let today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const entryDates = new Set(entries.map(e => {
-        const d = new Date(e.timestamp);
-        d.setHours(0, 0, 0, 0);
-        return d.getTime();
-    }));
-    let checkDate = new Date(today);
-    if (!entryDates.has(checkDate.getTime())) checkDate.setDate(checkDate.getDate() - 1);
-    while (entryDates.has(checkDate.getTime())) {
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    }
-
-    // 复习任务计算：假设每天目标是复习或掌握 10 个词
-    // 这里简单演示，实际可以通过 mastery 的变化来判断今日进度
-    const vocabCount = entries.reduce((acc, curr) => acc + (curr.analysis?.advancedVocab.length || 0), 0);
-
-    return {
-      total: entries.length,
-      streak: streak,
-      corrections: entries.reduce((acc, curr) => acc + (curr.analysis?.corrections.length || 0), 0),
-      vocab: vocabCount
-    };
+    const total = entries.length;
+    const rehearsalCount = entries.filter(e => e.type === 'rehearsal').length;
+    return { total, rehearsalCount };
   }, [entries]);
 
-  const getColorClass = (count: number) => {
-    if (count === -1) return 'bg-transparent opacity-0';
+  const getColor = (count: number) => {
     if (count === 0) return 'bg-slate-100';
     if (count === 1) return 'bg-indigo-200';
     if (count === 2) return 'bg-indigo-400';
     return 'bg-indigo-600';
   };
 
-  const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
-
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-bold text-slate-900 serif-font">馆长，欢迎回来。</h2>
-          <p className="text-slate-500 mt-1">云端同步已就绪，今天想记录些什么？</p>
-        </div>
-        <button 
-          onClick={onNewEntry}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-bold shadow-xl shadow-indigo-100 transition-all flex items-center space-x-2 w-fit active:scale-95"
-        >
-          <span>✍️ 开启新藏品</span>
-        </button>
-      </header>
+    <div className="space-y-8 pb-20 animate-in fade-in duration-700">
+      {/* 1. 馆长欢迎区 & 核心动作按钮 */}
+      <section className="space-y-6">
+        <header className="px-2 space-y-1">
+          <h2 className="text-3xl md:text-4xl font-bold text-slate-900 serif-font tracking-tight">馆长，欢迎回来。</h2>
+          <p className="text-slate-500 text-sm md:text-base italic">云端同步已就绪，今天想记录些什么？</p>
+        </header>
 
-      {/* 每日特展任务卡片 */}
-      <div className="bg-gradient-to-br from-indigo-600 to-violet-700 p-8 rounded-[2.5rem] text-white shadow-xl shadow-indigo-200 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <span className="bg-white/20 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Daily Quest</span>
-            <h3 className="text-2xl font-bold serif-font">今日特展复习任务</h3>
-            <p className="text-indigo-100 text-sm opacity-80">系统已为您精选 10 个需要打磨的词汇珍宝。</p>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <button 
+            onClick={onNewEntry}
+            className="group relative bg-indigo-600 p-8 rounded-[2.5rem] text-white flex items-center justify-between shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-[0.98] overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
+            <div className="text-left relative z-10">
+              <h5 className="text-xl font-bold serif-font">开启今日撰写</h5>
+              <p className="text-indigo-100 text-[10px] mt-1 opacity-70 uppercase tracking-widest font-black">Daily Language Entry</p>
+            </div>
+            <span className="text-3xl group-hover:translate-x-2 transition-transform relative z-10">→</span>
+          </button>
+          
           <button 
             onClick={onStartReview}
-            className="bg-white text-indigo-600 px-8 py-4 rounded-2xl font-black text-sm hover:bg-indigo-50 transition-all shadow-lg active:scale-95 flex items-center space-x-2 shrink-0"
+            className="group relative bg-slate-900 p-8 rounded-[2.5rem] text-white flex items-center justify-between shadow-2xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-[0.98] overflow-hidden"
           >
-            <span>🚀 立即开启练习</span>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
+            <div className="text-left relative z-10">
+              <h5 className="text-xl font-bold serif-font">打磨馆藏珍宝</h5>
+              <p className="text-slate-400 text-[10px] mt-1 opacity-70 uppercase tracking-widest font-black">Review & Refine</p>
+            </div>
+            <span className="text-3xl group-hover:translate-x-2 transition-transform relative z-10">→</span>
           </button>
         </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 text-4xl group-hover:scale-110 transition-transform">🔥</div>
-          <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mb-2">连续打卡</p>
-          <div className="flex items-baseline space-x-2">
-            <span className="text-4xl font-bold text-slate-900">{stats.streak}</span>
-            <span className="text-orange-500 text-xs font-bold italic">DAYS</span>
-          </div>
+      {/* 2. 统计卡片 */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:border-indigo-100 transition-colors">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">馆藏总数 Total</p>
+          <h3 className="text-3xl font-black text-slate-900 serif-font mt-1">{stats.total}</h3>
         </div>
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 text-4xl group-hover:scale-110 transition-transform">📚</div>
-          <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mb-2">馆藏总量</p>
-          <div className="flex items-baseline space-x-2">
-            <span className="text-4xl font-bold text-slate-900">{stats.total}</span>
-            <span className="text-emerald-500 text-xs font-bold">Cloud</span>
-          </div>
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:border-indigo-100 transition-colors">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">演练次数 Rehearsals</p>
+          <h3 className="text-3xl font-black text-slate-900 serif-font mt-1">{stats.rehearsalCount}</h3>
         </div>
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group">
-           <div className="absolute top-0 right-0 p-4 opacity-10 text-4xl group-hover:scale-110 transition-transform">🔍</div>
-          <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mb-2">累计修正</p>
-          <div className="flex items-baseline space-x-2">
-            <span className="text-4xl font-bold text-slate-900">{stats.corrections}</span>
-            <span className="text-indigo-400 text-xs font-bold">Points</span>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 text-4xl group-hover:scale-110 transition-transform">💎</div>
-          <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mb-2">进阶词库</p>
-          <div className="flex items-baseline space-x-2">
-            <span className="text-4xl font-bold text-slate-900">{stats.vocab}</span>
-            <span className="text-slate-400 text-xs font-bold">Items</span>
+        <div className="hidden md:block bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">博物馆状态 Status</p>
+          <div className="flex items-center space-x-2 mt-3 text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full w-fit">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
+            </span>
+            <span>已同步云端 Online</span>
           </div>
         </div>
       </div>
 
-      <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
-        <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold text-slate-900 flex items-center space-x-2">
-                <span className="p-2 bg-indigo-50 rounded-lg">🗓️</span>
-                <span>年度学习足迹</span>
-            </h3>
-            <div className="flex items-center space-x-2 text-[10px] font-bold text-slate-400">
-                <span>Less</span>
-                <div className="w-3 h-3 rounded-sm bg-slate-100"></div>
-                <div className="w-3 h-3 rounded-sm bg-indigo-200"></div>
-                <div className="w-3 h-3 rounded-sm bg-indigo-400"></div>
-                <div className="w-3 h-3 rounded-sm bg-indigo-600"></div>
-                <span>More</span>
-            </div>
+      {/* 3. 年度足迹 (Heatmap with Optimized Labels) */}
+      <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between mb-8">
+          <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">馆长年度足迹 Annual Footprint</h4>
+          <div className="flex space-x-1 items-center">
+            <span className="text-[9px] text-slate-400 mr-1 font-bold">LESS</span>
+            {[0, 1, 2, 3].map(v => <div key={v} className={`w-2.5 h-2.5 rounded-sm ${getColor(v)}`}></div>)}
+            <span className="text-[9px] text-slate-400 ml-1 font-bold">MORE</span>
+          </div>
         </div>
+        
         <div className="overflow-x-auto no-scrollbar pb-2">
-            <div className="flex flex-col min-w-[700px]">
-                <div className="flex mb-2 ml-8">
-                    {Array.from({length: 12}).map((_, i) => (
-                        <div key={i} className="flex-1 text-[10px] text-slate-400 font-medium">
-                            {monthNames[(new Date().getMonth() + i + 1) % 12]}
-                        </div>
-                    ))}
-                </div>
-                <div className="flex space-x-1">
-                    <div className="flex flex-col justify-between py-1 pr-2 text-[8px] text-slate-300 font-bold h-24 uppercase">
-                        <span>Mon</span><span>Wed</span><span>Fri</span><span>Sun</span>
-                    </div>
-                    <div className="flex flex-1 space-x-1">
-                        {heatmapData.map((week, wIdx) => (
-                            <div key={wIdx} className="flex flex-col space-y-1">
-                                {week.map((day, dIdx) => (
-                                    <div 
-                                        key={dIdx}
-                                        title={day.count >= 0 ? `${day.date.toLocaleDateString()}: ${day.count} 篇日记` : ''}
-                                        className={`w-3 h-3 rounded-sm transition-all duration-300 ${getColorClass(day.count)} hover:ring-2 hover:ring-indigo-300 hover:scale-110`}
-                                    />
-                                ))}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        </div>
-      </div>
+          {/* 月份横轴：使用绝对定位确保对齐 */}
+          <div className="relative h-5 mb-1 ml-8 w-full min-w-max">
+            {monthLabels.map((label, i) => (
+              <span 
+                key={i} 
+                className="absolute text-[10px] font-bold text-slate-400 uppercase whitespace-nowrap"
+                style={{ left: `${label.index * 14}px` }}
+              >
+                {label.text}
+              </span>
+            ))}
+          </div>
 
-      <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
-        <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center space-x-2">
-          <span className="p-2 bg-indigo-50 rounded-lg">📈</span>
-          <span>近期学习频率</span>
-        </h3>
-        <div className="h-64 w-full">
+          <div className="flex min-w-max">
+            {/* 星期纵轴 */}
+            <div className="flex flex-col gap-[3px] pr-3 justify-between py-[2px] h-[95px] w-8 shrink-0">
+              <span className="text-[9px] font-bold text-slate-300"></span>
+              <span className="text-[9px] font-bold text-slate-400 uppercase opacity-60">Mon</span>
+              <span className="text-[9px] font-bold text-slate-300"></span>
+              <span className="text-[9px] font-bold text-slate-400 uppercase opacity-60">Wed</span>
+              <span className="text-[9px] font-bold text-slate-300"></span>
+              <span className="text-[9px] font-bold text-slate-400 uppercase opacity-60">Fri</span>
+              <span className="text-[9px] font-bold text-slate-300"></span>
+            </div>
+
+            {/* 网格网格 */}
+            <div className="flex gap-[3px]">
+              {columns.map((week, wIdx) => (
+                <div key={wIdx} className="flex flex-col gap-[3px] shrink-0">
+                  {week.map((day, dIdx) => (
+                    <div
+                      key={dIdx}
+                      title={`${day.date.toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric'})}: ${day.count} 篇藏品`}
+                      className={`w-[11px] h-[11px] rounded-[2px] transition-all hover:ring-2 hover:ring-indigo-300 ${getColor(day.count)} cursor-crosshair`}
+                    ></div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 4. 活跃趋势图 */}
+      <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+        <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-8">馆藏增长趋势 Growth Trend</h4>
+        <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData}>
               <defs>
                 <linearGradient id="colorEntries" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15}/>
-                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                  <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
+                  <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}} />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} dy={10} />
               <YAxis hide />
               <Tooltip 
-                contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '12px 16px', fontSize: '12px' }}
-                cursor={{ stroke: '#6366f1', strokeWidth: 2 }}
+                contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
+                cursor={{ stroke: '#4f46e5', strokeWidth: 1 }}
               />
-              <Area type="monotone" dataKey="entries" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorEntries)" animationDuration={1500} />
+              <Area type="monotone" dataKey="entries" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorEntries)" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
-      </div>
+      </section>
     </div>
   );
 };
