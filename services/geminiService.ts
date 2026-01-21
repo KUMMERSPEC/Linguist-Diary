@@ -20,34 +20,27 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
     : "";
 
   const japaneseInstruction = isJapanese 
-    ? "IMPORTANT for Japanese: For BOTH 'modifiedText' and 'diffedText', provide Furigana for ALL Kanji using the syntax '[Kanji](furigana)'. Example: [今日](きょう)."
+    ? "IMPORTANT for Japanese: For ALL text fields, provide Furigana for Kanji using the syntax '[Kanji](furigana)'. Example: [今日](きょう). Apply this to words, meanings, usages, and feedback."
     : "";
 
-  const diffInstruction = "In the 'diffedText' field, you MUST wrap deleted/incorrect parts in '<rem>...</rem>' and added/corrected parts in '<add>...</add>'. This should create a clear comparison within the original sentence structure.";
+  const diffInstruction = "In the 'diffedText' field, you MUST wrap deleted/incorrect parts in '<rem>...</rem>' and added/corrected parts in '<add>...</add>'.";
 
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `You are the Lead Curator of the Linguist Diary Museum. Analyze this ${language} artifact (diary entry): "${text}". 
+      contents: `You are the Lead Curator of the Linguist Diary Museum. Analyze this ${language} artifact: "${text}". 
       ${historyContext}
-      
-      ROLE:
-      Analyze the text for grammatical precision, vocabulary elegance, and stylistic flow. 
-      Provide a "Museum Restoration" report.
-      
-      MEMORY LINK:
-      Reference patterns from [MUSEUM ARCHIVES] in your 'overallFeedback'. If they made the same mistake before, point it out gently as a "recurring restoration challenge".
-      
       ${diffInstruction}
       ${japaneseInstruction}`,
       config: {
+        thinkingConfig: { thinkingBudget: 4000 },
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
             modifiedText: { type: Type.STRING },
             diffedText: { type: Type.STRING },
-            overallFeedback: { type: Type.STRING, description: "Professional, encouraging curator's feedback. Connect to history if possible." },
+            overallFeedback: { type: Type.STRING },
             corrections: {
               type: Type.ARRAY,
               items: {
@@ -100,21 +93,17 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
 export const generatePracticeArtifact = async (language: string, keywords?: string): Promise<string> => {
   const ai = getAiInstance();
   const model = 'gemini-3-flash-preview';
+  const isJapanese = language.toLowerCase() === 'japanese' || language === '日本語';
+  const japaneseInstruction = isJapanese ? "Provide Furigana for Kanji using '[Kanji](furigana)'." : "";
   
-  const keywordInstruction = keywords 
-    ? `CRITICAL: You MUST include these specific keywords: "${keywords}".` 
-    : "Generate a short description of a daily scene or museum object.";
-
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `${keywordInstruction} 
-      The text must be in ${language}. 40-50 words max. Plain text only. No English.`,
+      contents: `${keywords ? `Keywords: "${keywords}".` : "Daily scene description."} ${japaneseInstruction} 
+      The text must be in ${language}. 40-50 words max.`,
     });
     return response.text?.trim() || "No text generated.";
-  } catch (e) {
-    return "Error generating practice text.";
-  }
+  } catch (e) { return "Error generating practice text."; }
 };
 
 export const evaluateRetelling = async (source: string, retelling: string, language: string): Promise<RehearsalEvaluation> => {
@@ -123,11 +112,7 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `Museum Exhibition Rehearsal.
-      Source: "${source}"
-      Retelling: "${retelling}"
-      Language: ${language}
-      Evaluate accuracy and quality. Response in Chinese.`,
+      contents: `Evaluate retelling in ${language}. Source: "${source}", Retelling: "${retelling}". Response in Chinese.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -144,9 +129,7 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
       }
     });
     return JSON.parse(response.text);
-  } catch (e) {
-    throw new Error("Evaluation failed.");
-  }
+  } catch (e) { throw new Error("Evaluation failed."); }
 };
 
 export const validateVocabUsage = async (word: string, meaning: string, sentence: string, language: string) => {
@@ -155,7 +138,7 @@ export const validateVocabUsage = async (word: string, meaning: string, sentence
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `Check if "${word}" (Meaning: ${meaning}) is used correctly in: "${sentence}" (${language}). Provide feedback in Chinese.`,
+      contents: `Verify usage of "${word}" in "${sentence}" (${language}). Output JSON.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -170,9 +153,7 @@ export const validateVocabUsage = async (word: string, meaning: string, sentence
       }
     });
     return JSON.parse(response.text);
-  } catch (error) {
-    return { isCorrect: false, feedback: "系统繁忙，请重试。" };
-  }
+  } catch (error) { return { isCorrect: false, feedback: "Error." }; }
 };
 
 export const generateDiaryAudio = async (text: string): Promise<string> => {
@@ -200,8 +181,8 @@ export const getChatFollowUp = async (history: ChatMessage[], language: string):
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Museum Chat Partner. Reply in ${language} to: ${JSON.stringify(history)}. Single message bubble only.`,
+      contents: `Reply in ${language} to: ${JSON.stringify(history)}.`,
     });
-    return response.text?.trim() || "Tell me more.";
+    return response.text?.trim() || "Continue.";
   } catch (e) { return "Go on..."; }
 };
