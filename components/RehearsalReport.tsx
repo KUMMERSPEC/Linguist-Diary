@@ -15,13 +15,14 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
   const [viewMode, setViewMode] = useState<'diff' | 'final'>('diff');
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
-  const renderRuby = (text: string) => {
-    if (!text) return '';
+  const renderRuby = (text?: string) => {
+    if (!text || typeof text !== 'string') return null;
     const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
     return <span dangerouslySetInnerHTML={{ __html: html }} />;
   };
 
-  const renderDiffText = (diff: string) => {
+  const renderDiffText = (diff?: string) => {
+    if (!diff || typeof diff !== 'string') return null;
     let processed = diff.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
     processed = processed
       .replace(/<add>(.*?)<\/add>/g, '<span class="bg-emerald-500/20 text-emerald-200 px-1 rounded-md border-b-2 border-emerald-400/30 font-bold mx-0.5">$1</span>')
@@ -30,6 +31,7 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
   };
 
   const handlePlayAudio = async (textToPlay: string, id: string) => {
+    if (!textToPlay) return;
     if (isPlaying === id) {
       audioSourceRef.current?.stop();
       setIsPlaying(null);
@@ -63,12 +65,14 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
   };
 
   const getGrade = (score: number) => {
-    const s = Math.round(score);
+    const s = Math.round(score || 0);
     if (s >= 90) return { label: 'S', color: 'text-indigo-400' };
     if (s >= 80) return { label: 'A', color: 'text-emerald-400' };
     if (s >= 70) return { label: 'B', color: 'text-orange-400' };
     return { label: 'C', color: 'text-slate-400' };
   };
+
+  if (!evaluation) return null;
 
   return (
     <div className="flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-700 pb-24">
@@ -95,23 +99,23 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
               <div className="bg-white/5 p-6 rounded-3xl border border-white/10 text-center hover:bg-white/10 transition-colors">
                 <span className="text-[9px] font-black text-slate-500 uppercase block mb-2">还原度 Accuracy</span>
                 <div className={`text-4xl font-black serif-font ${getGrade(evaluation.accuracyScore).color}`}>{getGrade(evaluation.accuracyScore).label}</div>
-                <span className="text-[10px] font-bold text-slate-400 mt-2 block">{Math.round(evaluation.accuracyScore)}/100</span>
+                <span className="text-[10px] font-bold text-slate-400 mt-2 block">{Math.round(evaluation.accuracyScore || 0)}/100</span>
               </div>
               <div className="bg-white/5 p-6 rounded-3xl border border-white/10 text-center hover:bg-white/10 transition-colors">
                 <span className="text-[9px] font-black text-slate-500 uppercase block mb-2">表现力 Quality</span>
                 <div className={`text-4xl font-black serif-font ${getGrade(evaluation.qualityScore).color}`}>{getGrade(evaluation.qualityScore).label}</div>
-                <span className="text-[10px] font-bold text-slate-400 mt-2 block">{Math.round(evaluation.qualityScore)}/100</span>
+                <span className="text-[10px] font-bold text-slate-400 mt-2 block">{Math.round(evaluation.qualityScore || 0)}/100</span>
               </div>
             </div>
 
             <div className="space-y-4">
               <div className="bg-white/5 p-6 rounded-3xl border border-white/5">
                 <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">内容评价 Content</h4>
-                <p className="text-sm text-slate-300 leading-relaxed italic">{evaluation.contentFeedback}</p>
+                <p className="text-sm text-slate-300 leading-relaxed italic">{evaluation.contentFeedback || "暂无反馈"}</p>
               </div>
               <div className="bg-white/5 p-6 rounded-3xl border border-white/5">
                 <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-3">语言评析 Language</h4>
-                <p className="text-sm text-slate-300 leading-relaxed italic">{evaluation.languageFeedback}</p>
+                <p className="text-sm text-slate-300 leading-relaxed italic">{evaluation.languageFeedback || "暂无评析"}</p>
               </div>
             </div>
           </div>
@@ -141,7 +145,7 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
                     <button onClick={() => setViewMode('final')} className={`px-4 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${viewMode === 'final' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>最终</button>
                   </div>
                   <button 
-                    onClick={() => handlePlayAudio(evaluation.suggestedVersion, 'suggested')}
+                    onClick={() => handlePlayAudio(evaluation.suggestedVersion || "", 'suggested')}
                     className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isPlaying === 'suggested' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-slate-400 hover:text-white'}`}
                   >
                     {isPlaying === 'suggested' ? '⏹' : '🎧'}

@@ -28,13 +28,13 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations = [], on
     setSelectedIdx(idx);
     if (idx === iterations.length) {
       setCurrentAnalysis(analysis);
-    } else {
+    } else if (iterations[idx]) {
       setCurrentAnalysis(iterations[idx].analysis);
     }
   };
 
   const handlePlayAudio = async (text: string, id: string = 'main') => {
-    if (playingAudioId === id) {
+    if (!text || playingAudioId === id) {
       audioSourceRef.current?.stop();
       setPlayingAudioId(null);
       return;
@@ -70,7 +70,8 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations = [], on
     } catch (e) { setPlayingAudioId(null); }
   };
 
-  const renderDiffText = (diff: string) => {
+  const renderDiffText = (diff?: string) => {
+    if (!diff || typeof diff !== 'string') return null;
     let processed = diff.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
     processed = processed
       .replace(/<add>(.*?)<\/add>/g, '<span class="bg-emerald-50 text-emerald-700 px-1 rounded-md border-b-2 border-emerald-500/30 font-bold mx-0.5 shadow-sm">$1</span>')
@@ -78,7 +79,8 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations = [], on
     return <div className="leading-[2.5] md:leading-[3.2] text-lg md:text-2xl text-slate-800 serif-font text-justify" dangerouslySetInnerHTML={{ __html: processed }} />;
   };
 
-  const renderCleanText = (text: string) => {
+  const renderCleanText = (text?: string) => {
+    if (!text || typeof text !== 'string') return null;
     let processed = text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
     return <div className="leading-[2.5] md:leading-[3.2] text-lg md:text-2xl text-slate-800 serif-font text-justify" dangerouslySetInnerHTML={{ __html: processed }} />;
   };
@@ -106,7 +108,7 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations = [], on
         </div>
         <div className="flex items-center space-x-3">
            <button 
-             onClick={() => handlePlayAudio(currentAnalysis.modifiedText)} 
+             onClick={() => handlePlayAudio(currentAnalysis?.modifiedText || '')} 
              className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${playingAudioId === 'main' ? 'bg-indigo-600 text-white animate-pulse shadow-lg' : 'bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 shadow-sm hover:border-indigo-100'}`}
              title="收听修复后的版本"
            >
@@ -194,7 +196,7 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations = [], on
                 </div>
 
                 <div className="w-full max-w-4xl mx-auto min-h-[160px]">
-                  {viewMode === 'diff' ? renderDiffText(currentAnalysis.diffedText) : renderCleanText(currentAnalysis.modifiedText)}
+                  {viewMode === 'diff' ? renderDiffText(currentAnalysis?.diffedText) : renderCleanText(currentAnalysis?.modifiedText)}
                 </div>
               </div>
 
@@ -215,7 +217,7 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations = [], on
                </div>
                
                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {currentAnalysis.corrections.length > 0 ? currentAnalysis.corrections.map((corr, idx) => (
+                  {currentAnalysis?.corrections && currentAnalysis.corrections.length > 0 ? currentAnalysis.corrections.map((corr, idx) => (
                     <div key={idx} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-all flex flex-col group/card">
                        <div className="flex items-center justify-between mb-4">
                           <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border ${getCategoryColor(corr.category)}`}>
@@ -229,13 +231,13 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations = [], on
                           </button>
                        </div>
                        <div className="flex flex-wrap items-center gap-2 mb-4 serif-font">
-                          <span className="text-rose-400 line-through opacity-60 text-sm md:text-base">{corr.original}</span>
+                          <span className="text-rose-400 line-through opacity-60 text-sm md:text-base">{corr.original || ''}</span>
                           <span className="text-slate-300 text-xs">➤</span>
-                          <span className="text-emerald-600 font-black text-base md:text-lg">{corr.improved}</span>
+                          <span className="text-emerald-600 font-black text-base md:text-lg">{corr.improved || ''}</span>
                        </div>
                        <div className="pt-4 border-t border-dashed border-slate-100 mt-auto">
                           <p className="text-[11px] text-slate-500 leading-relaxed italic">
-                             <span className="font-black text-slate-400 mr-2 uppercase tracking-tighter">Analysis:</span> {corr.explanation}
+                             <span className="font-black text-slate-400 mr-2 uppercase tracking-tighter">Analysis:</span> {corr.explanation || ''}
                           </p>
                        </div>
                     </div>
@@ -252,7 +254,7 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations = [], on
         {activeTab === 'logic' && (
           <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {currentAnalysis.transitionSuggestions.map((s, i) => (
+              {currentAnalysis?.transitionSuggestions && currentAnalysis.transitionSuggestions.map((s, i) => (
                 <div key={i} className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm hover:border-indigo-100 transition-all group/logic">
                   <div className="flex items-center justify-between mb-5">
                     <h4 className="text-xl font-black text-indigo-900 serif-font underline decoration-indigo-200 decoration-4 underline-offset-4">{s.word}</h4>
@@ -268,14 +270,14 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations = [], on
             <div className="bg-slate-900 p-8 md:p-12 rounded-[3.5rem] text-white shadow-2xl relative overflow-hidden">
               <div className="absolute top-0 right-0 p-10 opacity-5 text-9xl font-serif">“</div>
               <span className="text-[10px] font-black text-indigo-400 uppercase mb-4 block tracking-widest">Curator's Master Review</span>
-              <p className="text-indigo-50 italic leading-[1.8] text-sm md:text-lg serif-font">{currentAnalysis.overallFeedback}</p>
+              <p className="text-indigo-50 italic leading-[1.8] text-sm md:text-lg serif-font">{currentAnalysis?.overallFeedback}</p>
             </div>
           </div>
         )}
 
         {activeTab === 'gems' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-right-4 duration-500">
-             {currentAnalysis.advancedVocab.map((v, i) => (
+             {currentAnalysis?.advancedVocab && currentAnalysis.advancedVocab.map((v, i) => (
                <div key={i} className="bg-white p-8 rounded-[2.8rem] border border-slate-200 shadow-sm relative group hover:border-indigo-300 transition-all flex flex-col hover:-translate-y-1">
                   <div className="flex items-center justify-between mb-6">
                     <button onClick={() => handlePlayAudio(v.word, `vocab-${i}`)} className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-all ${playingAudioId === `vocab-${i}` ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-50 text-indigo-500 hover:bg-indigo-600 hover:text-white'}`}>🎧</button>

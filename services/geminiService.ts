@@ -2,12 +2,14 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { DiaryAnalysis, ChatMessage, RehearsalEvaluation, DiaryEntry } from "../types";
 
+// Helper to initialize the GenAI client using the environment's API key.
 const getAiInstance = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) throw new Error("API key is missing.");
   return new GoogleGenAI({ apiKey });
 };
 
+// Provides language-specific instructions for Japanese study text formatting.
 const getJapaneseInstruction = (language: string) => {
   const isJapanese = language.toLowerCase() === 'japanese' || language === '日本語';
   return isJapanese 
@@ -15,6 +17,7 @@ const getJapaneseInstruction = (language: string) => {
     : "";
 };
 
+// Analyzes a diary entry for grammar, vocabulary, and style improvements.
 export const analyzeDiaryEntry = async (text: string, language: string, history: DiaryEntry[] = []): Promise<DiaryAnalysis> => {
   const ai = getAiInstance();
   const model = 'gemini-3-pro-preview';
@@ -27,11 +30,20 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
       model,
       contents: `Role: Lead Curator. Analyze artifact: "${text}" in ${language}. 
       ${historyContext}
-      Format 'diffedText' with <add> and <rem>. 
+      
+      STRICT DIFF RULES (CRITICAL):
+      1. 'diffedText' MUST use MINIMAL CHARACTER-LEVEL DIFFS. 
+      2. ONLY wrap the EXACT wrong character, particle, or word in <add> and <rem> tags. 
+      3. DO NOT wrap unchanged surrounding context. For example, if adding a comma, ONLY wrap the comma: "文<add>、</add>章". 
+      4. If a verb conjugation changes, try to only wrap the changed suffix if it makes sense, or just the single verb. 
+      5. NEVER wrap an entire phrase if only one word inside it changes.
+      
+      ANNOTATIONS RULE:
+      1. For the 'corrections' array: NEVER use the '[Kanji](furigana)' format. Use PLAIN TEXT ONLY for both 'original' and 'improved' fields.
       
       FORMATTING RULES:
-      1. For 'overallFeedback' (written in Chinese): Use plain text ONLY. DO NOT use '[Kanji](furigana)' brackets.
-      2. For 'modifiedText', 'diffedText', and language examples: ${getJapaneseInstruction(language)}`,
+      1. For 'overallFeedback' (written in Chinese): Use plain text ONLY.
+      2. For 'modifiedText' and 'diffedText': ${getJapaneseInstruction(language)}`,
       config: {
         thinkingConfig: { thinkingBudget: 4000 },
         responseMimeType: "application/json",
@@ -88,58 +100,7 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
   } catch (error: any) { throw new Error(error.message || "Analysis failed."); }
 };
 
-export const validateVocabUsage = async (word: string, meaning: string, sentence: string, language: string) => {
-  const ai = getAiInstance();
-  const model = 'gemini-3-flash-preview';
-  try {
-    const response = await ai.models.generateContent({
-      model,
-      contents: `Check usage of "${word}" in "${sentence}" (${language}). Output JSON. 
-      For 'feedback' (Chinese): Use plain text.
-      For 'betterVersion': ${getJapaneseInstruction(language)}`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            isCorrect: { type: Type.BOOLEAN },
-            feedback: { type: Type.STRING },
-            betterVersion: { type: Type.STRING }
-          },
-          required: ["isCorrect", "feedback"]
-        }
-      }
-    });
-    return JSON.parse(response.text);
-  } catch (error) { return { isCorrect: false, feedback: "Error." }; }
-};
-
-export const generatePracticeArtifact = async (language: string, keywords: string = '', difficulty: string = 'Intermediate', topic: string = 'Random'): Promise<string> => {
-  const ai = getAiInstance();
-  const model = 'gemini-3-flash-preview';
-  
-  const difficultyPrompt = {
-    'Beginner': 'Use very simple A1-A2 level grammar, common high-frequency words, and short sentences.',
-    'Intermediate': 'Use B1-B2 level vocabulary, natural compound sentences, and standard daily expressions.',
-    'Advanced': 'Use C1 level sophisticated vocabulary, complex structures, metaphors, and literary or professional style.'
-  }[difficulty as 'Beginner' | 'Intermediate' | 'Advanced'] || 'Intermediate';
-
-  const topicPrompt = topic === 'Random' ? 'any interesting observation' : `the topic of ${topic}`;
-
-  try {
-    const response = await ai.models.generateContent({
-      model,
-      contents: `Generate a short (approx 40-50 words) text for language practice in ${language}. 
-      Difficulty Level: ${difficulty}. ${difficultyPrompt}
-      Topic: ${topicPrompt}.
-      ${keywords ? `MUST INCLUDE THESE SPECIFIC WORDS: ${keywords}.` : ""}
-      CRITICAL: Output ONLY the raw text passage. DO NOT include any labels like 'Text:', 'Word:', or headers. 
-      ${getJapaneseInstruction(language)}`,
-    });
-    return response.text?.trim() || "";
-  } catch (e) { return "Error generating artifact."; }
-};
-
+// Evaluates a user's retelling of a source text.
 export const evaluateRetelling = async (source: string, retelling: string, language: string): Promise<RehearsalEvaluation> => {
   const ai = getAiInstance();
   const model = 'gemini-3-pro-preview';
@@ -152,15 +113,13 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
       USER'S RETELLING: "${retelling}"
       
       TASKS:
-      1. Compare accuracy and detail between source and retelling.
-      2. Analyze language quality of the retelling.
-      3. 'suggestedVersion' MUST be a polished version of the *USER'S RETELLING*.
-      4. 'diffedRetelling' MUST be a diff between *USER'S RETELLING* and 'suggestedVersion' using <add> and <rem> tags.
+      1. 'suggestedVersion' MUST be a polished version of the USER'S RETELLING.
+      2. 'diffedRetelling' MUST use MINIMAL CHARACTER-LEVEL DIFFS between USER'S RETELLING and suggestedVersion using <add> and <rem> tags.
+      3. For 'diffedRetelling' and 'suggestedVersion': ${getJapaneseInstruction(language)}
       
       FORMATTING RULES:
-      1. Provide 'contentFeedback' and 'languageFeedback' in Chinese. USE PLAIN TEXT ONLY.
-      2. For 'suggestedVersion' and 'diffedRetelling': ${getJapaneseInstruction(language)}
-      3. 'accuracyScore' and 'qualityScore' must be INTEGERS 0-100.`,
+      1. Provide 'contentFeedback' and 'languageFeedback' in Chinese using PLAIN TEXT.
+      2. 'accuracyScore' and 'qualityScore' must be INTEGERS 0-100.`,
       config: {
         thinkingConfig: { thinkingBudget: 4000 },
         responseMimeType: "application/json",
@@ -179,21 +138,66 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
       }
     });
     const result = JSON.parse(response.text);
-    const fixScore = (s: any) => {
-      const num = parseFloat(s);
-      if (isNaN(num)) return 0;
-      return num <= 1 ? Math.round(num * 100) : Math.round(num);
-    };
     return {
       ...result,
-      accuracyScore: fixScore(result.accuracyScore),
-      qualityScore: fixScore(result.qualityScore)
+      accuracyScore: Number(result.accuracyScore) || 0,
+      qualityScore: Number(result.qualityScore) || 0
     };
   } catch (e) { throw new Error("Evaluation failed."); }
 };
 
+// Fix for Error in file components/ReviewVault.tsx on line 3: Validates vocabulary usage.
+export const validateVocabUsage = async (word: string, meaning: string, sentence: string, language: string): Promise<{ isCorrect: boolean; feedback: string; betterVersion?: string }> => {
+  const ai = getAiInstance();
+  const model = 'gemini-3-flash-preview';
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: `Evaluate if the word "${word}" (meaning: ${meaning}) is used correctly in the following ${language} sentence: "${sentence}".
+      Provide feedback in Chinese. If it's not perfect, provide a better version.`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            isCorrect: { type: Type.BOOLEAN },
+            feedback: { type: Type.STRING },
+            betterVersion: { type: Type.STRING }
+          },
+          required: ["isCorrect", "feedback"]
+        }
+      }
+    });
+    return JSON.parse(response.text);
+  } catch (e) {
+    throw new Error("Validation failed.");
+  }
+};
+
+// Fix for Error in file components/Rehearsal.tsx on line 4: Generates practice materials.
+export const generatePracticeArtifact = async (language: string, keywords: string, difficulty: string, topic: string): Promise<string> => {
+  const ai = getAiInstance();
+  const model = 'gemini-3-pro-preview';
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: `Generate a short ${language} text for a retelling exercise.
+      Topic: ${topic}
+      Difficulty: ${difficulty}
+      Keywords to include: ${keywords || 'none'}
+      
+      The text should be natural and suitable for study. ${getJapaneseInstruction(language)}`,
+    });
+    return response.text || "";
+  } catch (e) {
+    throw new Error("Generation failed.");
+  }
+};
+
+// Generates audio for a given text using the Text-to-Speech model.
 export const generateDiaryAudio = async (text: string): Promise<string> => {
   const ai = getAiInstance();
+  if (!text) return "";
   const cleanText = text.replace(/\[(.*?)\]\(.*?\)/g, '$1');
   try {
     const response = await ai.models.generateContent({
@@ -208,10 +212,12 @@ export const generateDiaryAudio = async (text: string): Promise<string> => {
   } catch (error) { throw error; }
 };
 
+// Combines chat history into a single narrative for analysis.
 export const synthesizeDiary = async (history: ChatMessage[], language: string): Promise<string> => {
   return history.filter(m => m.role === 'user').map(m => m.content.trim()).join('\n\n');
 };
 
+// Generates a helpful follow-up response for the guided chat feature.
 export const getChatFollowUp = async (history: ChatMessage[], language: string): Promise<string> => {
   const ai = getAiInstance();
   try {

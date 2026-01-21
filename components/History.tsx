@@ -13,15 +13,15 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('All');
 
-  const renderRuby = (text: string) => {
-    if (!text) return '';
+  const renderRuby = (text?: string) => {
+    if (!text || typeof text !== 'string') return '';
     const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
     return <span dangerouslySetInnerHTML={{ __html: html }} />;
   };
 
   const filteredEntries = useMemo(() => {
     return entries.filter(e => {
-      const matchesSearch = e.originalText.toLowerCase().includes(searchQuery.toLowerCase()) || e.date.includes(searchQuery);
+      const matchesSearch = (e.originalText && e.originalText.toLowerCase().includes(searchQuery.toLowerCase())) || (e.date && e.date.includes(searchQuery));
       const matchesLanguage = selectedLanguage === 'All' || e.language === selectedLanguage;
       return matchesSearch && matchesLanguage;
     }).sort((a, b) => b.timestamp - a.timestamp);

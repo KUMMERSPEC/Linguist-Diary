@@ -61,6 +61,7 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
   };
 
   const renderDiffText = (diff: string) => {
+    if (!diff) return null;
     let processed = diff.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
     processed = processed
       .replace(/<add>(.*?)<\/add>/g, '<span class="bg-emerald-50 text-emerald-700 px-1 rounded-md border-b-2 border-emerald-500/30 font-bold mx-0.5 shadow-sm">$1</span>')
