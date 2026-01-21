@@ -1,50 +1,50 @@
-
 import React, { useState } from 'react';
 import { signInWithPopup, GoogleAuthProvider, signInAnonymously, Auth } from 'firebase/auth';
 
 interface AuthViewProps {
-  auth: Auth;
+  auth: Auth | null;
+  onSandboxLogin: () => void;
 }
 
-const AuthView: React.FC<AuthViewProps> = ({ auth }) => {
+const AuthView: React.FC<AuthViewProps> = ({ auth, onSandboxLogin }) => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleGoogleLogin = async () => {
+    if (!auth) {
+      setErrorMsg("Firebase 未初始化：请检查配置或尝试【本地馆长模式】。");
+      return;
+    }
     setErrorMsg(null);
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
     } catch (error: any) {
-      console.error("Login failed", error);
-      
-      if (error.code === 'auth/unauthorized-domain') {
-        setErrorMsg("域名未授权：请前往 Firebase 控制台 -> Authentication -> Settings -> Authorized domains，添加您当前的 GitHub Pages 域名。");
+      if (error.code === 'auth/network-request-failed') {
+        setErrorMsg("网络错误：无法连接到 Firebase 服务，请检查网络。");
+      } else if (error.code === 'auth/api-key-not-valid.-please-pass-a-valid-api-key.') {
+        setErrorMsg("Firebase 配置无效：API Key 错误。建议使用【本地馆长模式】预览。");
       } else {
-        setErrorMsg("登录失败，请检查网络或 Firebase 配置。错误码: " + error.code);
+        setErrorMsg("登录失败：" + error.message);
       }
     }
   };
 
-  const handleAnonymousLogin = async () => {
-    setErrorMsg(null);
+  const handleGuestLogin = async () => {
+    if (!auth) {
+      onSandboxLogin();
+      return;
+    }
     try {
       await signInAnonymously(auth);
     } catch (error: any) {
-      console.error("Guest login failed", error);
-      
-      // 针对匿名登录未开启的专项提示
-      if (error.code === 'auth/admin-restricted-operation') {
-        setErrorMsg("访客功能未开启：请前往 Firebase 控制台 -> Authentication -> Sign-in method -> 点击 Add new provider -> 启用 Anonymous (匿名) 并保存。");
-      } else {
-        setErrorMsg("访客登录失败: " + error.code);
-      }
+      // If auth fails for any reason, fallback to sandbox
+      onSandboxLogin();
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
       <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-2xl shadow-indigo-100/50 p-10 border border-slate-100 relative overflow-hidden">
-        {/* Decorative background element */}
         <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-full opacity-50 -mr-10 -mt-10"></div>
         
         <div className="relative z-10 text-center space-y-8">
@@ -61,7 +61,7 @@ const AuthView: React.FC<AuthViewProps> = ({ auth }) => {
 
           {errorMsg && (
             <div className="bg-red-50 border border-red-100 text-red-600 p-4 rounded-2xl text-xs text-left leading-relaxed animate-in fade-in zoom-in">
-              <p className="font-bold mb-1">⚠️ 系统配置提醒：</p>
+              <p className="font-bold mb-1">⚠️ 系统提示：</p>
               {errorMsg}
             </div>
           )}
@@ -72,22 +72,26 @@ const AuthView: React.FC<AuthViewProps> = ({ auth }) => {
               className="w-full flex items-center justify-center space-x-3 bg-white border-2 border-slate-100 hover:border-indigo-600 hover:bg-indigo-50 transition-all p-4 rounded-2xl font-semibold text-slate-700 shadow-sm"
             >
               <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
-              <span>使用 Google 账号登录同步</span>
+              <span>使用 Google 账号同步</span>
             </button>
             
             <button 
-              onClick={handleAnonymousLogin}
-              className="w-full text-slate-400 hover:text-indigo-600 text-sm font-medium transition-colors py-2"
+              onClick={handleGuestLogin}
+              className="w-full bg-slate-900 text-white p-4 rounded-2xl font-bold shadow-lg hover:bg-indigo-600 transition-all active:scale-95"
             >
-              以访客身份继续预览 →
+              ✨ 本地馆长模式 (Sandbox)
             </button>
+            
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+              本地模式将数据保存在浏览器，无需 Firebase 配置
+            </p>
           </div>
 
           <div className="pt-6 border-t border-slate-50">
             <div className="flex justify-center space-x-6">
               <div className="text-center">
                 <p className="text-xl font-bold text-slate-800">∞</p>
-                <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">云端同步</p>
+                <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">持久馆藏</p>
               </div>
               <div className="text-center">
                 <p className="text-xl font-bold text-slate-800">AI</p>

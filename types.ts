@@ -49,15 +49,22 @@ export interface RehearsalEvaluation {
   userRetelling?: string;
 }
 
+export interface DiaryIteration {
+  text: string;
+  timestamp: number;
+  analysis: DiaryAnalysis;
+}
+
 export interface DiaryEntry {
   id: string;
   timestamp: number; 
   date: string; 
   originalText: string;
   language: string;
-  type: 'diary' | 'rehearsal'; // 新增：区分类型
+  type: 'diary' | 'rehearsal';
   analysis?: DiaryAnalysis;
-  rehearsal?: RehearsalEvaluation; // 新增：演练报告数据
+  rehearsal?: RehearsalEvaluation;
+  iterations?: DiaryIteration[]; // 新增：存储重写历史
 }
 
 export interface ChatMessage {

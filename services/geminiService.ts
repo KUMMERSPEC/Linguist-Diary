@@ -14,6 +14,7 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
   const model = 'gemini-3-pro-preview';
   const isJapanese = language.toLowerCase() === 'japanese' || language === '日本語';
   
+  // 提取历史数据中的纠错信息作为 AI 的记忆背景
   const historyContext = history.length > 0 
     ? `\n[USER MUSEUM HISTORY]\n${history.map(h => `- Date: ${h.date}, Lang: ${h.language}, Key Corrections: ${h.analysis?.corrections.map(c => c.improved).join(', ')}`).join('\n')}`
     : "";
@@ -31,7 +32,7 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
       ${historyContext}
       
       CRITICAL INSTRUCTION (MEMORY CHAIN):
-      Look at the provided [USER MUSEUM HISTORY]. If you find recurring grammar mistakes or overused simple words compared to previous entries, explicitly mention this in 'overallFeedback' as a "Memory Link". Use a warm, observant tone.
+      Look at the provided [USER MUSEUM HISTORY]. If you find recurring grammar mistakes, patterns of error, or overused simple words compared to previous entries, explicitly mention this in 'overallFeedback' as a "Memory Link". Use a warm, observant, and encouraging tone.
       
       ${diffInstruction}
       ${japaneseInstruction}`,
@@ -42,7 +43,7 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
           properties: {
             modifiedText: { type: Type.STRING },
             diffedText: { type: Type.STRING },
-            overallFeedback: { type: Type.STRING, description: "Include Memory Link insights here if applicable." },
+            overallFeedback: { type: Type.STRING, description: "Include Memory Link insights here if applicable, connecting this entry to past ones." },
             corrections: {
               type: Type.ARRAY,
               items: {

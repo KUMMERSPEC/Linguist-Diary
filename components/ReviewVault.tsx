@@ -81,6 +81,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
       return;
     }
     setIsAudioLoading(true);
+    setPlayingAudioId(id);
     try {
       const base64Audio = await generateDiaryAudio(text);
       const binaryString = atob(base64Audio);
@@ -98,9 +99,9 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
       source.onended = () => setPlayingAudioId(null);
       source.start();
       audioSourceRef.current = source;
-      setPlayingAudioId(id);
     } catch (e) {
       console.error(e);
+      setPlayingAudioId(null);
     } finally {
       setIsAudioLoading(false);
     }
@@ -221,7 +222,15 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                 <div className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-4">
                   PROGRESS {currentIndex + 1}/5
                 </div>
-                <h3 className="text-2xl md:text-4xl font-black text-slate-900 mb-2 serif-font">{currentGem.word}</h3>
+                <div className="flex flex-col items-center">
+                   <h3 className="text-2xl md:text-4xl font-black text-slate-900 mb-2 serif-font">{currentGem.word}</h3>
+                   <button 
+                     onClick={() => playAudio(currentGem.word, `daily-${currentIndex}`)}
+                     className={`mb-4 w-10 h-10 rounded-full flex items-center justify-center transition-all ${playingAudioId === `daily-${currentIndex}` ? 'bg-indigo-600 text-white animate-pulse' : 'bg-indigo-50 text-indigo-500 hover:bg-indigo-600 hover:text-white'}`}
+                   >
+                     {playingAudioId === `daily-${currentIndex}` ? '⏹' : '🎧'}
+                   </button>
+                </div>
                 <p className="text-base md:text-xl text-slate-600 font-medium italic mb-6 leading-snug">{currentGem.meaning}</p>
                 <div className="bg-slate-50/80 p-5 rounded-2xl border-l-4 border-indigo-400 max-w-2xl">
                   <p className="text-xs md:text-sm text-slate-500 italic leading-relaxed">“{currentGem.usage}”</p>
@@ -239,7 +248,6 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                   )}
                 </div>
                 
-                {/* 动态布局：如果有结果，则显示反馈卡片，否则显示输入框 */}
                 {!testResult ? (
                   <div className="space-y-4">
                     <textarea
@@ -252,7 +260,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                     <button
                       disabled={isValidating || userSentence.trim().length < 2}
                       onClick={handleValidation}
-                      className="w-full bg-indigo-600 text-white py-4 rounded-3xl font-bold shadow-xl shadow-indigo-100 disabled:bg-slate-100 disabled:text-slate-300 transition-all active:scale-95 flex items-center justify-center space-x-2"
+                      className="w-full bg-indigo-600 text-white py-4 rounded-3xl font-bold shadow-xl shadow-indigo-100 disabled:bg-slate-100 disabled:text-slate-300 transition-all active:scale-[0.97] flex items-center justify-center space-x-2"
                     >
                       {isValidating ? (
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -261,13 +269,11 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                   </div>
                 ) : (
                   <div className="space-y-6 animate-in slide-in-from-top-4 duration-500">
-                    {/* 用户造句的回显 */}
                     <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-200">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">您的尝试 Attempt</p>
                       <p className="text-base md:text-xl text-slate-800 serif-font italic leading-relaxed">“ {userSentence} ”</p>
                     </div>
 
-                    {/* AI 反馈详细卡片 - 移除 truncation，自然延伸 */}
                     <div className="bg-white p-8 md:p-10 rounded-[2.5rem] border border-indigo-100 shadow-xl shadow-indigo-200/20 space-y-6">
                        <div className="flex items-start space-x-4">
                           <span className="text-3xl shrink-0">🏛️</span>
@@ -281,13 +287,20 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                        
                        {testResult.betterVersion && !testResult.isCorrect && (
                          <div className="bg-indigo-50/50 p-6 md:p-8 rounded-[2rem] border border-indigo-100">
-                           <p className="text-[9px] font-black text-indigo-400 uppercase mb-3 tracking-widest">精进推荐 Mastery Version:</p>
+                           <div className="flex items-center justify-between mb-3">
+                             <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">精进推荐 Mastery Version:</p>
+                             <button 
+                               onClick={() => playAudio(testResult.betterVersion!, 'better-version')}
+                               className={`w-6 h-6 rounded-full flex items-center justify-center ${playingAudioId === 'better-version' ? 'bg-indigo-600 text-white animate-pulse' : 'bg-indigo-100 text-indigo-500'}`}
+                             >
+                               <span className="text-[10px]">🎧</span>
+                             </button>
+                           </div>
                            <p className="text-base md:text-lg font-bold text-indigo-700 serif-font leading-relaxed">{testResult.betterVersion}</p>
                          </div>
                        )}
                     </div>
 
-                    {/* 操作按钮 */}
                     <div className="flex gap-4">
                       {!testResult.isCorrect && (
                         <button onClick={handleRetry} className="flex-1 bg-white border-2 border-slate-200 text-slate-600 py-4 rounded-3xl text-sm font-bold hover:bg-slate-50 transition-all active:scale-95 shadow-sm">🖋️ 重新挑战</button>
@@ -308,7 +321,6 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
         </div>
       )}
 
-      {/* 句子挑战 */}
       {activeTab === 'flashback' && challengeData && (
         <div className="max-w-2xl mx-auto py-4 space-y-6 animate-in slide-in-from-right-4 duration-500">
           <div className="bg-white p-8 md:p-12 rounded-[2.5rem] border border-slate-200 shadow-xl relative overflow-hidden text-center min-h-[220px] flex flex-col justify-center">
@@ -320,12 +332,20 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                <div className="mt-8 p-5 bg-slate-50 rounded-2xl border border-slate-100 w-full text-left animate-in slide-in-from-top-4 duration-500">
                  <div className="space-y-3">
                     {challengeData.corrections.map((corr, idx) => (
-                      <div key={idx} className="flex space-x-2 items-start">
-                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-1.5 shrink-0"></div>
-                        <p className="text-xs text-slate-600 italic">
-                          <span className="text-slate-400 line-through mr-2">{corr.original}</span>
-                          <span className="text-indigo-600 font-bold">→ {corr.improved}</span>
-                        </p>
+                      <div key={idx} className="flex space-x-2 items-start justify-between group">
+                        <div className="flex space-x-2 items-start">
+                           <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-1.5 shrink-0"></div>
+                           <p className="text-xs text-slate-600 italic">
+                             <span className="text-slate-400 line-through mr-2">{corr.original}</span>
+                             <span className="text-indigo-600 font-bold">→ {corr.improved}</span>
+                           </p>
+                        </div>
+                        <button 
+                          onClick={() => playAudio(corr.improved, `challenge-corr-${idx}`)}
+                          className={`w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all ${playingAudioId === `challenge-corr-${idx}` ? 'bg-indigo-600 text-white opacity-100' : 'bg-indigo-100 text-indigo-400'}`}
+                        >
+                          <span className="text-[10px]">🎧</span>
+                        </button>
                       </div>
                     ))}
                  </div>
@@ -344,7 +364,6 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
         </div>
       )}
 
-      {/* 词汇全集 */}
       {activeTab === 'gems' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 animate-in fade-in duration-500 items-start">
           {allGems.length === 0 ? (
@@ -359,16 +378,24 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
               return (
                 <div 
                   key={idx} 
-                  onClick={() => setExpandedWordKey(isExpanded ? null : wordKey)}
                   className={`bg-white rounded-[2.2rem] border transition-all duration-300 cursor-pointer overflow-hidden group flex flex-col ${
                     isExpanded 
                       ? 'border-indigo-400 shadow-xl ring-4 ring-indigo-500/5' 
                       : 'border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300'
                   }`}
+                  onClick={() => setExpandedWordKey(isExpanded ? null : wordKey)}
                 >
                   <div className="p-6">
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{gem.language}</span>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{gem.language}</span>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); playAudio(gem.word, wordKey); }}
+                          className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${playingAudioId === wordKey ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-400 opacity-60 hover:opacity-100'}`}
+                        >
+                          <span className="text-[10px]">{playingAudioId === wordKey ? '⏹' : '🎧'}</span>
+                        </button>
+                      </div>
                       <div className="flex space-x-1">
                         {[1, 2, 3].map(i => (
                           <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= (gem.mastery || 0) ? 'bg-indigo-500' : 'bg-slate-100'}`}></div>
@@ -394,25 +421,27 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                       <div className="mt-5 pt-5 border-t border-slate-100 space-y-4 animate-in slide-in-from-top-2 duration-300">
                          <div className="flex items-center justify-between">
                             <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">历史练习足迹 Logs</h5>
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); playAudio(gem.word, gem.word); }}
-                              className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-all"
-                            >
-                              <span className="text-[10px]">🎧</span>
-                            </button>
                          </div>
                          
                          {gem.practices && gem.practices.length > 0 ? (
                            <div className="space-y-3 max-h-[200px] overflow-y-auto no-scrollbar pr-1">
                               {gem.practices.map((p, pIdx) => (
-                                <div key={pIdx} className="bg-slate-50/80 p-3 rounded-2xl border-l-2 border-indigo-400 relative group/log">
-                                   <p className="text-[11px] text-slate-600 serif-font italic leading-relaxed">“ {p.sentence} ”</p>
-                                   <div className="flex justify-between items-center mt-2 opacity-60">
-                                      <span className="text-[8px] font-bold text-slate-400">{new Date(p.timestamp).toLocaleDateString()}</span>
-                                      <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md ${p.status === 'Perfect' ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'}`}>
-                                         {p.status}
-                                      </span>
+                                <div key={pIdx} className="bg-slate-50/80 p-3 rounded-2xl border-l-2 border-indigo-400 relative group/log flex items-start justify-between">
+                                   <div className="flex-1">
+                                      <p className="text-[11px] text-slate-600 serif-font italic leading-relaxed">“ {p.sentence} ”</p>
+                                      <div className="flex justify-between items-center mt-2 opacity-60">
+                                         <span className="text-[8px] font-bold text-slate-400">{new Date(p.timestamp).toLocaleDateString()}</span>
+                                         <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md ${p.status === 'Perfect' ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                                            {p.status}
+                                         </span>
+                                      </div>
                                    </div>
+                                   <button 
+                                     onClick={(e) => { e.stopPropagation(); playAudio(p.sentence, `log-${wordKey}-${pIdx}`); }}
+                                     className={`ml-2 shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-all ${playingAudioId === `log-${wordKey}-${pIdx}` ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-400 opacity-40 hover:opacity-100'}`}
+                                   >
+                                      <span className="text-[8px]">🎧</span>
+                                   </button>
                                 </div>
                               ))}
                            </div>
@@ -420,9 +449,17 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                            <p className="text-[10px] text-slate-400 italic py-4 text-center">尚未在特展中练习过此词</p>
                          )}
 
-                         <div className="bg-slate-50 p-3 rounded-2xl">
-                            <p className="text-[8px] font-black text-slate-400 uppercase mb-1">典藏例句 Masterwork</p>
-                            <p className="text-[10px] text-slate-500 italic leading-relaxed">“ {gem.usage} ”</p>
+                         <div className="bg-slate-50 p-3 rounded-2xl flex items-start justify-between">
+                            <div className="flex-1">
+                               <p className="text-[8px] font-black text-slate-400 uppercase mb-1">典藏例句 Masterwork</p>
+                               <p className="text-[10px] text-slate-500 italic leading-relaxed">“ {gem.usage} ”</p>
+                            </div>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); playAudio(gem.usage, `usage-${wordKey}`); }}
+                              className={`ml-2 shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-all ${playingAudioId === `usage-${wordKey}` ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-400 opacity-40 hover:opacity-100'}`}
+                            >
+                               <span className="text-[8px]">🎧</span>
+                            </button>
                          </div>
                       </div>
                     )}

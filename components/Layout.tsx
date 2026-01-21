@@ -1,17 +1,16 @@
 
 import React from 'react';
 import { ViewState } from '../types';
-import { User, Auth, signOut } from 'firebase/auth';
 
 interface LayoutProps {
   children: React.ReactNode;
   activeView: ViewState;
   onViewChange: (view: ViewState) => void;
-  user: User;
-  auth: Auth;
+  user: { displayName?: string | null, photoURL?: string | null };
+  onLogout: () => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, user, auth }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, user, onLogout }) => {
   const NavItem = ({ view, label, icon }: { view: ViewState, label: string, icon: string }) => (
     <button
       onClick={() => onViewChange(view)}
@@ -30,7 +29,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
     <div className="flex h-screen h-[100dvh] bg-slate-50 overflow-hidden">
       {/* Sidebar (Desktop Only) */}
       <aside className="w-64 bg-white border-r border-slate-200 flex flex-col hidden md:flex h-full">
-        {/* Logo Section */}
         <div className="p-6 pb-4 shrink-0">
           <div className="flex items-center space-x-3 px-2">
             <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-xl shadow-lg shadow-indigo-100">
@@ -40,7 +38,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
           </div>
         </div>
 
-        {/* Scrollable Navigation Area */}
         <nav className="flex-1 overflow-y-auto no-scrollbar px-6 space-y-1.5">
           <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 py-2 mt-2">Menu</div>
           <NavItem view="dashboard" label="概览 / Dashboard" icon="📊" />
@@ -51,20 +48,19 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
           <NavItem view="history" label="博物馆 / Collection" icon="🏛️" />
         </nav>
 
-        {/* User Info & Logout (Fixed at Bottom) */}
         <div className="p-6 pt-4 border-t border-slate-100 shrink-0 bg-white">
           <div className="flex items-center space-x-3 mb-2 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-            {user.photoURL ? (
+            {user?.photoURL ? (
               <img src={user.photoURL} className="w-9 h-9 rounded-full border border-white shadow-sm" alt="User" />
             ) : (
               <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center text-slate-400 shadow-sm border border-slate-100 font-bold">
-                {user.displayName ? user.displayName[0] : 'U'}
+                {user?.displayName ? user.displayName[0] : 'U'}
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-slate-800 truncate">{user.displayName || "访客馆长"}</p>
+              <p className="text-xs font-bold text-slate-800 truncate">{user?.displayName || "访客馆长"}</p>
               <button 
-                onClick={() => signOut(auth)}
+                onClick={onLogout}
                 className="text-[9px] font-black text-indigo-600 uppercase hover:underline tracking-tighter"
               >
                 退出登录 LOGOUT
@@ -84,13 +80,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
             <h1 className="text-sm font-bold text-slate-800 tracking-tight">Linguist</h1>
           </div>
           <div className="flex items-center space-x-3">
-             {user.photoURL && <img src={user.photoURL} className="w-7 h-7 rounded-full" alt="User" />}
-             <button onClick={() => signOut(auth)} className="text-lg">🚪</button>
+             <button onClick={onLogout} className="text-lg">🚪</button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-3 py-2 md:px-8 md:py-8">
-          <div className="max-w-5xl mx-auto h-full flex flex-col">
+        {/* 核心修正：移除内部 div 的 h-full 限制，允许长内容页面整体滚动 */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 md:px-8 md:py-8">
+          <div className="max-w-5xl mx-auto flex flex-col min-h-full">
             {children}
           </div>
         </div>

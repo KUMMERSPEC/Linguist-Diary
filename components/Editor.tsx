@@ -1,9 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface EditorProps {
   onAnalyze: (text: string, language: string) => void;
   isLoading: boolean;
+  initialText?: string;
+  initialLanguage?: string;
 }
 
 const LANGUAGES = [
@@ -14,9 +16,14 @@ const LANGUAGES = [
   { code: 'German', label: 'Deutsch', flag: '🇩🇪' },
 ];
 
-const Editor: React.FC<EditorProps> = ({ onAnalyze, isLoading }) => {
-  const [text, setText] = useState('');
-  const [language, setLanguage] = useState('English');
+const Editor: React.FC<EditorProps> = ({ onAnalyze, isLoading, initialText = '', initialLanguage = 'English' }) => {
+  const [text, setText] = useState(initialText);
+  const [language, setLanguage] = useState(initialLanguage);
+
+  useEffect(() => {
+    setText(initialText);
+    setLanguage(initialLanguage);
+  }, [initialText, initialLanguage]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,24 +33,24 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, isLoading }) => {
 
   return (
     <div className="flex flex-col h-full max-h-full animate-in fade-in slide-in-from-bottom-2 duration-500">
-      {/* 极简页眉 */}
-      <header className="mb-1.5 space-y-1 shrink-0">
+      <header className="mb-4 space-y-3 shrink-0">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-base md:text-2xl font-bold text-slate-900 serif-font">新藏品</h2>
-          <span className="text-[9px] font-bold text-slate-400 tracking-tighter uppercase">Standard</span>
+          <h2 className="text-2xl md:text-3xl font-bold text-slate-900 serif-font">
+            {initialText ? '🏛️ 迭代打磨 Refinement' : '✨ 开启撰写 New Artifact'}
+          </h2>
+          <span className="text-[10px] font-black text-slate-400 tracking-widest uppercase opacity-60">Curator's Studio</span>
         </div>
         
-        {/* 语言选择器：缩小高度 */}
-        <div className="flex items-center space-x-1 overflow-x-auto no-scrollbar pb-0.5 -mx-3 px-3 md:mx-0 md:px-0">
+        <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar pb-0.5 -mx-3 px-3 md:mx-0 md:px-0">
           {LANGUAGES.map((lang) => (
             <button
               key={lang.code}
               type="button"
               onClick={() => setLanguage(lang.code)}
-              className={`flex-shrink-0 flex items-center space-x-1 px-2 py-1 rounded-lg text-[10px] md:text-[11px] font-bold transition-all border ${
+              className={`flex-shrink-0 flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-[10px] md:text-xs font-bold transition-all border ${
                 language === lang.code 
-                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm' 
-                  : 'bg-white border-slate-200 text-slate-500'
+                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' 
+                  : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-200'
               }`}
             >
               <span>{lang.flag}</span>
@@ -54,50 +61,45 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, isLoading }) => {
       </header>
 
       <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
-        {/* 文本区域：自适应高度 */}
-        <div className="flex-1 bg-white rounded-xl md:rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col transition-all min-h-[150px]">
+        {/* 输入框容器：通过 overflow-hidden 确保内部元素不溢出大圆角 */}
+        <div className="flex-1 bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col transition-all focus-within:ring-4 focus-within:ring-indigo-500/5 focus-within:border-indigo-200 min-h-[200px] mb-4">
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="今天发生了什么？..."
-            className="w-full flex-1 resize-none border-none focus:ring-0 p-3 md:p-8 text-slate-700 text-sm md:text-lg leading-relaxed serif-font placeholder:text-slate-300 bg-transparent"
+            placeholder={initialText ? "打磨当前的语言藏品，追求表达之美..." : "记录您的语言点滴，开启馆藏之旅..."}
+            className="w-full flex-1 resize-none border-none focus:ring-0 p-6 md:p-10 text-slate-700 text-base md:text-xl leading-relaxed serif-font placeholder:text-slate-300 bg-transparent"
             disabled={isLoading}
           />
           
-          <div className="px-3 py-1 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between shrink-0">
-            <div className="flex items-center space-x-1.5">
-              <div className={`w-1.5 h-1.5 rounded-full ${text.length >= 10 ? 'bg-indigo-500' : 'bg-slate-300'}`}></div>
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{language}</span>
+          <div className="px-6 py-3 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between shrink-0">
+            <div className="flex items-center space-x-2">
+               <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></div>
+               <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">{language} — {initialText ? 'REFINE MODE' : 'COLLECTION DRAFT'}</span>
             </div>
             <span className={`text-[9px] font-black tracking-tighter ${text.length < 10 ? 'text-slate-300' : 'text-indigo-600'}`}>
-              {text.length} <span className="opacity-50">/ MIN 10</span>
+              {text.length} <span className="opacity-30">/ MIN 10</span>
             </span>
           </div>
         </div>
 
-        {/* 提交按钮：紧凑型 */}
-        <div className="mt-2 shrink-0">
-          <button
-            type="submit"
-            disabled={isLoading || text.length < 10}
-            className={`w-full py-2.5 md:py-3.5 rounded-xl font-bold flex items-center justify-center space-x-2 transition-all active:scale-[0.97] ${
+        <div className="shrink-0">
+          <button 
+            type="submit" 
+            disabled={isLoading || text.length < 10} 
+            className={`w-full py-4 md:py-5 rounded-[1.5rem] font-bold flex items-center justify-center space-x-3 transition-all active:scale-[0.98] ${
               isLoading 
                 ? 'bg-slate-100 text-slate-300' 
-                : 'bg-indigo-600 text-white shadow-md'
+                : 'bg-indigo-600 text-white shadow-xl shadow-indigo-100 hover:bg-indigo-700'
             }`}
           >
             {isLoading ? (
-              <div className="animate-spin rounded-full h-4 w-4 border-2 border-slate-300 border-t-indigo-500" />
+              <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-300 border-t-indigo-500" />
             ) : (
-              <span className="text-sm md:text-base">✨ 提交分析内容</span>
+              <span className="text-sm md:text-lg">
+                {initialText ? '✨ 提交并分析迭代版本' : '✨ 提交并开启 AI 审阅'}
+              </span>
             )}
           </button>
-          
-          {text.length > 0 && text.length < 10 && (
-            <p className="text-center text-[8px] text-orange-400 font-bold mt-1 uppercase">
-              还需要至少 {10 - text.length} 个字符
-            </p>
-          )}
         </div>
       </form>
     </div>
