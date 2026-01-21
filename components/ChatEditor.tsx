@@ -65,19 +65,16 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 待点亮珍宝库：过滤出当前语言且熟练度较低的词汇
   const targetGems = useMemo(() => {
-    // 词汇去重
     const uniqueMap = new Map<string, AdvancedVocab>();
     allGems
       .filter(g => g.language === language.code && (g.mastery || 0) < 3)
       .forEach(g => {
         if (!uniqueMap.has(g.word)) uniqueMap.set(g.word, g);
       });
-    return Array.from(uniqueMap.values()).slice(0, 5); // 每次选5个作为目标
+    return Array.from(uniqueMap.values()).slice(0, 5);
   }, [allGems, language]);
 
-  // 记录本轮对话中已使用的珍宝词汇
   const [usedGems, setUsedGems] = useState<Set<string>>(new Set());
 
   const getStarter = useCallback(() => {
@@ -92,7 +89,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
     const start = getStarter();
     setMessages([{ role: 'ai', content: start.text }]);
     setThemeLabel(start.theme);
-    setUsedGems(new Set()); // 切换语言时重置点亮状态
+    setUsedGems(new Set());
   }, [language, getStarter]);
 
   useEffect(() => {
@@ -124,7 +121,6 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
     if (!inputValue.trim() || isTyping) return;
     const content = inputValue.trim();
     
-    // 检测是否点亮了新珍宝
     const newlyDetected = targetGems.filter(gem => 
       !usedGems.has(gem.word) && 
       content.toLowerCase().includes(gem.word.toLowerCase())
@@ -162,7 +158,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
 
   const handleFinish = async () => {
     if (messages.filter(m => m.role === 'user').length === 0) {
-      alert("请先开始对话，馆长需要一些素材来为你生成日记。");
+      alert("请先开始对话。");
       return;
     }
     onFinish(messages, language.code);
@@ -178,9 +174,9 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
         </div>
         <div className="space-y-4">
           <p className="text-[10px] text-slate-400 font-bold leading-relaxed">
-            在对话中成功调用以下馆藏词汇，即可点亮它们并增加熟练度。
+            在对话中成功调用以下馆藏词汇，即可点亮它们。
           </p>
-          <div className="space-y-3">
+          <div className="space-y-3 overflow-y-auto max-h-[calc(100vh-250px)] no-scrollbar">
              {targetGems.length > 0 ? targetGems.map((gem, idx) => {
                const isLit = usedGems.has(gem.word);
                return (
@@ -213,30 +209,30 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
       </aside>
 
       {/* 主对话区 */}
-      <div className="flex-1 flex flex-col h-full min-w-0">
-        <header className="flex flex-col space-y-3 shrink-0 px-4 md:px-8 py-4 border-b border-slate-100 bg-white/80 backdrop-blur-md z-20">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-               <div className="bg-indigo-600 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-100">
+      <div className="flex-1 flex flex-col h-full min-w-0 bg-white md:bg-slate-50">
+        <header className="flex flex-col shrink-0 border-b border-slate-100 bg-white/90 backdrop-blur-md z-20">
+          <div className="flex items-center justify-between px-4 md:px-8 py-3">
+            <div className="flex items-center space-x-3 min-w-0">
+               <div className="bg-indigo-600 text-white px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest shadow-md shrink-0">
                  {themeLabel}
                </div>
-               <h2 className="text-xl font-bold text-slate-800 serif-font">启发聊天 Guided Chat</h2>
+               <h2 className="text-base font-bold text-slate-800 serif-font truncate">启发聊天</h2>
             </div>
             <button 
               onClick={handleFinish}
-              className="bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-600 transition-all active:scale-95 shadow-lg"
+              className="bg-slate-900 text-white px-4 py-1.5 rounded-xl text-[10px] font-bold hover:bg-indigo-600 transition-all active:scale-95 shadow-md shrink-0"
             >
-              🏛️ 合成并入馆
+              🏛️ 合成
             </button>
           </div>
 
-          <div className="flex items-center justify-between">
-             <div className="flex items-center space-x-1 overflow-x-auto no-scrollbar pb-1">
+          <div className="px-4 md:px-8 pb-3 space-y-3">
+             <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar pb-1">
                {LANGUAGES.map((lang) => (
                  <button
                    key={lang.code}
                    onClick={() => handleLanguageChange(lang)}
-                   className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all border ${
+                   className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-[9px] font-bold transition-all border ${
                      language.code === lang.code 
                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' 
                        : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-200'
@@ -247,26 +243,35 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
                ))}
              </div>
              
-             {/* 移动端显示的简易珍宝进度 */}
-             <div className="lg:hidden flex items-center space-x-1">
-                {targetGems.map((gem, i) => (
-                  <div 
-                    key={i} 
-                    className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${usedGems.has(gem.word) ? 'bg-amber-400 scale-125 shadow-sm shadow-amber-200' : 'bg-slate-200'}`}
-                    title={gem.word}
-                  />
-                ))}
+             {/* 移动端横向珍宝滚动条 (仅在移动端显示) */}
+             <div className="lg:hidden flex items-center space-x-2 overflow-x-auto no-scrollbar py-0.5">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest shrink-0">待点亮:</span>
+                {targetGems.map((gem, i) => {
+                  const isLit = usedGems.has(gem.word);
+                  return (
+                    <div 
+                      key={i} 
+                      className={`flex-shrink-0 px-3 py-1.5 rounded-xl border text-[10px] font-black serif-font transition-all duration-500 flex items-center space-x-1.5 ${
+                        isLit 
+                          ? 'bg-amber-100 border-amber-300 text-amber-800 shadow-sm shadow-amber-100 scale-105 ring-2 ring-amber-400/20' 
+                          : 'bg-slate-50 border-slate-200 text-slate-400'
+                      }`}
+                    >
+                      <span>{gem.word}</span>
+                      {isLit && <span className="animate-pulse">✨</span>}
+                    </div>
+                  );
+                })}
              </div>
           </div>
         </header>
 
         <div 
           ref={scrollRef}
-          className="flex-1 overflow-y-auto px-4 md:px-8 space-y-6 no-scrollbar py-8"
+          className="flex-1 overflow-y-auto px-4 md:px-8 space-y-6 no-scrollbar py-6 md:py-8"
         >
           <div className="max-w-4xl mx-auto space-y-6">
             {messages.map((msg, idx) => {
-              // 检测该气泡是否包含了本轮使用的珍宝
               const containedGems = targetGems.filter(gem => 
                 msg.role === 'user' && msg.content.toLowerCase().includes(gem.word.toLowerCase())
               );
@@ -276,12 +281,12 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
                   key={idx} 
                   className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-4 duration-500`}
                 >
-                  <div className={`relative max-w-[85%] md:max-w-[70%] p-4 md:p-6 rounded-[2rem] shadow-sm border ${
+                  <div className={`relative max-w-[85%] md:max-w-[70%] p-4 md:p-6 rounded-[1.8rem] shadow-sm border ${
                     msg.role === 'user' 
                       ? 'bg-indigo-600 text-white border-indigo-500 rounded-tr-none shadow-xl shadow-indigo-100/50' 
-                      : 'bg-white text-slate-700 border-slate-100 rounded-tl-none'
+                      : 'bg-white text-slate-700 border-slate-100 rounded-tl-none shadow-sm'
                   }`}>
-                    <p className="text-sm md:text-base leading-relaxed serif-font whitespace-pre-wrap">
+                    <p className="text-[15px] md:text-base leading-relaxed serif-font whitespace-pre-wrap">
                       {msg.content}
                     </p>
                     
@@ -300,7 +305,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
             })}
             {isTyping && (
               <div className="flex justify-start animate-pulse">
-                <div className="bg-white p-4 rounded-3xl border border-slate-100 flex space-x-1 items-center">
+                <div className="bg-white p-4 rounded-2xl border border-slate-100 flex space-x-1 items-center">
                   <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-audio-bar-1"></div>
                   <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-audio-bar-2"></div>
                   <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-audio-bar-3"></div>
@@ -310,29 +315,29 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
           </div>
         </div>
 
-        <footer className="shrink-0 bg-white border-t border-slate-100 px-4 pt-4 pb-4 md:pb-8 shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.05)]">
+        <footer className="shrink-0 bg-white border-t border-slate-100 px-4 pt-3 pb-4 md:pb-8 shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.05)]">
           <div className="max-w-4xl mx-auto">
-            <div className="relative bg-white rounded-[2.5rem] border border-slate-200 shadow-xl focus-within:ring-4 focus-within:ring-indigo-500/10 focus-within:border-indigo-400 transition-all p-1.5 flex items-end">
+            <div className="relative bg-white rounded-[1.8rem] border border-slate-200 shadow-xl focus-within:ring-4 focus-within:ring-indigo-500/10 focus-within:border-indigo-400 transition-all p-1 flex items-end">
               <textarea
                 ref={textareaRef}
                 rows={1}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={`用 ${language.label} 回复并尝试使用侧边珍宝词汇...`}
-                className="flex-1 bg-transparent border-none focus:ring-0 text-slate-700 text-base py-3 px-6 resize-none no-scrollbar serif-font min-h-[56px] flex items-center"
+                placeholder={`用 ${language.label} 回复...`}
+                className="flex-1 bg-transparent border-none focus:ring-0 text-slate-700 text-sm md:text-base py-3 px-5 resize-none no-scrollbar serif-font min-h-[44px] md:min-h-[56px] flex items-center"
               />
               <button
                 onClick={handleSend}
                 disabled={!inputValue.trim() || isTyping}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shrink-0 mb-1 mr-1 ${
+                className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-all shrink-0 mb-0.5 mr-0.5 ${
                   inputValue.trim() && !isTyping 
                     ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 scale-100' 
-                    : 'bg-slate-100 text-slate-300 scale-90'
+                    : 'bg-slate-50 text-slate-300'
                 }`}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 transform rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 md:h-6 md:w-6 transform rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
               </button>
             </div>

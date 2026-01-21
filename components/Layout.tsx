@@ -28,9 +28,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
   const isChat = activeView === 'chat';
 
   return (
-    <div className="flex h-screen h-[100dvh] bg-slate-50 overflow-hidden">
+    <div className="flex h-screen w-screen bg-slate-50 overflow-hidden relative">
       {/* Sidebar (Desktop Only) */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col hidden md:flex h-full">
+      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col hidden md:flex h-full shrink-0">
         <div className="p-6 pb-4 shrink-0">
           <div className="flex items-center space-x-3 px-2">
             <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-xl shadow-lg shadow-indigo-100">
@@ -73,34 +73,48 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden relative">
-        <header className="md:hidden flex items-center justify-between px-4 py-2 bg-white border-b border-slate-200 shrink-0">
+      <main className="flex-1 flex flex-col min-w-0 h-full relative overflow-hidden">
+        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 shrink-0 z-50">
           <div className="flex items-center space-x-2">
-            <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-xs">
+            <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-xs shadow-md shadow-indigo-100">
               🖋️
             </div>
-            <h1 className="text-sm font-bold text-slate-800 tracking-tight">Linguist</h1>
+            <h1 className="text-sm font-bold text-slate-800 tracking-tight serif-font">Linguist Diary</h1>
           </div>
           <div className="flex items-center space-x-3">
-             <button onClick={onLogout} className="text-lg">🚪</button>
+             <button onClick={onLogout} className="text-lg opacity-60">🚪</button>
           </div>
         </header>
 
-        {/* 修正：聊天视图容器高度设为 h-full，移除自动 overflow */}
-        <div className={`flex-1 ${isChat ? 'px-0 overflow-hidden' : 'px-4 py-4 md:px-8 md:py-8 overflow-y-auto'}`}>
-          <div className={`mx-auto flex flex-col h-full ${isChat ? 'max-w-full' : 'max-w-5xl'}`}>
-            {children}
+        {/* 内容容器 */}
+        <div className={`flex-1 overflow-hidden relative ${isChat ? 'pb-20' : 'pb-24'}`}>
+          <div className={`h-full ${isChat ? 'px-0' : 'px-4 pt-4 md:px-8 md:py-8 overflow-y-auto'}`}>
+            <div className={`mx-auto flex flex-col h-full ${isChat ? 'max-w-full' : 'max-w-5xl'}`}>
+              {children}
+            </div>
           </div>
         </div>
 
-        {/* Mobile Nav Bar */}
-        <nav className="md:hidden flex items-center justify-around bg-white border-t border-slate-200 p-1 pb-4 shrink-0 shadow-lg">
-           <button onClick={() => onViewChange('dashboard')} className={`p-2 transition-all ${activeView === 'dashboard' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>📊</button>
-           <button onClick={() => onViewChange('editor')} className={`p-2 transition-all ${activeView === 'editor' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>📝</button>
-           <button onClick={() => onViewChange('rehearsal')} className={`p-2 transition-all ${activeView === 'rehearsal' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>🎭</button>
-           <button onClick={() => onViewChange('chat')} className={`p-2 transition-all ${activeView === 'chat' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>💬</button>
-           <button onClick={() => onViewChange('review_vault')} className={`p-2 transition-all ${activeView === 'review_vault' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>💎</button>
-           <button onClick={() => onViewChange('history')} className={`p-2 transition-all ${activeView === 'history' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>🏛️</button>
+        {/* 彻底固定的移动端导航栏 */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 flex items-center justify-around bg-white/90 backdrop-blur-xl border-t border-slate-200 px-2 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-10px_25px_-5px_rgba(0,0,0,0.05)] z-[100]">
+           <button onClick={() => onViewChange('dashboard')} className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all ${activeView === 'dashboard' ? 'text-indigo-600 bg-indigo-50/50 scale-110' : 'text-slate-300'}`}>
+             <span className="text-xl">📊</span>
+           </button>
+           <button onClick={() => onViewChange('editor')} className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all ${activeView === 'editor' ? 'text-indigo-600 bg-indigo-50/50 scale-110' : 'text-slate-300'}`}>
+             <span className="text-xl">📝</span>
+           </button>
+           <button onClick={() => onViewChange('rehearsal')} className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all ${activeView === 'rehearsal' ? 'text-indigo-600 bg-indigo-50/50 scale-110' : 'text-slate-300'}`}>
+             <span className="text-xl">🎭</span>
+           </button>
+           <button onClick={() => onViewChange('chat')} className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all ${activeView === 'chat' ? 'text-indigo-600 bg-indigo-50/50 scale-110' : 'text-slate-300'}`}>
+             <span className="text-xl">💬</span>
+           </button>
+           <button onClick={() => onViewChange('review_vault')} className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all ${activeView === 'review_vault' ? 'text-indigo-600 bg-indigo-50/50 scale-110' : 'text-slate-300'}`}>
+             <span className="text-xl">💎</span>
+           </button>
+           <button onClick={() => onViewChange('history')} className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all ${activeView === 'history' ? 'text-indigo-600 bg-indigo-50/50 scale-110' : 'text-slate-300'}`}>
+             <span className="text-xl">🏛️</span>
+           </button>
         </nav>
       </main>
     </div>
