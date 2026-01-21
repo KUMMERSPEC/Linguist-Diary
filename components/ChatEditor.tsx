@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChatMessage } from '../types';
 import { getChatFollowUp, synthesizeDiary } from '../services/geminiService';
@@ -19,9 +20,9 @@ const LANGUAGES = [
   { 
     code: 'Japanese', label: '日本語', flag: '🇯🇵', 
     starters: {
-      morning: "おはようございます！今日の目標は何ですか？",
-      day: "今日はどんな一日を過ごしていますか？",
-      evening: "こんばんは。一日が終わろうとしていますが、今何を考えていますか？",
+      morning: "おはようございます！今日の目标は何ですか？",
+      day: "今日はどんな一日を过ごしていますか？",
+      evening: "こんばんは。一日が终わろうとしていますが、今何を考えていますか？",
       night: "夜も更けてきましたね。今日はどんな梦を見たいですか？"
     }
   },
@@ -137,9 +138,9 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish }) => {
   };
 
   return (
-    <div className="flex flex-col h-full animate-in fade-in slide-in-from-bottom-2 duration-500 overflow-hidden max-w-4xl mx-auto w-full">
-      {/* 顶部状态栏 */}
-      <header className="flex flex-col space-y-3 shrink-0 mb-4 px-2">
+    <div className="flex flex-col h-full animate-in fade-in duration-500 overflow-hidden w-full">
+      {/* 顶部状态栏 - 不动 */}
+      <header className="flex flex-col space-y-3 shrink-0 px-4 md:px-8 py-4 border-b border-slate-100 bg-white/80 backdrop-blur-md z-20">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
              <div className="bg-indigo-600 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-100">
@@ -173,68 +174,72 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish }) => {
         </div>
       </header>
 
-      {/* 消息展示区 */}
+      {/* 消息展示区 - 独立滚动 */}
       <div 
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-2 space-y-6 no-scrollbar pb-4"
+        className="flex-1 overflow-y-auto px-4 md:px-8 space-y-6 no-scrollbar py-8"
       >
-        {messages.map((msg, idx) => (
-          <div 
-            key={idx} 
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-4 duration-500`}
-          >
-            <div className={`max-w-[85%] md:max-w-[70%] p-4 md:p-6 rounded-[2rem] shadow-sm border ${
-              msg.role === 'user' 
-                ? 'bg-indigo-600 text-white border-indigo-500 rounded-tr-none' 
-                : 'bg-white text-slate-700 border-slate-100 rounded-tl-none'
-            }`}>
-              <p className="text-sm md:text-base leading-relaxed serif-font whitespace-pre-wrap">
-                {msg.content}
-              </p>
+        <div className="max-w-4xl mx-auto space-y-6">
+          {messages.map((msg, idx) => (
+            <div 
+              key={idx} 
+              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-4 duration-500`}
+            >
+              <div className={`max-w-[85%] md:max-w-[70%] p-4 md:p-6 rounded-[2rem] shadow-sm border ${
+                msg.role === 'user' 
+                  ? 'bg-indigo-600 text-white border-indigo-500 rounded-tr-none shadow-xl shadow-indigo-100/50' 
+                  : 'bg-white text-slate-700 border-slate-100 rounded-tl-none'
+              }`}>
+                <p className="text-sm md:text-base leading-relaxed serif-font whitespace-pre-wrap">
+                  {msg.content}
+                </p>
+              </div>
             </div>
-          </div>
-        ))}
-        {isTyping && (
-          <div className="flex justify-start animate-pulse">
-            <div className="bg-white p-4 rounded-3xl border border-slate-100 flex space-x-1 items-center">
-              <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-audio-bar-1"></div>
-              <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-audio-bar-2"></div>
-              <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-audio-bar-3"></div>
+          ))}
+          {isTyping && (
+            <div className="flex justify-start animate-pulse">
+              <div className="bg-white p-4 rounded-3xl border border-slate-100 flex space-x-1 items-center">
+                <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-audio-bar-1"></div>
+                <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-audio-bar-2"></div>
+                <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-audio-bar-3"></div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* 输入区 */}
-      <div className="p-2 pt-4 shrink-0">
-        <div className="relative bg-white rounded-[2.5rem] border border-slate-200 shadow-xl focus-within:ring-4 focus-within:ring-indigo-500/10 focus-within:border-indigo-400 transition-all p-2 flex items-end">
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={`用 ${language.label} 回复馆长...`}
-            className="flex-1 bg-transparent border-none focus:ring-0 text-slate-700 text-base py-3 px-4 resize-none no-scrollbar serif-font"
-          />
-          <button
-            onClick={handleSend}
-            disabled={!inputValue.trim() || isTyping}
-            className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shrink-0 ${
-              inputValue.trim() && !isTyping 
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 scale-100' 
-                : 'bg-slate-100 text-slate-300 scale-90'
-            }`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 transform rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
-          </button>
+      {/* 输入区 - 自然排列在底部，不使用 absolute */}
+      <footer className="shrink-0 bg-white border-t border-slate-100 px-4 pt-4 pb-4 md:pb-8 shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.05)]">
+        <div className="max-w-4xl mx-auto">
+          <div className="relative bg-white rounded-[2.5rem] border border-slate-200 shadow-xl focus-within:ring-4 focus-within:ring-indigo-500/10 focus-within:border-indigo-400 transition-all p-1.5 flex items-end">
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={`用 ${language.label} 回复馆长...`}
+              className="flex-1 bg-transparent border-none focus:ring-0 text-slate-700 text-base py-3 px-6 resize-none no-scrollbar serif-font min-h-[56px] flex items-center"
+            />
+            <button
+              onClick={handleSend}
+              disabled={!inputValue.trim() || isTyping}
+              className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shrink-0 mb-1 mr-1 ${
+                inputValue.trim() && !isTyping 
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 scale-100' 
+                  : 'bg-slate-100 text-slate-300 scale-90'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 transform rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            </button>
+          </div>
+          <p className="text-center text-[8px] font-black text-slate-300 uppercase tracking-widest mt-3 opacity-60">
+            Shift + Enter 换行 | 随时点击顶部按钮合成日记
+          </p>
         </div>
-        <p className="text-center text-[8px] font-black text-slate-300 uppercase tracking-widest mt-2">
-          Shift + Enter 换行 | 随时点击顶部按钮合成日记
-        </p>
-      </div>
+      </footer>
     </div>
   );
 };

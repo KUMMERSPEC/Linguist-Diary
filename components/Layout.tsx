@@ -25,6 +25,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
     </button>
   );
 
+  const isChat = activeView === 'chat';
+
   return (
     <div className="flex h-screen h-[100dvh] bg-slate-50 overflow-hidden">
       {/* Sidebar (Desktop Only) */}
@@ -84,9 +86,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
           </div>
         </header>
 
-        {/* 核心修正：移除内部 div 的 h-full 限制，允许长内容页面整体滚动 */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 md:px-8 md:py-8">
-          <div className="max-w-5xl mx-auto flex flex-col min-h-full">
+        {/* 修正：聊天视图容器高度设为 h-full，移除自动 overflow */}
+        <div className={`flex-1 ${isChat ? 'px-0 overflow-hidden' : 'px-4 py-4 md:px-8 md:py-8 overflow-y-auto'}`}>
+          <div className={`mx-auto flex flex-col h-full ${isChat ? 'max-w-full' : 'max-w-5xl'}`}>
             {children}
           </div>
         </div>
