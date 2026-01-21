@@ -77,6 +77,17 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
 
   const [usedGems, setUsedGems] = useState<Set<string>>(new Set());
 
+  const renderRuby = (text: string) => {
+    if (!text) return '';
+    const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
+    return <span dangerouslySetInnerHTML={{ __html: html }} />;
+  };
+
+  const stripRuby = (text: string) => {
+    if (!text) return '';
+    return text.replace(/\[(.*?)\]\(.*?\)/g, '$1');
+  };
+
   const getStarter = useCallback(() => {
     const hour = new Date().getHours();
     if (hour >= 5 && hour < 11) return { text: language.starters.morning, theme: '🌅 清晨' };
@@ -123,7 +134,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
     
     const newlyDetected = targetGems.filter(gem => 
       !usedGems.has(gem.word) && 
-      content.toLowerCase().includes(gem.word.toLowerCase())
+      content.toLowerCase().includes(stripRuby(gem.word).toLowerCase())
     );
 
     if (newlyDetected.length > 0) {
@@ -194,7 +205,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
                      </div>
                    )}
                    <h4 className={`text-base font-black serif-font ${isLit ? 'text-amber-700' : 'text-slate-600'}`}>
-                     {gem.word}
+                     {renderRuby(gem.word)}
                    </h4>
                    <p className="text-[10px] text-slate-400 mt-1 italic line-clamp-2">{gem.meaning}</p>
                  </div>
@@ -257,7 +268,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
                           : 'bg-slate-50 border-slate-200 text-slate-400'
                       }`}
                     >
-                      <span>{gem.word}</span>
+                      <span>{renderRuby(gem.word)}</span>
                       {isLit && <span className="animate-pulse">✨</span>}
                     </div>
                   );
@@ -273,7 +284,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
           <div className="max-w-4xl mx-auto space-y-6">
             {messages.map((msg, idx) => {
               const containedGems = targetGems.filter(gem => 
-                msg.role === 'user' && msg.content.toLowerCase().includes(gem.word.toLowerCase())
+                msg.role === 'user' && msg.content.toLowerCase().includes(stripRuby(gem.word).toLowerCase())
               );
               
               return (
@@ -286,8 +297,8 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
                       ? 'bg-indigo-600 text-white border-indigo-500 rounded-tr-none shadow-xl shadow-indigo-100/50' 
                       : 'bg-white text-slate-700 border-slate-100 rounded-tl-none shadow-sm'
                   }`}>
-                    <p className="text-[15px] md:text-base leading-relaxed serif-font whitespace-pre-wrap">
-                      {msg.content}
+                    <p className="text-[15px] md:text-base leading-[2.2] serif-font whitespace-pre-wrap">
+                      {renderRuby(msg.content)}
                     </p>
                     
                     {containedGems.length > 0 && (

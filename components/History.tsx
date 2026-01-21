@@ -13,6 +13,12 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('All');
 
+  const renderRuby = (text: string) => {
+    if (!text) return '';
+    const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
+    return <span dangerouslySetInnerHTML={{ __html: html }} />;
+  };
+
   const filteredEntries = useMemo(() => {
     return entries.filter(e => {
       const matchesSearch = e.originalText.toLowerCase().includes(searchQuery.toLowerCase()) || e.date.includes(searchQuery);
@@ -119,8 +125,8 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
                        </div>
 
                        <div className="flex-1 cursor-pointer" onClick={() => onSelect(entry)}>
-                         <p className="text-slate-600 line-clamp-5 serif-font mb-8 italic text-base md:text-lg leading-[1.8] group-hover:text-slate-900 transition-colors">
-                           “ {entry.originalText} ”
+                         <p className="text-slate-600 line-clamp-5 serif-font mb-8 italic text-base md:text-lg leading-[2.2] group-hover:text-slate-900 transition-colors">
+                           “ {renderRuby(entry.originalText)} ”
                          </p>
                        </div>
 

@@ -29,6 +29,12 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
 
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
+  const renderRuby = (text: string) => {
+    if (!text) return '';
+    const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
+    return <span dangerouslySetInnerHTML={{ __html: html }} />;
+  };
+
   const startNewSession = async () => {
     setIsGenerating(true);
     setSourceText('');
@@ -190,8 +196,8 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
                 </div>
              </div>
              <div className={`bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative min-h-[200px] flex items-center justify-center text-center transition-all duration-700 ${!showSource ? 'blur-xl grayscale select-none' : ''}`}>
-                <p className="text-lg md:text-xl text-slate-700 leading-relaxed serif-font italic">
-                  “ {sourceText} ”
+                <p className="text-lg md:text-xl text-slate-700 leading-[2.5] serif-font italic">
+                  “ {renderRuby(sourceText)} ”
                 </p>
                 {!showSource && (
                   <div className="absolute inset-0 flex items-center justify-center z-10">
@@ -223,7 +229,7 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
         </div>
       )}
 
-      {/* 评估结果显示 (保持原样) */}
+      {/* 评估结果显示 */}
       {evaluation && (
         <div className="animate-in fade-in slide-in-from-top-4 duration-700">
            <div className="bg-slate-900 rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden">
@@ -290,9 +296,9 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
                     <div className="flex items-center justify-between">
                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">馆长推荐复述 Masterwork Retelling</h4>
                     </div>
-                    <div className="bg-indigo-600/20 p-8 rounded-[2.5rem] border border-indigo-500/30 text-indigo-100 italic serif-font text-lg leading-relaxed relative">
+                    <div className="bg-indigo-600/20 p-8 rounded-[2.5rem] border border-indigo-500/30 text-indigo-100 italic serif-font text-lg leading-[2.2] relative">
                        <span className="absolute -top-4 -left-2 text-6xl text-indigo-500/20">“</span>
-                       {evaluation.suggestedVersion}
+                       {renderRuby(evaluation.suggestedVersion)}
                     </div>
                     <div className="flex justify-center mt-6">
                        <button 
