@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { DiaryAnalysis, ChatMessage, RehearsalEvaluation, DiaryEntry } from "../types";
 
@@ -141,14 +140,29 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `Evaluate retelling in ${language}. Source: "${source}", Retelling: "${retelling}". Response in Chinese. ${getJapaneseInstruction(language)}`,
+      contents: `Evaluate a language retelling exercise in ${language}. 
+      
+      ARCHIVE SOURCE (The baseline information): "${source}"
+      USER'S RETELLING (What the user produced): "${retelling}"
+      
+      TASKS:
+      1. Compare the retelling to the source for accuracy and detail.
+      2. Analyze the language quality of the user's retelling.
+      3. CRITICAL: The 'suggestedVersion' MUST be a polished, corrected, and more natural version of the *USER'S RETELLING*. 
+         Do NOT just repeat or modify the source text. Instead, take what the user tried to say, fix their mistakes, and elevate their expression while keeping their original narrative perspective.
+      
+      CRITICAL REQUIREMENTS:
+      1. Provide response in Chinese (feedback sections).
+      2. 'accuracyScore' and 'qualityScore' MUST be INTEGERS between 0 and 100.
+      3. ${getJapaneseInstruction(language)}`,
       config: {
+        thinkingConfig: { thinkingBudget: 4000 },
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            accuracyScore: { type: Type.NUMBER },
-            qualityScore: { type: Type.NUMBER },
+            accuracyScore: { type: Type.INTEGER },
+            qualityScore: { type: Type.INTEGER },
             contentFeedback: { type: Type.STRING },
             languageFeedback: { type: Type.STRING },
             suggestedVersion: { type: Type.STRING }
@@ -157,7 +171,17 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
         }
       }
     });
-    return JSON.parse(response.text);
+    const result = JSON.parse(response.text);
+    const fixScore = (s: any) => {
+      const num = parseFloat(s);
+      if (isNaN(num)) return 0;
+      return num <= 1 ? Math.round(num * 100) : Math.round(num);
+    };
+    return {
+      ...result,
+      accuracyScore: fixScore(result.accuracyScore),
+      qualityScore: fixScore(result.qualityScore)
+    };
   } catch (e) { throw new Error("Evaluation failed."); }
 };
 
@@ -169,7 +193,7 @@ export const generateDiaryAudio = async (text: string): Promise<string> => {
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text: cleanText }] }],
       config: {
-        responseModalalities: [Modality.AUDIO],
+        responseModalities: [Modality.AUDIO],
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
       },
     });

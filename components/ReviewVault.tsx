@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef } from 'react';
 import { DiaryEntry, AdvancedVocab, PracticeRecord } from '../types';
 import { validateVocabUsage, generateDiaryAudio } from '../services/geminiService';
@@ -95,20 +94,20 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
       <div className="animate-in fade-in duration-500 space-y-3 p-1">
         <header className="flex items-center justify-between shrink-0 mb-2">
           <h2 className="text-lg font-bold text-slate-900 serif-font">珍宝档案 Archive</h2>
-          <button onClick={() => setActiveTab('gems')} className="text-[10px] font-black text-indigo-600 uppercase">返回 BACK</button>
+          <button onClick={() => setActiveTab('gems')} className="text-[11px] font-black text-indigo-600 uppercase">返回 BACK</button>
         </header>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
           {allVocab.map((v, i) => (
             <div key={i} className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
               <div className="flex justify-between items-start mb-1">
-                <span className="text-[8px] font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded uppercase tracking-widest">{v.language}</span>
-                <span className="text-[8px] font-black text-slate-400">{v.mastery || 0}/3</span>
+                <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded uppercase tracking-widest">{v.language}</span>
+                <span className="text-[9px] font-black text-slate-400">{v.mastery || 0}/3</span>
               </div>
               <h3 className="text-sm font-bold serif-font">{renderRuby(v.word)}</h3>
-              <p className="text-[9px] text-slate-500 italic line-clamp-1 mb-2">{v.meaning}</p>
+              <p className="text-[10px] text-slate-500 italic line-clamp-1 mb-2">{v.meaning}</p>
               <div className="mt-auto pt-2 border-t border-slate-50 flex justify-between items-center">
-                 <span className="text-[7px] font-bold text-slate-300 uppercase">{v.date}</span>
-                 <button onClick={() => onReviewEntry(entries.find(e => e.id === v.entryId)!)} className="text-[8px] font-bold text-indigo-400">VIEW</button>
+                 <span className="text-[8px] font-bold text-slate-300 uppercase">{v.date}</span>
+                 <button onClick={() => onReviewEntry(entries.find(e => e.id === v.entryId)!)} className="text-[9px] font-bold text-indigo-400">VIEW</button>
               </div>
             </div>
           ))}
@@ -118,144 +117,182 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
   }
 
   return (
-    <div className="flex flex-col h-full animate-in fade-in duration-500 max-h-screen overflow-hidden p-0 md:p-2">
-      <header className="flex items-center justify-between mb-1.5 shrink-0 px-2 md:px-0">
-        <h2 className="text-lg md:text-2xl font-black text-slate-900 serif-font">珍宝练习</h2>
+    <div className="flex flex-col animate-in fade-in duration-500 pb-40 md:pb-8 p-0 md:p-2">
+      <header className="flex items-center justify-between mb-6 shrink-0 px-4 md:px-0">
+        <div className="flex flex-col">
+          <h2 className="text-2xl md:text-3xl font-black text-slate-900 serif-font">珍宝复习馆</h2>
+          <p className="text-[11px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-0.5">Refine your linguistic gems</p>
+        </div>
         <button 
           onClick={() => setActiveTab('all')}
-          className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-slate-500 uppercase shadow-sm"
+          className="px-5 py-2.5 bg-white border border-slate-200 rounded-2xl text-[11px] font-black text-slate-500 uppercase shadow-sm flex items-center gap-2 active:scale-95 transition-all"
         >
           📜 档案
         </button>
       </header>
 
       {!currentGem ? (
-        <div className="flex-1 flex flex-col items-center justify-center py-10 text-center">
+        <div className="flex-1 flex flex-col items-center justify-center py-20 text-center">
           <div className="text-4xl grayscale opacity-20 mb-4">💎</div>
           <p className="text-slate-400 text-sm font-bold serif-font">暂无待练习单词</p>
         </div>
       ) : (
-        <div className="flex-1 flex flex-col lg:grid lg:grid-cols-2 lg:gap-4 min-h-0">
-          {/* 上方：单词卡片 - 移动端高度压缩 */}
-          <div className="shrink-0 lg:shrink mb-2 lg:mb-0">
-            <div className="bg-white rounded-2xl md:rounded-[2.5rem] border border-slate-200 shadow-lg overflow-hidden flex flex-col">
-              <div className="p-3 md:p-8 relative">
-                <div className="absolute top-3 right-3 flex items-center space-x-2">
-                   <div className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[8px] font-black rounded uppercase">{currentGem.level}</div>
-                   <div className="text-[8px] font-black text-slate-300">{currentIndex + 1}/{featuredGems.length}</div>
+        <>
+          <div className="flex flex-col lg:grid lg:grid-cols-2 lg:gap-8 px-2 md:px-0">
+            <div className="mb-6 lg:mb-0">
+              <div className="bg-white rounded-[2.5rem] md:rounded-[3rem] border border-slate-200 shadow-xl overflow-hidden flex flex-col h-full">
+                <div className="p-7 md:p-12 relative flex-1 flex flex-col">
+                  <div className="absolute top-7 right-7 flex items-center space-x-3">
+                    <div className="px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-full uppercase tracking-widest">{currentGem.level}</div>
+                    <div className="text-[11px] font-black text-slate-300 tracking-[0.2em]">{currentIndex + 1}/{featuredGems.length}</div>
+                  </div>
+
+                  <div className="mt-4 mb-5 md:mb-10">
+                    <div className="flex items-center gap-4 flex-wrap mb-2 md:mb-4">
+                      <h3 className="text-3xl md:text-6xl font-black text-slate-900 serif-font">
+                        {renderRuby(currentGem.word)}
+                      </h3>
+                      <button 
+                        onClick={() => handlePlayAudio(currentGem.word)}
+                        className={`w-9 h-9 md:w-14 md:h-14 rounded-full flex items-center justify-center transition-all ${playingAudio ? 'bg-indigo-600 text-white animate-pulse shadow-lg' : 'bg-slate-50 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600'}`}
+                      >
+                        <span className="text-base md:text-2xl">🎧</span>
+                      </button>
+                    </div>
+                    <p className="text-lg md:text-2xl text-indigo-900/70 font-bold italic serif-font leading-relaxed">{currentGem.meaning}</p>
+                  </div>
+
+                  <div className="flex-1 space-y-4">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Contextual Usage</span>
+                      <div className="h-[1px] flex-1 bg-slate-100"></div>
+                    </div>
+                    <div className="bg-slate-50/70 p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] border border-slate-100 relative group transition-colors hover:bg-white">
+                      <span className="absolute top-3 left-5 text-3xl opacity-10 serif-font text-indigo-600">“</span>
+                      <p className="text-lg md:text-2xl text-slate-600 italic serif-font leading-[1.8] relative z-10">
+                          {renderRuby(currentGem.usage)}
+                      </p>
+                      <span className="absolute bottom-3 right-5 text-3xl opacity-10 serif-font text-indigo-600 rotate-180">“</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="mt-1 mb-2 md:mb-6">
-                  <h3 className="text-xl md:text-5xl font-black text-slate-900 serif-font flex items-center gap-2">
-                    {renderRuby(currentGem.word)}
-                    <button 
-                      onClick={() => handlePlayAudio(currentGem.word)}
-                      className={`w-6 h-6 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-all ${playingAudio ? 'bg-indigo-600 text-white animate-pulse' : 'bg-slate-50 text-slate-400'}`}
-                    >
-                      <span className="text-xs md:text-lg">🎧</span>
-                    </button>
-                  </h3>
-                  <p className="text-[11px] md:text-base text-indigo-800 font-bold italic mt-1 leading-tight">{currentGem.meaning}</p>
-                </div>
-
-                <div className="hidden md:block lg:block space-y-2">
-                   <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Example</h4>
-                   <p className="text-slate-600 italic serif-font text-xs md:text-lg leading-relaxed bg-slate-50 p-3 md:p-6 rounded-xl border border-slate-100">
-                     “ {renderRuby(currentGem.usage)} ”
-                   </p>
-                </div>
-                {/* 移动端紧凑型例句 */}
-                <div className="md:hidden block">
-                   <p className="text-[10px] text-slate-500 italic serif-font bg-slate-50 p-2 rounded-lg border border-slate-100 line-clamp-2">
-                     “ {renderRuby(currentGem.usage)} ”
-                   </p>
+                <div className="bg-slate-50/50 px-6 py-4 flex items-center justify-between border-t border-slate-100 shrink-0">
+                  <button 
+                    disabled={currentIndex === 0}
+                    onClick={() => { setCurrentIndex(i => i - 1); setFeedback(null); setPracticeInput(''); }}
+                    className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 disabled:opacity-20 transition-all hover:bg-slate-50 shadow-sm active:scale-90"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
+                  </button>
+                  <div className="flex space-x-2">
+                    {[...Array(featuredGems.length)].map((_, i) => (
+                      <div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${i === currentIndex ? 'w-8 bg-indigo-600' : 'w-1.5 bg-slate-300'}`}></div>
+                    ))}
+                  </div>
+                  <button 
+                    disabled={currentIndex === featuredGems.length - 1}
+                    onClick={() => { setCurrentIndex(i => i + 1); setFeedback(null); setPracticeInput(''); }}
+                    className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 disabled:opacity-20 transition-all hover:bg-slate-50 shadow-sm active:scale-90"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
+                  </button>
                 </div>
               </div>
+            </div>
 
-              <div className="bg-slate-50 px-3 py-1.5 flex items-center justify-between border-t border-slate-100 shrink-0">
-                 <button 
-                   disabled={currentIndex === 0}
-                   onClick={() => { setCurrentIndex(i => i - 1); setFeedback(null); setPracticeInput(''); }}
-                   className="p-1.5 bg-white border border-slate-200 rounded-md text-slate-400 disabled:opacity-30 text-[10px]"
-                 >
-                   ←
-                 </button>
-                 <div className="flex space-x-1">
-                   {[...Array(featuredGems.length)].map((_, i) => (
-                     <div key={i} className={`h-1 rounded-full transition-all ${i === currentIndex ? 'w-3 bg-indigo-600' : 'w-1 bg-slate-200'}`}></div>
-                   ))}
-                 </div>
-                 <button 
-                   disabled={currentIndex === featuredGems.length - 1}
-                   onClick={() => { setCurrentIndex(i => i + 1); setFeedback(null); setPracticeInput(''); }}
-                   className="p-1.5 bg-white border border-slate-200 rounded-md text-slate-400 disabled:opacity-30 text-[10px]"
-                 >
-                   →
-                 </button>
+            <div className="flex flex-col">
+              <div className="flex flex-col bg-white rounded-[2.5rem] md:rounded-[3rem] border border-slate-200 shadow-xl p-7 md:p-12 relative min-h-[300px]">
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-2 h-2 bg-indigo-600 rounded-full animate-pulse"></div>
+                      <h4 className="text-[11px] font-black text-slate-800 tracking-[0.2em] uppercase">撰写造句 PRACTICE</h4>
+                    </div>
+                    {feedback && (
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest ${feedback.isCorrect ? 'text-emerald-500 bg-emerald-50' : 'text-rose-500 bg-rose-50'}`}>
+                        {feedback.isCorrect ? 'Excellent' : 'Refine'}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex-1 flex flex-col space-y-5">
+                    <textarea
+                      value={practiceInput}
+                      onChange={(e) => setPracticeInput(e.target.value)}
+                      placeholder={`使用“${currentGem.word.replace(/\[(.*?)\]\(.*?\)/g, '$1')}”造句...`}
+                      className="w-full bg-slate-50/40 border border-slate-100 focus:bg-white focus:ring-8 focus:ring-indigo-500/5 focus:border-indigo-200 rounded-[2rem] p-6 md:p-10 text-lg md:text-2xl serif-font placeholder:text-slate-300 resize-none min-h-[160px] md:min-h-[220px] transition-all"
+                      disabled={isValidating}
+                    />
+                    
+                    {/* 电脑端提交按钮：仅大屏幕显示 */}
+                    <button
+                      onClick={handlePracticeSubmit}
+                      disabled={!practiceInput.trim() || isValidating}
+                      className={`hidden lg:flex w-full py-5 md:py-6 rounded-3xl font-black transition-all active:scale-[0.98] items-center justify-center space-x-4 shadow-2xl ${
+                        isValidating ? 'bg-slate-100 text-slate-300 shadow-none' : 'bg-slate-900 text-white shadow-indigo-100/50 hover:bg-indigo-600'
+                      }`}
+                    >
+                      {isValidating ? (
+                        <div className="animate-spin rounded-full h-6 w-6 border-2 border-slate-300 border-t-indigo-500" />
+                      ) : (
+                        <span className="text-sm md:text-lg tracking-[0.2em] uppercase">✨ 提交 AI 审阅 SUBMIT</span>
+                      )}
+                    </button>
+
+                    {feedback && (
+                      <div className="mt-4 animate-in slide-in-from-bottom-5">
+                        <div className={`p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] border-2 shadow-sm ${feedback.isCorrect ? 'bg-emerald-50/50 border-emerald-100' : 'bg-rose-50/50 border-rose-100'}`}>
+                          <div className="flex items-start gap-4 mb-4">
+                            <div className={`w-9 h-9 md:w-11 md:h-11 rounded-2xl flex items-center justify-center shrink-0 text-lg md:text-xl ${feedback.isCorrect ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                              {feedback.isCorrect ? '✨' : '🧐'}
+                            </div>
+                            <p className="text-base md:text-lg text-slate-700 leading-relaxed font-medium pt-1">
+                              {feedback.feedback}
+                            </p>
+                          </div>
+                          {feedback.betterVersion && (
+                            <div className="bg-white/90 p-6 md:p-10 rounded-[1.5rem] md:rounded-[2rem] border border-white/50 shadow-inner relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-50 rounded-bl-[2rem] opacity-30"></div>
+                                <h5 className="text-[10px] md:text-[11px] font-black text-indigo-400 uppercase tracking-widest mb-3 flex items-center">
+                                  <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full mr-2"></span> Masterful Revision
+                                </h5>
+                                <p className="text-lg md:text-2xl font-bold text-indigo-950 serif-font italic leading-relaxed">“{feedback.betterVersion}”</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+              </div>
+
+              <div className="hidden lg:flex bg-white/50 border border-slate-100 rounded-[1.5rem] p-6 mt-6 items-center justify-between shrink-0">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Mastery Progress</span>
+                <div className="flex space-x-3">
+                  {[1, 2, 3].map(step => (
+                    <div key={step} className={`w-10 h-2 rounded-full transition-all duration-700 ${step <= (currentGem.mastery || 0) ? 'bg-indigo-600 shadow-lg shadow-indigo-100' : 'bg-slate-200'}`}></div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* 下方：练习区域 - 移动端高度控制 */}
-          <div className="flex flex-col min-h-0 flex-1 lg:flex-initial">
-             <div className="flex flex-col bg-white rounded-2xl md:rounded-[2.5rem] border border-slate-200 shadow-sm p-3 md:p-8 flex-1 overflow-hidden">
-                <div className="flex items-center space-x-2 mb-2 md:mb-4 shrink-0">
-                  <div className="w-1 h-3 bg-indigo-600 rounded-full"></div>
-                  <h4 className="text-[9px] md:text-[11px] font-black text-slate-800 tracking-wider uppercase">撰写造句 PRACTICE</h4>
-                </div>
-
-                <div className="flex-1 flex flex-col min-h-0 overflow-y-auto no-scrollbar">
-                   <textarea
-                     value={practiceInput}
-                     onChange={(e) => setPracticeInput(e.target.value)}
-                     placeholder={`使用“${currentGem.word.replace(/\[(.*?)\]\(.*?\)/g, '$1')}”造句...`}
-                     className="w-full bg-slate-50 border-none focus:ring-2 focus:ring-indigo-500/10 rounded-xl p-3 text-sm md:text-xl serif-font placeholder:text-slate-300 resize-none mb-2 min-h-[60px] md:min-h-[120px] shrink-0"
-                     disabled={isValidating}
-                   />
-                   
-                   <button
-                     onClick={handlePracticeSubmit}
-                     disabled={!practiceInput.trim() || isValidating}
-                     className={`w-full py-2.5 md:py-4 rounded-xl font-bold transition-all active:scale-[0.98] flex items-center justify-center space-x-2 shadow-md shrink-0 ${
-                       isValidating ? 'bg-slate-100 text-slate-300' : 'bg-slate-900 text-white'
-                     }`}
-                   >
-                     {isValidating ? (
-                       <div className="animate-spin rounded-full h-3 w-3 border-2 border-slate-300 border-t-indigo-500" />
-                     ) : (
-                       <span className="text-[11px] md:text-base font-black">✨ 提交 AI 审阅</span>
-                     )}
-                   </button>
-
-                    {feedback && (
-                      <div className="mt-2 animate-in slide-in-from-bottom-2 shrink-0">
-                        <div className={`p-3 rounded-xl border ${feedback.isCorrect ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
-                           <p className="text-[10px] md:text-sm text-slate-700 leading-tight mb-1">
-                             <span className="mr-1">{feedback.isCorrect ? '✅' : '🧐'}</span>
-                             {feedback.feedback}
-                           </p>
-                           {feedback.betterVersion && (
-                             <div className="bg-white/60 p-2 rounded-lg border border-white/50 mt-1">
-                                <h5 className="text-[7px] font-black text-slate-400 uppercase">Better:</h5>
-                                <p className="text-[11px] md:text-base font-bold text-indigo-900 serif-font italic leading-tight">“{feedback.betterVersion}”</p>
-                             </div>
-                           )}
-                        </div>
-                      </div>
-                    )}
-                </div>
-             </div>
-
-             <div className="hidden md:flex bg-white/50 border border-slate-100 rounded-2xl p-4 mt-2 items-center justify-between shrink-0">
-               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">掌握进度</span>
-               <div className="flex space-x-1">
-                 {[1, 2, 3].map(step => (
-                   <div key={step} className={`w-6 h-1 rounded-full ${step <= (currentGem.mastery || 0) ? 'bg-indigo-600' : 'bg-slate-200'}`}></div>
-                 ))}
-               </div>
-             </div>
+          {/* 移动端悬浮提交按钮：仅小屏幕显示 */}
+          <div className="lg:hidden fixed bottom-20 left-0 right-0 px-6 py-4 z-[110] pointer-events-none">
+            <button
+              onClick={handlePracticeSubmit}
+              disabled={!practiceInput.trim() || isValidating}
+              className={`w-full py-4 rounded-3xl font-black transition-all active:scale-[0.98] flex items-center justify-center space-x-4 shadow-[0_15px_30px_-5px_rgba(79,70,229,0.3)] pointer-events-auto ${
+                isValidating ? 'bg-slate-100 text-slate-300 shadow-none' : 'bg-slate-900 text-white'
+              }`}
+            >
+              {isValidating ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-300 border-t-indigo-500" />
+              ) : (
+                <span className="text-sm tracking-[0.2em] uppercase">✨ 提交 AI 审阅 SUBMIT</span>
+              )}
+            </button>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

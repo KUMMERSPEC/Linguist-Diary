@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, updateDoc, Firestore } from 'firebase/firestore';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc, Firestore } from 'firebase/firestore';
 
 import Layout from './components/Layout';
 import AuthView from './components/AuthView';
@@ -13,9 +12,10 @@ import History from './components/History';
 import ChatEditor from './components/ChatEditor';
 import ReviewVault from './components/ReviewVault';
 import Rehearsal from './components/Rehearsal';
+import RehearsalReport from './components/RehearsalReport';
 
 import { ViewState, DiaryEntry, ChatMessage, RehearsalEvaluation, DiaryIteration, AdvancedVocab } from './types';
-import { analyzeDiaryEntry, synthesizeDiary } from './services/geminiService';
+import { analyzeDiaryEntry } from './services/geminiService';
 
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY || "",
@@ -48,7 +48,6 @@ const App: React.FC = () => {
   const [currentEntry, setCurrentEntry] = useState<DiaryEntry | null>(null);
   const [rewriteBaseId, setRewriteBaseId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingText, setLoadingText] = useState('加载中...');
   const [isSandbox, setIsSandbox] = useState(true);
   const [isInitializing, setIsInitializing] = useState(true);
 
@@ -57,11 +56,7 @@ const App: React.FC = () => {
     const savedEntries = localStorage.getItem('linguist_entries');
 
     if (savedEntries) {
-      try {
-        setEntries(JSON.parse(savedEntries));
-      } catch (e) {
-        console.error("Failed to parse local entries");
-      }
+      try { setEntries(JSON.parse(savedEntries)); } catch (e) { console.error(e); }
     }
 
     if (isFirebaseValid && app && db) {
@@ -75,28 +70,14 @@ const App: React.FC = () => {
           };
           setUser(userData);
           setIsSandbox(false);
-          
           try {
             const docRef = doc(db!, 'users', fbUser.uid);
             const docSnap = await getDoc(docRef);
-            
             if (docSnap.exists()) {
               const cloudEntries = docSnap.data().entries || [];
-              if (cloudEntries.length > 0) {
-                const localEntries = JSON.parse(localStorage.getItem('linguist_entries') || '[]');
-                if (localEntries.length === 0) setEntries(cloudEntries);
-              }
-            } else {
-              await setDoc(docRef, { 
-                uid: fbUser.uid, 
-                displayName: fbUser.displayName, 
-                entries: [],
-                createdAt: Date.now()
-              });
+              if (cloudEntries.length > 0) setEntries(cloudEntries);
             }
-          } catch (err: any) {
-            console.error("Cloud Sync detailed error:", err);
-          }
+          } catch (err) { console.error(err); }
         } else if (savedUser) {
           setUser(JSON.parse(savedUser));
         }
@@ -112,21 +93,15 @@ const App: React.FC = () => {
   const syncEntries = async (newEntries: DiaryEntry[]) => {
     localStorage.setItem('linguist_entries', JSON.stringify(newEntries));
     if (user && !isSandbox && isFirebaseValid && db) {
-      try {
-        await setDoc(doc(db, 'users', user.uid), { entries: newEntries }, { merge: true });
-      } catch (e) {
-        console.error("Firebase update failed:", e);
-      }
+      try { await setDoc(doc(db, 'users', user.uid), { entries: newEntries }, { merge: true }); } catch (e) { console.error(e); }
     }
   };
 
   const handleAnalyze = async (text: string, language: string) => {
     setIsLoading(true);
-    setLoadingText(rewriteBaseId ? '正在打磨新的版本...' : '正在为您审阅初稿...');
     try {
       const analysis = await analyzeDiaryEntry(text, language, entries.slice(0, 5));
       const now = new Date();
-      
       if (rewriteBaseId) {
         const baseEntry = entries.find(e => e.id === rewriteBaseId);
         if (baseEntry) {
@@ -170,74 +145,129 @@ const App: React.FC = () => {
     const updatedEntries = rewriteBaseId 
       ? entries.map(e => e.id === rewriteBaseId ? currentEntry : e)
       : [currentEntry, ...entries];
-    
     setEntries(updatedEntries);
     await syncEntries(updatedEntries);
-    setView('dashboard');
+    setView('history');
     setCurrentEntry(null);
     setRewriteBaseId(null);
   };
 
-  const handleLogin = (userData: { uid: string, displayName: string, photoURL: string }, isMock = false) => {
+  const handleSaveRehearsal = async (language: string, rehearsal: RehearsalEvaluation) => {
+    const now = new Date();
+    const newEntry: DiaryEntry = {
+      id: `rehearsal_${Date.now()}`,
+      timestamp: Date.now(),
+      date: now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
+      originalText: rehearsal.sourceText || "",
+      language,
+      type: 'rehearsal',
+      rehearsal
+    };
+    const updatedEntries = [newEntry, ...entries];
+    setEntries(updatedEntries);
+    await syncEntries(updatedEntries);
+  };
+
+  const handleSelectEntry = (entry: DiaryEntry) => {
+    setCurrentEntry(entry);
+    if (entry.type === 'rehearsal') {
+      setView('rehearsal_report');
+    } else {
+      setView('review');
+    }
+  };
+
+  const handleRewrite = (entry: DiaryEntry) => {
+    setRewriteBaseId(entry.id);
+    setView('editor');
+  };
+
+  const handleDeleteEntry = async (id: string) => {
+    if (!window.confirm("确定要从收藏馆中移除这件艺术品吗？")) return;
+    const updatedEntries = entries.filter(e => e.id !== id);
+    setEntries(updatedEntries);
+    await syncEntries(updatedEntries);
+  };
+
+  const handleFinishChat = async (history: ChatMessage[], language: string) => {
+    setIsLoading(true);
+    setView('editor');
+    try {
+      const draft = history.filter(m => m.role === 'user').map(m => m.content).join('\n\n');
+      const analysis = await analyzeDiaryEntry(draft, language, entries.slice(0, 5));
+      const now = new Date();
+      const newEntry: DiaryEntry = {
+        id: `diary_${Date.now()}`,
+        timestamp: Date.now(),
+        date: now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
+        originalText: draft,
+        language,
+        type: 'diary',
+        analysis,
+        iterations: []
+      };
+      setCurrentEntry(newEntry);
+      setView('review');
+    } catch (e) {
+      alert("分析失败，已为您保留草稿。");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUpdateMastery = async (entryId: string, word: string, newMastery: number, record?: any) => {
+    const updatedEntries = entries.map(e => {
+      if (e.id === entryId && e.analysis) {
+        const updatedVocab = e.analysis.advancedVocab.map(v => {
+          if (v.word === word) {
+            return { ...v, mastery: newMastery, practices: [...(v.practices || []), record].filter(Boolean) };
+          }
+          return v;
+        });
+        return { ...e, analysis: { ...e.analysis, advancedVocab: updatedVocab } };
+      }
+      return e;
+    });
+    setEntries(updatedEntries);
+    await syncEntries(updatedEntries);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('linguist_user');
+    setUser(null);
+    if (isFirebaseValid && app) {
+      getAuth(app).signOut();
+    }
+  };
+
+  const handleLogin = (userData: any, isMock: boolean) => {
     setUser(userData);
     setIsSandbox(isMock);
     localStorage.setItem('linguist_user', JSON.stringify(userData));
   };
 
-  const handleLogout = async () => {
-    if (isFirebaseValid && !isSandbox && app) {
-      await getAuth(app).signOut();
-    }
-    localStorage.removeItem('linguist_user');
-    setUser(null);
-    setView('dashboard');
-  };
-
-  // 提取所有可用的进阶词汇用于 Chat 中的强制生产练习
-  const availableGems = entries.flatMap(e => 
-    (e.analysis?.advancedVocab || []).map(v => ({
-      ...v,
-      language: e.language
-    }))
-  );
-
   if (isInitializing) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
-        <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
-        <p className="text-slate-400 text-sm font-medium animate-pulse">正在进入收藏馆...</p>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-600 border-t-transparent"></div>
       </div>
     );
   }
 
   if (!user) {
-    return (
-      <AuthView 
-        auth={app ? getAuth(app) : null} 
-        isFirebaseValid={isFirebaseValid}
-        onLogin={handleLogin}
-      />
-    );
+    return <AuthView auth={isFirebaseValid ? getAuth(app!) : null} isFirebaseValid={isFirebaseValid} onLogin={handleLogin} />;
   }
 
   return (
     <Layout activeView={view} onViewChange={setView} user={user} onLogout={handleLogout}>
-      {isLoading && (
-        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[100] flex flex-col items-center justify-center space-y-6">
-          <div className="relative">
-             <div className="w-20 h-20 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
-             <div className="absolute inset-0 flex items-center justify-center text-2xl">🖋️</div>
-          </div>
-          <p className="text-slate-600 font-bold animate-pulse serif-font">{loadingText}</p>
-        </div>
-      )}
-      {view === 'dashboard' && <Dashboard entries={entries} onNewEntry={() => { setRewriteBaseId(null); setView('editor'); }} onStartReview={() => setView('review_vault')} />}
+      {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={() => setView('review_vault')} entries={entries} />}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} isLoading={isLoading} initialText={rewriteBaseId ? entries.find(e => e.id === rewriteBaseId)?.originalText : ''} initialLanguage={rewriteBaseId ? entries.find(e => e.id === rewriteBaseId)?.language : 'English'} />}
-      {view === 'review' && currentEntry?.analysis && <Review analysis={currentEntry.analysis} language={currentEntry.language} iterations={currentEntry.iterations} onSave={handleSaveEntry} onBack={() => setView('editor')} />}
-      {view === 'history' && <History entries={entries} onSelect={(e) => { if(e.type==='diary') {setCurrentEntry(e); setView('review');} }} onDelete={async (id) => { if(!window.confirm("移除吗？")) return; const updated = entries.filter(e => e.id !== id); setEntries(updated); await syncEntries(updated); }} onRewrite={(e) => { setRewriteBaseId(e.id); setView('editor'); }} />}
-      {view === 'chat' && <ChatEditor allGems={availableGems} onFinish={async (t, l) => { setIsLoading(true); try { const text = await synthesizeDiary(t, l); await handleAnalyze(text, l); } finally { setIsLoading(false); } }} />}
-      {view === 'review_vault' && <ReviewVault entries={entries} onUpdateMastery={async (eid, w, m, r) => { const updated = entries.map(entry => { if (entry.id === eid && entry.analysis) { const uv = entry.analysis.advancedVocab.map(v => v.word === w ? { ...v, mastery: m, practices: r ? [r, ...(v.practices || [])] : v.practices } : v); return { ...entry, analysis: { ...entry.analysis, advancedVocab: uv } }; } return entry; }); setEntries(updated); await syncEntries(updated); }} onReviewEntry={(e) => { setCurrentEntry(e); setView('review'); }} />}
-      {view === 'rehearsal' && <Rehearsal onSaveToMuseum={async (l, r) => { const newEntry: DiaryEntry = { id: `reh_${Date.now()}`, timestamp: Date.now(), date: new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }), originalText: r.userRetelling || "", language: l, type: 'rehearsal', rehearsal: r }; const updated = [newEntry, ...entries]; setEntries(updated); await syncEntries(updated); }} />}
+      {view === 'review' && currentEntry?.analysis && <Review analysis={currentEntry.analysis} language={currentEntry.language} iterations={currentEntry.iterations} onSave={handleSaveEntry} onBack={() => { setCurrentEntry(null); setRewriteBaseId(null); setView('editor'); }} />}
+      {view === 'history' && <History entries={entries} onSelect={handleSelectEntry} onDelete={handleDeleteEntry} onRewrite={handleRewrite} />}
+      {view === 'chat' && <ChatEditor onFinish={handleFinishChat} allGems={entries.flatMap(e => e.analysis?.advancedVocab.map(v => ({ ...v, language: e.language })) || [])} />}
+      {view === 'review_vault' && <ReviewVault entries={entries} onReviewEntry={handleSelectEntry} onUpdateMastery={handleUpdateMastery} />}
+      {view === 'rehearsal' && <Rehearsal onSaveToMuseum={handleSaveRehearsal} />}
+      {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} />}
     </Layout>
   );
 };

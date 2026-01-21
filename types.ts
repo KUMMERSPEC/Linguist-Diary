@@ -72,4 +72,4 @@ export interface ChatMessage {
   content: string;
 }
 
-export type ViewState = 'dashboard' | 'editor' | 'review' | 'history' | 'chat' | 'review_vault' | 'rehearsal';
+export type ViewState = 'dashboard' | 'editor' | 'review' | 'history' | 'chat' | 'review_vault' | 'rehearsal' | 'rehearsal_report';
