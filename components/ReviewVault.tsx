@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { DiaryEntry, AdvancedVocab, Correction, PracticeRecord } from '../types';
 import { validateVocabUsage, generateDiaryAudio } from '../services/geminiService';
@@ -31,6 +32,9 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
   const [isValidating, setIsValidating] = useState(false);
   const [testResult, setTestResult] = useState<{ isCorrect: boolean, feedback: string, betterVersion?: string } | null>(null);
 
+  // 引用 textarea 以调整高度
+  const practiceTextareaRef = useRef<HTMLTextAreaElement>(null);
+
   // 句子挑战
   const [challengeData, setChallengeData] = useState<{
     entry: DiaryEntry;
@@ -57,6 +61,14 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
       setDailyPool(shuffled.slice(0, 5));
     }
   }, [activeTab, allGems, dailyPool.length]);
+
+  // 监听输入，动态调整 textarea 高度
+  useEffect(() => {
+    if (practiceTextareaRef.current) {
+      practiceTextareaRef.current.style.height = 'auto';
+      practiceTextareaRef.current.style.height = `${practiceTextareaRef.current.scrollHeight}px`;
+    }
+  }, [userSentence, testResult]);
 
   const nextChallenge = () => {
     const entriesWithCorrections = entries.filter(e => e.analysis && e.analysis.corrections.length > 0);
@@ -117,13 +129,16 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
       
       const newMastery = result.isCorrect ? Math.min((currentGem.mastery || 0) + 1, 3) : Math.max((currentGem.mastery || 0) - 1, 0);
       
-      onUpdateMastery(currentGem.entryId, currentGem.word, newMastery, {
-        sentence: result.isCorrect ? userSentence : (result.betterVersion || userSentence),
+      // 核心修改：只有在完全正确时才创建练习记录 record
+      const recordToSave: PracticeRecord | undefined = result.isCorrect ? {
+        sentence: userSentence,
         originalAttempt: userSentence,
         feedback: result.feedback,
         timestamp: Date.now(),
-        status: result.isCorrect ? 'Perfect' : 'Polished'
-      });
+        status: 'Perfect'
+      } : undefined;
+
+      onUpdateMastery(currentGem.entryId, currentGem.word, newMastery, recordToSave);
     } catch (e) {
       setTestResult({ isCorrect: false, feedback: "馆长似乎走神了，请再试一次。" });
     } finally {
@@ -206,7 +221,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
       </header>
 
       {activeTab === 'daily' && (
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           {showCompletion ? (
             <div className="text-center space-y-6 py-12 animate-in zoom-in duration-500">
               <div className="text-6xl">🏆</div>
@@ -215,31 +230,31 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
               <button onClick={() => { setShowCompletion(false); setCurrentIndex(0); setDailyPool([]); }} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold">再来一组</button>
             </div>
           ) : currentGem ? (
-            <div className="grid grid-cols-1 gap-6 animate-in slide-in-from-right-4 duration-500">
-              {/* 词汇信息区 - 居中卡片 */}
-              <div className="bg-white p-6 md:p-10 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden flex flex-col items-center text-center">
-                <div className="absolute top-4 right-8 opacity-5 text-8xl font-serif">“</div>
-                <div className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 items-stretch animate-in slide-in-from-right-4 duration-500">
+              {/* 词汇信息区 - 居左展示 (PC端) */}
+              <div className="bg-white p-5 md:p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden flex flex-col items-center justify-center text-center h-full">
+                <div className="absolute top-4 right-8 opacity-5 text-7xl font-serif">“</div>
+                <div className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2 md:mb-4">
                   PROGRESS {currentIndex + 1}/5
                 </div>
                 <div className="flex flex-col items-center">
-                   <h3 className="text-2xl md:text-4xl font-black text-slate-900 mb-2 serif-font">{currentGem.word}</h3>
+                   <h3 className="text-xl md:text-3xl lg:text-4xl font-black text-slate-900 mb-1 md:mb-2 serif-font">{currentGem.word}</h3>
                    <button 
                      onClick={() => playAudio(currentGem.word, `daily-${currentIndex}`)}
-                     className={`mb-4 w-10 h-10 rounded-full flex items-center justify-center transition-all ${playingAudioId === `daily-${currentIndex}` ? 'bg-indigo-600 text-white animate-pulse' : 'bg-indigo-50 text-indigo-500 hover:bg-indigo-600 hover:text-white'}`}
+                     className={`mb-2 md:mb-4 w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-all ${playingAudioId === `daily-${currentIndex}` ? 'bg-indigo-600 text-white animate-pulse' : 'bg-indigo-50 text-indigo-500 hover:bg-indigo-600 hover:text-white'}`}
                    >
                      {playingAudioId === `daily-${currentIndex}` ? '⏹' : '🎧'}
                    </button>
                 </div>
-                <p className="text-base md:text-xl text-slate-600 font-medium italic mb-6 leading-snug">{currentGem.meaning}</p>
-                <div className="bg-slate-50/80 p-5 rounded-2xl border-l-4 border-indigo-400 max-w-2xl">
-                  <p className="text-xs md:text-sm text-slate-500 italic leading-relaxed">“{currentGem.usage}”</p>
+                <p className="text-sm md:text-lg lg:text-xl text-slate-600 font-medium italic mb-4 md:mb-6 leading-snug">{currentGem.meaning}</p>
+                <div className="bg-slate-50/80 p-3 md:p-5 rounded-2xl border-l-4 border-indigo-400 max-w-full w-full">
+                  <p className="text-[11px] md:text-sm text-slate-500 italic leading-relaxed text-left">“{currentGem.usage}”</p>
                 </div>
               </div>
 
-              {/* 交互练习区 */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between px-2">
+              {/* 交互练习区 - 居右展示 (PC端) */}
+              <div className="flex flex-col h-full space-y-4">
+                <div className="flex items-center justify-between px-2 shrink-0">
                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">练习造句 Practice</h4>
                   {testResult && (
                     <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest ${testResult.isCorrect ? 'bg-emerald-500 text-white shadow-md shadow-emerald-100' : 'bg-indigo-600 text-white shadow-md shadow-indigo-100'}`}>
@@ -249,18 +264,20 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                 </div>
                 
                 {!testResult ? (
-                  <div className="space-y-4">
+                  <div className="flex flex-col space-y-4 h-fit md:flex-1 md:h-full">
                     <textarea
+                      ref={practiceTextareaRef}
+                      rows={1}
                       value={userSentence}
                       onChange={(e) => setUserSentence(e.target.value)}
                       disabled={isValidating}
                       placeholder={`在此尝试使用 "${currentGem.word}" ...`}
-                      className={`w-full bg-white border border-slate-200 rounded-[2.5rem] p-6 md:p-8 text-base md:text-xl md:p-6 serif-font focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all resize-none min-h-[140px] md:min-h-[160px] ${isValidating ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`w-full bg-white border border-slate-200 rounded-[2.5rem] p-5 md:p-8 text-base md:text-lg serif-font focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all resize-none min-h-[56px] md:min-h-0 md:flex-1 ${isValidating ? 'opacity-50 cursor-not-allowed' : ''}`}
                     />
                     <button
                       disabled={isValidating || userSentence.trim().length < 2}
                       onClick={handleValidation}
-                      className="w-full bg-indigo-600 text-white py-4 rounded-3xl font-bold shadow-xl shadow-indigo-100 disabled:bg-slate-100 disabled:text-slate-300 transition-all active:scale-[0.97] flex items-center justify-center space-x-2"
+                      className="w-full shrink-0 bg-indigo-600 text-white py-3 md:py-4 rounded-3xl font-bold shadow-xl shadow-indigo-100 disabled:bg-slate-100 disabled:text-slate-300 transition-all active:scale-[0.97] flex items-center justify-center space-x-2"
                     >
                       {isValidating ? (
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -268,27 +285,27 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-6 animate-in slide-in-from-top-4 duration-500">
-                    <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-200">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">您的尝试 Attempt</p>
-                      <p className="text-base md:text-xl text-slate-800 serif-font italic leading-relaxed">“ {userSentence} ”</p>
+                  <div className="flex-1 flex flex-col space-y-4 animate-in slide-in-from-top-4 duration-500 h-full">
+                    <div className="bg-slate-50 p-4 md:p-6 rounded-[2.5rem] border border-slate-200 shrink-0">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">您的尝试 Attempt</p>
+                      <p className="text-sm md:text-lg text-slate-800 serif-font italic leading-relaxed">“ {userSentence} ”</p>
                     </div>
 
-                    <div className="bg-white p-8 md:p-10 rounded-[2.5rem] border border-indigo-100 shadow-xl shadow-indigo-200/20 space-y-6">
+                    <div className="flex-1 bg-white p-5 md:p-8 rounded-[2.5rem] border border-indigo-100 shadow-xl shadow-indigo-200/20 space-y-4 overflow-y-auto no-scrollbar">
                        <div className="flex items-start space-x-4">
-                          <span className="text-3xl shrink-0">🏛️</span>
-                          <div className="space-y-2">
-                             <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">馆长评价 Curator's Appraisal</p>
-                             <div className="text-sm md:text-base text-slate-700 leading-[1.8] italic font-medium">
+                          <span className="text-2xl shrink-0">🏛️</span>
+                          <div className="space-y-1">
+                             <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">馆长评价 Appraisal</p>
+                             <div className="text-xs md:text-sm text-slate-700 leading-relaxed italic font-medium">
                                {testResult.feedback}
                              </div>
                           </div>
                        </div>
                        
                        {testResult.betterVersion && !testResult.isCorrect && (
-                         <div className="bg-indigo-50/50 p-6 md:p-8 rounded-[2rem] border border-indigo-100">
-                           <div className="flex items-center justify-between mb-3">
-                             <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">精进推荐 Mastery Version:</p>
+                         <div className="bg-indigo-50/50 p-4 md:p-5 rounded-[2rem] border border-indigo-100">
+                           <div className="flex items-center justify-between mb-2">
+                             <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">精进推荐:</p>
                              <button 
                                onClick={() => playAudio(testResult.betterVersion!, 'better-version')}
                                className={`w-6 h-6 rounded-full flex items-center justify-center ${playingAudioId === 'better-version' ? 'bg-indigo-600 text-white animate-pulse' : 'bg-indigo-100 text-indigo-500'}`}
@@ -296,16 +313,16 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                                <span className="text-[10px]">🎧</span>
                              </button>
                            </div>
-                           <p className="text-base md:text-lg font-bold text-indigo-700 serif-font leading-relaxed">{testResult.betterVersion}</p>
+                           <p className="text-sm md:text-base font-bold text-indigo-700 serif-font leading-relaxed">{testResult.betterVersion}</p>
                          </div>
                        )}
                     </div>
 
-                    <div className="flex gap-4">
+                    <div className="flex gap-3 shrink-0">
                       {!testResult.isCorrect && (
-                        <button onClick={handleRetry} className="flex-1 bg-white border-2 border-slate-200 text-slate-600 py-4 rounded-3xl text-sm font-bold hover:bg-slate-50 transition-all active:scale-95 shadow-sm">🖋️ 重新挑战</button>
+                        <button onClick={handleRetry} className="flex-1 bg-white border-2 border-slate-200 text-slate-600 py-3 rounded-2xl text-[11px] font-bold hover:bg-slate-50 transition-all active:scale-95 shadow-sm">🖋️ 重新挑战</button>
                       )}
-                      <button onClick={handleNextWord} className="flex-[2] bg-indigo-600 text-white py-4 rounded-3xl text-sm font-bold shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
+                      <button onClick={handleNextWord} className="flex-[2] bg-indigo-600 text-white py-3 rounded-2xl text-[11px] font-bold shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
                         {currentIndex < dailyPool.length - 1 ? '下一个' : '完成特展'}
                       </button>
                     </div>
