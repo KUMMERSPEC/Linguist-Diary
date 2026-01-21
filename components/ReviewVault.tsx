@@ -23,7 +23,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
   const [showPracticeDetail, setShowPracticeDetail] = useState(false); 
 
   // States for practice mode
-  const [isPracticeMode, setIsPracticeMode] = useState(false);
+  const [isPracticeMode, setIsPracticeMode] = useState(0); // 0: off, 1: starting, 2: active
   const [currentPracticeIndex, setCurrentPracticeIndex] = useState(0);
 
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -105,21 +105,23 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
 
   // Effect for practice mode to update selected word
   useEffect(() => {
-    if (isPracticeMode && filteredAndSortedVocab.length > 0) {
+    if (isPracticeMode === 2 && filteredAndSortedVocab.length > 0) { // Only when practice mode is active
       const newIndex = Math.max(0, Math.min(currentPracticeIndex, filteredAndSortedVocab.length - 1));
       setSelectedWord(filteredAndSortedVocab[newIndex]);
       setCurrentPracticeIndex(newIndex); // Ensure index is within bounds
       setShowPracticeDetail(true); // Always show detail in practice mode
-    } else if (!isPracticeMode && selectedWord && !showPracticeDetail) {
+    } else if (isPracticeMode === 0 && selectedWord && !showPracticeDetail) {
       // If practice mode ends and detail is not explicitly shown, clear selected word
       setSelectedWord(null);
     }
-  }, [isPracticeMode, currentPracticeIndex, filteredAndSortedVocab, showPracticeDetail]);
+  }, [isPracticeMode, currentPracticeIndex, filteredAndSortedVocab, showPracticeDetail, selectedWord]);
 
   // Scroll selected word into view if in practice mode or manually selected
   useEffect(() => {
     if (listRef.current && selectedWord) {
-      const element = listRef.current.querySelector(`[data-vocab-id="${selectedWord.word}-${selectedWord.date}-${selectedWord.entryId}"]`);
+      // Use a more robust selector for the unique vocab item
+      const vocabId = `${selectedWord.word}-${selectedWord.date}-${selectedWord.entryId}`;
+      const element = listRef.current.querySelector(`[data-vocab-id="${vocabId}"]`);
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
@@ -182,8 +184,8 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
   const handleSelectWord = (vocab: ExtendedVocab) => {
     setSelectedWord(vocab);
     setShowPracticeDetail(true); // Show detail on mobile click
-    if (!isPracticeMode) {
-      // If not in practice mode, find the index of the selected word
+    if (isPracticeMode === 0) { // If not in practice mode
+      // Find the index of the selected word to correctly set currentPracticeIndex for potential later practice mode activation
       const index = filteredAndSortedVocab.findIndex(v => 
         v.word === vocab.word && v.date === vocab.date && v.entryId === vocab.entryId
       );
@@ -196,7 +198,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
   const handleBackToList = () => {
     setShowPracticeDetail(false);
     setSelectedWord(null);
-    setIsPracticeMode(false); // Exit practice mode when going back to list
+    setIsPracticeMode(0); // Exit practice mode when going back to list
     setLastFeedback(null);
     setPracticeInput('');
   };
@@ -207,9 +209,8 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
     if (currentPracticeIndex < filteredAndSortedVocab.length - 1) {
       setCurrentPracticeIndex(prev => prev + 1);
     } else {
-      // Optionally loop or end practice
       alert("恭喜您完成了所有单词练习！");
-      setIsPracticeMode(false);
+      setIsPracticeMode(0); // Set to off
       setSelectedWord(null);
       setShowPracticeDetail(false);
     }
@@ -230,14 +231,14 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
       alert("没有词汇可以练习。");
       return;
     }
-    setIsPracticeMode(true);
-    setCurrentPracticeIndex(0);
-    // setSelectedWord will be updated by useEffect
-    // setShowPracticeDetail will be updated by useEffect
+    setIsPracticeMode(1); // Set to starting
+    setCurrentPracticeIndex(0); // Start from the beginning
+    setTimeout(() => setIsPracticeMode(2), 0); // Activate practice mode after state update
+    // setSelectedWord and showPracticeDetail will be updated by useEffect
   };
 
   const handleExitPracticeMode = () => {
-    setIsPracticeMode(false);
+    setIsPracticeMode(0); // Set to off
     setSelectedWord(null);
     setShowPracticeDetail(false);
     setLastFeedback(null);
@@ -269,7 +270,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
       onUpdateMastery(selectedWord.entryId, selectedWord.word, newMastery, newPracticeRecord);
 
       // Auto-advance if in practice mode and correct
-      if (isPracticeMode && feedback.isCorrect) {
+      if (isPracticeMode === 2 && feedback.isCorrect) {
         setTimeout(() => {
           handleNextWord();
         }, 1500); // Give user a moment to see feedback
@@ -365,28 +366,9 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
               掌握度 {sortBy === 'mastery' && (sortOrder === 'desc' ? '↓' : '↑')}
             </button>
           </div>
-          
-          {/* Start Practice Button */}
-          {!isPracticeMode ? (
-            <button
-              onClick={handleStartPractice}
-              disabled={filteredAndSortedVocab.length === 0}
-              className="w-full bg-indigo-600 text-white py-3 rounded-2xl text-sm font-bold shadow-lg hover:bg-indigo-700 transition-all active:scale-95 mt-4"
-            >
-              🚀 开始练习 Start Practice
-            </button>
-          ) : (
-            <button
-              onClick={handleExitPracticeMode}
-              className="w-full bg-slate-200 text-slate-700 py-3 rounded-2xl text-sm font-bold shadow-md hover:bg-slate-300 transition-all active:scale-95 mt-4"
-            >
-              🔚 退出练习 Exit Practice
-            </button>
-          )}
-
         </header>
 
-        <div ref={listRef} className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-20">
+        <div ref={listRef} className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-4"> {/* Adjusted pb for new footer */}
           {filteredAndSortedVocab.length > 0 ? filteredAndSortedVocab.map((vocab, idx) => (
             <button
               key={vocab.word + vocab.date + vocab.entryId + idx} // Unique key including index to prevent issues with duplicate words/dates
@@ -419,12 +401,33 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
             <div className="py-16 text-center text-slate-400 text-sm italic">没有找到匹配的词汇珍宝。</div>
           )}
         </div>
+        
+        {/* Left Sidebar Footer for Practice Button */}
+        <div className="mt-4 shrink-0 bg-white pt-4 border-t border-slate-100">
+          {isPracticeMode === 0 ? (
+            <button
+              onClick={handleStartPractice}
+              disabled={filteredAndSortedVocab.length === 0}
+              className="w-full bg-indigo-600 text-white py-3 rounded-2xl text-sm font-bold shadow-lg hover:bg-indigo-700 transition-all active:scale-95"
+            >
+              🚀 开始练习 Start Practice
+            </button>
+          ) : (
+            <button
+              onClick={handleExitPracticeMode}
+              className="w-full bg-slate-200 text-slate-700 py-3 rounded-2xl text-sm font-bold shadow-md hover:bg-slate-300 transition-all active:scale-95"
+            >
+              🔚 退出练习 Exit Practice
+            </button>
+          )}
+        </div>
       </aside>
 
       {/* 右侧：实践与详情 - Conditionally shown on mobile when detail is shown */}
       {selectedWord && (
-        <main className={`flex-1 flex flex-col p-6 bg-slate-50 animate-in fade-in slide-in-from-right-4 duration-300 overflow-y-auto no-scrollbar pb-24 ${!showPracticeDetail ? 'hidden md:flex' : 'fixed inset-0 z-50 bg-slate-50 md:relative'}`}>
-          <div className="max-w-3xl mx-auto w-full space-y-8">
+        <main className={`flex-1 flex flex-col p-6 bg-slate-50 animate-in fade-in slide-in-from-right-4 duration-300 ${!showPracticeDetail ? 'hidden md:flex' : 'fixed inset-0 z-50 bg-slate-50 md:relative'}`}>
+          {/* Scrollable Content Area */}
+          <div className="flex-1 overflow-y-auto no-scrollbar max-w-3xl mx-auto w-full pb-8"> {/* Added pb-8 for spacing above sticky footer */}
             {/* Mobile Back Button */}
             {showPracticeDetail && (
               <div className="md:hidden flex items-center justify-between mb-6 pt-4 px-2">
@@ -434,7 +437,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                 >
                   ← 返回列表
                 </button>
-                {isPracticeMode && (
+                {isPracticeMode === 2 && (
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     练习模式 {currentPracticeIndex + 1} / {filteredAndSortedVocab.length}
                   </span>
@@ -442,7 +445,8 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
               </div>
             )}
 
-            <header className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl space-y-5">
+            {/* Header (word details) */}
+            <header className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl space-y-5 mb-8">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <span className={`text-3xl ${getMasteryColor(selectedWord.mastery).replace(/bg-.*?-/, 'text-')}`}>{getMasteryIcon(selectedWord.mastery)}</span>
@@ -478,75 +482,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
               </button>
             </header>
 
-            {/* 实践区 */}
-            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl space-y-6">
-              <h4 className="text-xl font-black text-slate-900 serif-font">实践您的理解 Practice</h4>
-              <p className="text-slate-500 text-sm">尝试用所选词汇造句。</p>
-
-              <textarea
-                value={practiceInput}
-                onChange={(e) => setPracticeInput(e.target.value)}
-                placeholder={`用 "${stripRuby(selectedWord.word)}" 造句...`}
-                className="w-full h-32 p-4 bg-slate-50 border border-slate-100 rounded-2xl resize-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all outline-none text-sm serif-font"
-                disabled={isValidating}
-              />
-              <button
-                onClick={handleValidatePractice}
-                disabled={!practiceInput.trim() || isValidating}
-                className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center space-x-3 transition-all active:scale-[0.98] ${
-                  isValidating
-                    ? 'bg-slate-100 text-slate-300'
-                    : 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700'
-                }`}
-              >
-                {isValidating ? (
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-300 border-t-indigo-500" />
-                ) : (
-                  <span className="text-sm">提交并验证 Submit & Validate</span>
-                )}
-              </button>
-
-              {lastFeedback && (
-                <div className={`p-5 rounded-2xl border ${lastFeedback.isCorrect ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'} animate-in fade-in slide-in-from-bottom-2`}>
-                  <p className={`font-bold text-sm mb-2 ${lastFeedback.isCorrect ? 'text-emerald-700' : 'text-rose-700'}`}>
-                    {lastFeedback.isCorrect ? '✅ 完美！' : '⚠️ 需打磨：'}
-                  </p>
-                  <p className="text-xs text-slate-700 leading-relaxed">{lastFeedback.feedback}</p>
-                  {lastFeedback.betterVersion && !lastFeedback.isCorrect && (
-                    <div className="mt-4 pt-3 border-t border-dashed border-slate-200">
-                      <p className="text-xs text-slate-600 italic">
-                        <span className="font-bold mr-1">建议版本:</span> {renderRuby(lastFeedback.betterVersion)}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Practice Mode Navigation */}
-            {isPracticeMode && (
-              <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
-                <button
-                  onClick={handlePrevWord}
-                  disabled={currentPracticeIndex === 0}
-                  className="flex items-center space-x-2 text-[10px] font-black text-slate-500 uppercase hover:text-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  ← 上一词
-                </button>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  {currentPracticeIndex + 1} / {filteredAndSortedVocab.length}
-                </span>
-                <button
-                  onClick={handleNextWord}
-                  disabled={currentPracticeIndex === filteredAndSortedVocab.length - 1 && lastFeedback?.isCorrect} // Can't go next if last word and not correct
-                  className="flex items-center space-x-2 text-[10px] font-black text-indigo-600 uppercase hover:text-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  下一词 →
-                </button>
-              </div>
-            )}
-
-            {/* 练习历史 */}
+            {/* 练习历史 (scrolls with other content) */}
             {selectedWord.practices && selectedWord.practices.length > 0 && (
               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl space-y-6">
                 <h4 className="text-xl font-black text-slate-900 serif-font">练习历史 Practice History</h4>
@@ -560,19 +496,87 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                           <p className="text-xs text-slate-500 italic leading-relaxed">
                             <span className="font-semibold">AI 建议:</span> {renderRuby(practice.betterVersion)}
                           </p>
-                        )}
-                        <p className="text-[10px] text-slate-400 mt-2">{new Date(practice.timestamp).toLocaleDateString('zh-CN', {year: 'numeric', month: 'short', day: 'numeric'})}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
+              )}
+            </div>
+            
+            {/* Sticky Footer for Practice Input and Controls */}
+            <div className="max-w-3xl mx-auto w-full sticky bottom-0 z-10 bg-slate-50 pt-6"> {/* Use pt-6 to push content up */}
+              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl space-y-6">
+                <h4 className="text-xl font-black text-slate-900 serif-font">实践您的理解 Practice</h4>
+                <p className="text-slate-500 text-sm">尝试用所选词汇造句。</p>
+
+                <textarea
+                  value={practiceInput}
+                  onChange={(e) => setPracticeInput(e.target.value)}
+                  placeholder={`用 "${stripRuby(selectedWord.word)}" 造句...`}
+                  className="w-full h-32 p-4 bg-slate-50 border border-slate-100 rounded-2xl resize-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all outline-none text-sm serif-font"
+                  disabled={isValidating}
+                />
+                <button
+                  onClick={handleValidatePractice}
+                  disabled={!practiceInput.trim() || isValidating}
+                  className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center space-x-3 transition-all active:scale-[0.98] ${
+                    isValidating
+                      ? 'bg-slate-100 text-slate-300'
+                      : 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700'
+                  }`}
+                >
+                  {isValidating ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-300 border-t-indigo-500" />
+                  ) : (
+                    <span className="text-sm">提交并验证 Submit & Validate</span>
+                  )}
+                </button>
+
+                {lastFeedback && (
+                  <div className={`p-5 rounded-2xl border ${lastFeedback.isCorrect ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'} animate-in fade-in slide-in-from-bottom-2`}>
+                    <p className={`font-bold text-sm mb-2 ${lastFeedback.isCorrect ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {lastFeedback.isCorrect ? '✅ 完美！' : '⚠️ 需打磨：'}
+                    </p>
+                    <p className="text-xs text-slate-700 leading-relaxed">{lastFeedback.feedback}</p>
+                    {lastFeedback.betterVersion && !lastFeedback.isCorrect && (
+                      <div className="mt-4 pt-3 border-t border-dashed border-slate-200">
+                        <p className="text-xs text-slate-600 italic">
+                          <span className="font-bold mr-1">建议版本:</span> {renderRuby(lastFeedback.betterVersion)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </main>
-      )}
-    </div>
-  );
+
+              {/* Practice Mode Navigation */}
+              {isPracticeMode === 2 && (
+                <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 shadow-sm mt-4"> {/* Added mt-4 */}
+                  <button
+                    onClick={handlePrevWord}
+                    disabled={currentPracticeIndex === 0}
+                    className="flex items-center space-x-2 text-[10px] font-black text-slate-500 uppercase hover:text-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    ← 上一词
+                  </button>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    {currentPracticeIndex + 1} / {filteredAndSortedVocab.length}
+                  </span>
+                  <button
+                    onClick={handleNextWord}
+                    disabled={currentPracticeIndex === filteredAndSortedVocab.length - 1 && lastFeedback?.isCorrect} // Can't go next if last word and not correct
+                    className="flex items-center space-x-2 text-[10px] font-black text-indigo-600 uppercase hover:text-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    下一词 →
+                  </button>
+                </div>
+              )}
+            </div>
+          </main>
+        )}
+      </div>
+    );
 };
 
 export default ReviewVault;

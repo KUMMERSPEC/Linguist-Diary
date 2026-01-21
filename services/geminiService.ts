@@ -22,6 +22,42 @@ const getJapaneseInstruction = (language: string) => {
     : baseInstruction;
 };
 
+/**
+ * Helper function to generate more specific and user-friendly AI error messages.
+ * @param error The error object caught from an AI API call.
+ * @returns A string containing the user-friendly error message.
+ */
+const getAiErrorMessage = (error: any) => {
+  console.error("AI API Error:", error);
+  let errorMessage = "AI 处理失败，请稍后重试。";
+
+  if (error instanceof Error) {
+    if (error.message.includes("Failed to fetch") ||
+        error.message.includes("Network request failed") ||
+        error.message.includes("network error") ||
+        error.message.includes("timed out")) {
+      errorMessage = "网络连接不稳定或处理超时，请检查网络后重试。";
+    } else if (error.message.includes("JSON.parse")) {
+      errorMessage = "AI 返回的数据格式不正确，请稍后重试。";
+    } else if (error.message.includes("API key not valid") ||
+               error.message.includes("Authentication failed")) {
+      errorMessage = "API 密钥无效或未配置。请联系管理员。";
+    } else if (error.message.includes("Requested entity was not found")) {
+      errorMessage = "API 密钥请求实体未找到，请检查您的付费密钥是否已正确选择。";
+    } else {
+      errorMessage = `AI 处理失败：${error.message}`;
+    }
+  }
+
+  // Truncate message if it's too long
+  if (errorMessage.length > 200) {
+    errorMessage = errorMessage.substring(0, 197) + "...";
+  }
+
+  return errorMessage;
+};
+
+
 // Analyzes a diary entry for grammar, vocabulary, and style improvements.
 export const analyzeDiaryEntry = async (text: string, language: string, history: DiaryEntry[] = []): Promise<DiaryAnalysis> => {
   const ai = getAiInstance();
@@ -102,7 +138,7 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
       }
     });
     return JSON.parse(response.text) as DiaryAnalysis;
-  } catch (error: any) { throw new Error(error.message || "Analysis failed."); }
+  } catch (error: any) { throw new Error(getAiErrorMessage(error)); }
 };
 
 // Evaluates a user's retelling of a source text.
@@ -151,7 +187,7 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
       accuracyScore: Number(result.accuracyScore) || 0,
       qualityScore: Number(result.qualityScore) || 0
     };
-  } catch (e) { throw new Error("Evaluation failed."); }
+  } catch (e: any) { throw new Error(getAiErrorMessage(e)); }
 };
 
 // Validates vocabulary usage. (BetterVersion now strictly PLAIN TEXT)
@@ -181,8 +217,8 @@ export const validateVocabUsage = async (word: string, meaning: string, sentence
       }
     });
     return JSON.parse(response.text);
-  } catch (e) {
-    throw new Error("Validation failed.");
+  } catch (e: any) {
+    throw new Error(getAiErrorMessage(e));
   }
 };
 
@@ -201,8 +237,8 @@ export const generatePracticeArtifact = async (language: string, keywords: strin
       The text should be natural and suitable for study. ${getJapaneseInstruction(language)}`,
     });
     return response.text || "";
-  } catch (e) {
-    throw new Error("Generation failed.");
+  } catch (e: any) {
+    throw new Error(getAiErrorMessage(e));
   }
 };
 
@@ -221,7 +257,7 @@ export const generateDiaryAudio = async (text: string): Promise<string> => {
       },
     });
     return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
-  } catch (error) { throw error; }
+  } catch (error: any) { throw new Error(getAiErrorMessage(error)); }
 };
 
 // Combines chat history into a single narrative for analysis.
@@ -239,5 +275,10 @@ export const getChatFollowUp = async (history: ChatMessage[], language: string):
       For the reply: ${getJapaneseInstruction(language)}`,
     });
     return response.text?.trim() || "";
-  } catch (e) { return "..."; }
+  } catch (e: any) { 
+    // This function specifically returns "..." on error for a smoother chat experience,
+    // so we'll catch and return the default behavior.
+    console.error("Chat follow-up failed:", e);
+    return "..."; 
+  }
 };
