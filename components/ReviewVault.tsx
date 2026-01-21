@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { DiaryEntry, AdvancedVocab, PracticeRecord } from '../types';
 import { validateVocabUsage, generateDiaryAudio } from '../services/geminiService';
 
@@ -47,6 +47,22 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
     return text.replace(/\[(.*?)\]\(.*?\)/g, '$1');
   };
 
+  // 高亮显示句子中的关键词
+  const highlightSentence = (sentence: string, wordWithRuby: string) => {
+    const keyword = stripRuby(wordWithRuby);
+    if (!keyword) return sentence;
+    
+    // 全文转义及高亮
+    const regex = new RegExp(`(${keyword})`, 'gi');
+    const parts = sentence.split(regex);
+    
+    return parts.map((part, i) => 
+      part.toLowerCase() === keyword.toLowerCase() 
+        ? <span key={i} className="text-indigo-600 font-black border-b-2 border-indigo-100 px-0.5">{part}</span> 
+        : part
+    );
+  };
+
   const handlePracticeSubmit = async () => {
     if (!practiceInput.trim() || !currentGem || isValidating) return;
     setIsValidating(true);
@@ -65,9 +81,10 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
       
       if (result.isCorrect) {
         setPracticeInput('');
-        // 成功后不立即切走，让用户看一眼反馈
+        alert("✨ 太棒了！用法非常准确。");
+      } else {
+        alert(`💡 建议优化：${result.feedback}`);
       }
-      alert(result.isCorrect ? "✨ 太棒了！用法非常准确。" : `💡 建议优化：${result.feedback}`);
     } catch (e) {
       alert("验证失败，请重试。");
     } finally {
@@ -97,11 +114,11 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700 pb-20">
+    <div className="space-y-8 animate-in fade-in duration-700 pb-20 relative">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
           <h2 className="text-3xl md:text-4xl font-black text-slate-900 serif-font">珍宝复习馆</h2>
-          <p className="text-slate-500 mt-2 text-sm italic">温故而知新，打磨您的表达艺术。</p>
+          <p className="text-slate-500 mt-2 text-sm italic">打磨表达，将每一个词汇化为馆藏级记忆。</p>
         </div>
         <div className="flex bg-white p-1 rounded-2xl border border-slate-200 shadow-sm self-start">
           <button onClick={() => setActiveTab('gems')} className={`px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 ${activeTab === 'gems' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}>
@@ -115,10 +132,22 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
 
       {activeTab === 'gems' && (
         currentGem ? (
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-            {/* 左侧：标本展柜 */}
-            <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white rounded-[3rem] border border-slate-200 shadow-xl p-10 flex flex-col items-center text-center relative overflow-hidden h-full">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
+            {/* 移动端悬浮提示条 (仅移动端可见，且在 gems 标签页) */}
+            <div className="md:hidden sticky top-[-1px] left-0 right-0 z-40 bg-white/90 backdrop-blur-xl border-b border-slate-200 px-4 py-3 flex items-center justify-between -mx-4 shadow-sm animate-in slide-in-from-top-full">
+               <div className="flex items-center space-x-3 overflow-hidden">
+                  <div className="w-1.5 h-6 bg-indigo-600 rounded-full shrink-0"></div>
+                  <div className="min-w-0">
+                    <h4 className="text-lg font-black text-slate-900 serif-font truncate">{renderRuby(currentGem.word)}</h4>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase truncate">{currentGem.meaning}</p>
+                  </div>
+               </div>
+               <button onClick={() => playAudio(currentGem.word)} className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center">🎧</button>
+            </div>
+
+            {/* 左侧：标本展柜 (PC 端 Sticky) */}
+            <div className="lg:col-span-2 lg:sticky lg:top-8 z-10">
+              <div className="bg-white rounded-[3rem] border border-slate-200 shadow-xl p-8 md:p-10 flex flex-col items-center text-center relative overflow-hidden h-fit">
                 <div className="absolute top-0 right-0 p-8 opacity-5 text-9xl font-serif">“</div>
                 <div className="mb-8 flex flex-col items-center w-full">
                   <div className="flex items-center justify-between w-full mb-6">
@@ -128,24 +157,24 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                     <div className="flex items-center space-x-1">
                        <button 
                         disabled={currentIndex === 0}
-                        onClick={() => setCurrentIndex(prev => prev - 1)}
+                        onClick={() => {setCurrentIndex(prev => prev - 1); setPracticeInput(''); window.scrollTo({top: 0, behavior: 'smooth'});}}
                         className="p-2 hover:bg-slate-50 rounded-full disabled:opacity-20"
                        >←</button>
                        <button 
                         disabled={currentIndex === featuredGems.length - 1}
-                        onClick={() => setCurrentIndex(prev => prev + 1)}
+                        onClick={() => {setCurrentIndex(prev => prev + 1); setPracticeInput(''); window.scrollTo({top: 0, behavior: 'smooth'});}}
                         className="p-2 hover:bg-slate-50 rounded-full disabled:opacity-20"
                        >→</button>
                     </div>
                   </div>
                   
-                  <h3 className="text-5xl font-black text-slate-900 serif-font mb-4 leading-relaxed">
+                  <h3 className="text-4xl md:text-5xl font-black text-slate-900 serif-font mb-4 leading-relaxed">
                     {renderRuby(currentGem.word)}
                   </h3>
                   <button onClick={() => playAudio(currentGem.word)} className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${playingAudio ? 'bg-indigo-600 text-white animate-pulse shadow-lg' : 'bg-indigo-50 text-indigo-400 hover:bg-indigo-100 shadow-sm'}`}>🎧</button>
                 </div>
 
-                <p className="text-xl text-slate-500 italic mb-10 serif-font leading-relaxed">
+                <p className="text-lg md:text-xl text-slate-500 italic mb-10 serif-font leading-relaxed">
                   {currentGem.meaning}
                 </p>
 
@@ -164,9 +193,9 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
             </div>
 
             {/* 右侧：工作台与历史足迹 */}
-            <div className="lg:col-span-3 space-y-6 flex flex-col h-full min-h-[600px]">
+            <div className="lg:col-span-3 space-y-8 flex flex-col">
                {/* 练习区域 */}
-               <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm p-10 flex flex-col shrink-0">
+               <div id="practice-workbench" className="bg-white rounded-[3rem] border border-slate-200 shadow-sm p-8 md:p-10 flex flex-col shrink-0">
                   <div className="flex items-center justify-between mb-6">
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">工作台 Workbench</h4>
                     <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-50 px-3 py-1 rounded-full">Level: {currentGem.level}</span>
@@ -175,7 +204,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                     value={practiceInput}
                     onChange={(e) => setPracticeInput(e.target.value)}
                     placeholder={`在此尝试使用 "${stripRuby(currentGem.word)}" ...`}
-                    className="w-full text-xl md:text-2xl text-slate-700 serif-font italic leading-relaxed border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-200 min-h-[120px]"
+                    className="w-full text-xl md:text-2xl text-slate-700 serif-font italic leading-relaxed border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-200 min-h-[160px]"
                   />
                   <div className="mt-6">
                     <button 
@@ -188,23 +217,23 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                   </div>
                </div>
                
-               {/* 历史记录：增加了固定高度和滚动条 */}
-               <div className="flex-1 bg-white rounded-[3rem] border border-slate-200 shadow-sm p-10 flex flex-col overflow-hidden">
-                  <div className="flex items-center justify-between mb-6 shrink-0">
+               {/* 历史记录：增加了关键词高亮 */}
+               <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm p-8 md:p-10 flex flex-col">
+                  <div className="flex items-center justify-between mb-8 shrink-0">
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">历史练习足迹 Logs</h4>
                     <span className="text-[10px] font-black text-slate-300">{(currentGem.practices?.length || 0)} RECORDS</span>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto no-scrollbar space-y-6 pr-2">
+                  <div className="space-y-10">
                     {currentGem.practices && currentGem.practices.length > 0 ? (
                       currentGem.practices.map((log, li) => (
                         <div key={li} className="group/log relative pl-6">
                           <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-slate-100 group-hover/log:bg-indigo-200 transition-colors"></div>
                           <div className="absolute left-[-3px] top-2 w-2 h-2 rounded-full bg-white border-2 border-slate-200 group-hover/log:border-indigo-400 transition-colors"></div>
                           
-                          <div className="space-y-2">
-                            <p className="text-base text-slate-700 serif-font italic leading-relaxed group-hover/log:text-indigo-900 transition-colors">
-                              “ {stripRuby(log.sentence)} ”
+                          <div className="space-y-3">
+                            <p className="text-lg text-slate-700 serif-font italic leading-relaxed">
+                              “ {highlightSentence(stripRuby(log.sentence), currentGem.word)} ”
                             </p>
                             <div className="flex items-center space-x-3">
                               <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-tighter ${log.status === 'Perfect' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
@@ -213,10 +242,11 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                               <span className="text-[9px] text-slate-300 font-bold">{new Date(log.timestamp).toLocaleDateString()}</span>
                             </div>
                             {log.betterVersion && log.betterVersion !== log.sentence && (
-                              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 mt-2">
-                                <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                                  <span className="text-indigo-400 mr-2">✦</span>
-                                  {stripRuby(log.betterVersion)}
+                              <div className="bg-indigo-50/30 p-5 rounded-2xl border border-indigo-100/30 mt-3 relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-1 h-full bg-indigo-400/50"></div>
+                                <p className="text-xs text-indigo-700 leading-relaxed font-medium">
+                                  <span className="text-indigo-400 mr-2 font-black">✦ 馆长建议:</span>
+                                  {highlightSentence(stripRuby(log.betterVersion), currentGem.word)}
                                 </p>
                               </div>
                             )}
@@ -224,9 +254,9 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                         </div>
                       ))
                     ) : (
-                      <div className="h-full flex flex-col items-center justify-center opacity-30 py-10">
+                      <div className="py-20 flex flex-col items-center justify-center opacity-30">
                         <div className="text-4xl mb-4">📜</div>
-                        <p className="text-[10px] font-black uppercase tracking-widest">暂无档案记录</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest">暂无记录，开始你的第一次练习吧</p>
                       </div>
                     )}
                   </div>

@@ -4,34 +4,32 @@ import { DiaryAnalysis, ChatMessage, RehearsalEvaluation, DiaryEntry } from "../
 
 const getAiInstance = () => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("API key is missing.");
-  }
+  if (!apiKey) throw new Error("API key is missing.");
   return new GoogleGenAI({ apiKey });
+};
+
+// 抽取公共的日语指令
+const getJapaneseInstruction = (language: string) => {
+  const isJapanese = language.toLowerCase() === 'japanese' || language === '日本語';
+  return isJapanese 
+    ? "CRITICAL: For Japanese, ALWAYS use '[Kanji](furigana)' format for ALL kanji in ALL fields (including word, meaning, usage, and feedback). Example: [今日](きょう). NEVER output plain kanji without brackets."
+    : "";
 };
 
 export const analyzeDiaryEntry = async (text: string, language: string, history: DiaryEntry[] = []): Promise<DiaryAnalysis> => {
   const ai = getAiInstance();
   const model = 'gemini-3-pro-preview';
-  const isJapanese = language.toLowerCase() === 'japanese' || language === '日本語';
-  
   const historyContext = history.length > 0 
-    ? `\n[MUSEUM ARCHIVES - PREVIOUS ENTRIES]\n${history.map(h => `- Date: ${h.date}, Key Corrections: ${h.analysis?.corrections.map(c => c.improved).slice(0, 2).join(', ')}`).join('\n')}`
+    ? `\n[ARCHIVES]\n${history.map(h => `- ${h.date}: ${h.analysis?.corrections.map(c => c.improved).slice(0, 1)}`).join('\n')}`
     : "";
-
-  const japaneseInstruction = isJapanese 
-    ? "IMPORTANT for Japanese: For ALL text fields, provide Furigana for Kanji using the syntax '[Kanji](furigana)'. Example: [今日](きょう). Apply this to words, meanings, usages, and feedback."
-    : "";
-
-  const diffInstruction = "In the 'diffedText' field, you MUST wrap deleted/incorrect parts in '<rem>...</rem>' and added/corrected parts in '<add>...</add>'.";
 
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `You are the Lead Curator of the Linguist Diary Museum. Analyze this ${language} artifact: "${text}". 
+      contents: `Role: Lead Curator. Analyze artifact: "${text}" in ${language}. 
       ${historyContext}
-      ${diffInstruction}
-      ${japaneseInstruction}`,
+      Format 'diffedText' with <add> and <rem>. 
+      ${getJapaneseInstruction(language)}`,
       config: {
         thinkingConfig: { thinkingBudget: 4000 },
         responseMimeType: "application/json",
@@ -85,25 +83,43 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
       }
     });
     return JSON.parse(response.text) as DiaryAnalysis;
-  } catch (error: any) {
-    throw new Error(error.message || "Analysis failed.");
-  }
+  } catch (error: any) { throw new Error(error.message || "Analysis failed."); }
+};
+
+export const validateVocabUsage = async (word: string, meaning: string, sentence: string, language: string) => {
+  const ai = getAiInstance();
+  const model = 'gemini-3-flash-preview';
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: `Check usage of "${word}" in "${sentence}" (${language}). Output JSON. ${getJapaneseInstruction(language)}`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            isCorrect: { type: Type.BOOLEAN },
+            feedback: { type: Type.STRING },
+            betterVersion: { type: Type.STRING }
+          },
+          required: ["isCorrect", "feedback"]
+        }
+      }
+    });
+    return JSON.parse(response.text);
+  } catch (error) { return { isCorrect: false, feedback: "Error." }; }
 };
 
 export const generatePracticeArtifact = async (language: string, keywords?: string): Promise<string> => {
   const ai = getAiInstance();
   const model = 'gemini-3-flash-preview';
-  const isJapanese = language.toLowerCase() === 'japanese' || language === '日本語';
-  const japaneseInstruction = isJapanese ? "Provide Furigana for Kanji using '[Kanji](furigana)'." : "";
-  
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `${keywords ? `Keywords: "${keywords}".` : "Daily scene description."} ${japaneseInstruction} 
-      The text must be in ${language}. 40-50 words max.`,
+      contents: `Generate 40-word text in ${language}. ${keywords ? `Include: ${keywords}` : ""} ${getJapaneseInstruction(language)}`,
     });
-    return response.text?.trim() || "No text generated.";
-  } catch (e) { return "Error generating practice text."; }
+    return response.text?.trim() || "";
+  } catch (e) { return "Error."; }
 };
 
 export const evaluateRetelling = async (source: string, retelling: string, language: string): Promise<RehearsalEvaluation> => {
@@ -112,7 +128,7 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `Evaluate retelling in ${language}. Source: "${source}", Retelling: "${retelling}". Response in Chinese.`,
+      contents: `Evaluate retelling in ${language}. Source: "${source}", Retelling: "${retelling}". Response in Chinese. ${getJapaneseInstruction(language)}`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -130,30 +146,6 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
     });
     return JSON.parse(response.text);
   } catch (e) { throw new Error("Evaluation failed."); }
-};
-
-export const validateVocabUsage = async (word: string, meaning: string, sentence: string, language: string) => {
-  const ai = getAiInstance();
-  const model = 'gemini-3-flash-preview';
-  try {
-    const response = await ai.models.generateContent({
-      model,
-      contents: `Verify usage of "${word}" in "${sentence}" (${language}). Output JSON.`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            isCorrect: { type: Type.BOOLEAN },
-            feedback: { type: Type.STRING },
-            betterVersion: { type: Type.STRING }
-          },
-          required: ["isCorrect", "feedback"]
-        }
-      }
-    });
-    return JSON.parse(response.text);
-  } catch (error) { return { isCorrect: false, feedback: "Error." }; }
 };
 
 export const generateDiaryAudio = async (text: string): Promise<string> => {
@@ -181,8 +173,8 @@ export const getChatFollowUp = async (history: ChatMessage[], language: string):
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Reply in ${language} to: ${JSON.stringify(history)}.`,
+      contents: `Reply in ${language} to: ${JSON.stringify(history)}. ${getJapaneseInstruction(language)}`,
     });
-    return response.text?.trim() || "Continue.";
-  } catch (e) { return "Go on..."; }
+    return response.text?.trim() || "";
+  } catch (e) { return "..."; }
 };
