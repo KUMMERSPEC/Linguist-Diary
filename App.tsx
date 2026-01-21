@@ -14,7 +14,7 @@ import ChatEditor from './components/ChatEditor';
 import ReviewVault from './components/ReviewVault';
 import Rehearsal from './components/Rehearsal';
 
-import { ViewState, DiaryEntry, ChatMessage, RehearsalEvaluation, DiaryIteration } from './types';
+import { ViewState, DiaryEntry, ChatMessage, RehearsalEvaluation, DiaryIteration, AdvancedVocab } from './types';
 import { analyzeDiaryEntry, synthesizeDiary } from './services/geminiService';
 
 const firebaseConfig = {
@@ -83,12 +83,10 @@ const App: React.FC = () => {
             if (docSnap.exists()) {
               const cloudEntries = docSnap.data().entries || [];
               if (cloudEntries.length > 0) {
-                // 如果本地没有数据，则拉取云端。如果有本地数据，以本地为准（防止覆盖新写的日记）
                 const localEntries = JSON.parse(localStorage.getItem('linguist_entries') || '[]');
                 if (localEntries.length === 0) setEntries(cloudEntries);
               }
             } else {
-              // 初次登录，在云端初始化空档
               await setDoc(docRef, { 
                 uid: fbUser.uid, 
                 displayName: fbUser.displayName, 
@@ -98,10 +96,6 @@ const App: React.FC = () => {
             }
           } catch (err: any) {
             console.error("Cloud Sync detailed error:", err);
-            // 提示用户可能的原因
-            if (err.message?.includes('permission-denied')) {
-              console.warn("提示：请检查 Firebase 控制台的 Firestore 规则是否已设为允许读写。");
-            }
           }
         } else if (savedUser) {
           setUser(JSON.parse(savedUser));
@@ -199,6 +193,14 @@ const App: React.FC = () => {
     setView('dashboard');
   };
 
+  // 提取所有可用的进阶词汇用于 Chat 中的强制生产练习
+  const availableGems = entries.flatMap(e => 
+    (e.analysis?.advancedVocab || []).map(v => ({
+      ...v,
+      language: e.language
+    }))
+  );
+
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
@@ -233,7 +235,7 @@ const App: React.FC = () => {
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} isLoading={isLoading} initialText={rewriteBaseId ? entries.find(e => e.id === rewriteBaseId)?.originalText : ''} initialLanguage={rewriteBaseId ? entries.find(e => e.id === rewriteBaseId)?.language : 'English'} />}
       {view === 'review' && currentEntry?.analysis && <Review analysis={currentEntry.analysis} language={currentEntry.language} iterations={currentEntry.iterations} onSave={handleSaveEntry} onBack={() => setView('editor')} />}
       {view === 'history' && <History entries={entries} onSelect={(e) => { if(e.type==='diary') {setCurrentEntry(e); setView('review');} }} onDelete={async (id) => { if(!window.confirm("移除吗？")) return; const updated = entries.filter(e => e.id !== id); setEntries(updated); await syncEntries(updated); }} onRewrite={(e) => { setRewriteBaseId(e.id); setView('editor'); }} />}
-      {view === 'chat' && <ChatEditor onFinish={async (t, l) => { setIsLoading(true); try { const text = await synthesizeDiary(t, l); await handleAnalyze(text, l); } finally { setIsLoading(false); } }} />}
+      {view === 'chat' && <ChatEditor allGems={availableGems} onFinish={async (t, l) => { setIsLoading(true); try { const text = await synthesizeDiary(t, l); await handleAnalyze(text, l); } finally { setIsLoading(false); } }} />}
       {view === 'review_vault' && <ReviewVault entries={entries} onUpdateMastery={async (eid, w, m, r) => { const updated = entries.map(entry => { if (entry.id === eid && entry.analysis) { const uv = entry.analysis.advancedVocab.map(v => v.word === w ? { ...v, mastery: m, practices: r ? [r, ...(v.practices || [])] : v.practices } : v); return { ...entry, analysis: { ...entry.analysis, advancedVocab: uv } }; } return entry; }); setEntries(updated); await syncEntries(updated); }} onReviewEntry={(e) => { setCurrentEntry(e); setView('review'); }} />}
       {view === 'rehearsal' && <Rehearsal onSaveToMuseum={async (l, r) => { const newEntry: DiaryEntry = { id: `reh_${Date.now()}`, timestamp: Date.now(), date: new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }), originalText: r.userRetelling || "", language: l, type: 'rehearsal', rehearsal: r }; const updated = [newEntry, ...entries]; setEntries(updated); await syncEntries(updated); }} />}
     </Layout>
