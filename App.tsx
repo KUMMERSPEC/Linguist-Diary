@@ -53,7 +53,6 @@ const App: React.FC = () => {
   const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
-    // 检查本地是否有已登录的用户
     const savedUser = localStorage.getItem('linguist_user');
     const savedEntries = localStorage.getItem('linguist_entries');
 
@@ -65,7 +64,7 @@ const App: React.FC = () => {
       }
     }
 
-    if (isFirebaseValid && app) {
+    if (isFirebaseValid && app && db) {
       const auth = getAuth(app);
       const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
         if (fbUser) {
@@ -76,15 +75,33 @@ const App: React.FC = () => {
           };
           setUser(userData);
           setIsSandbox(false);
+          
           try {
             const docRef = doc(db!, 'users', fbUser.uid);
             const docSnap = await getDoc(docRef);
+            
             if (docSnap.exists()) {
               const cloudEntries = docSnap.data().entries || [];
-              if (cloudEntries.length > 0) setEntries(cloudEntries);
+              if (cloudEntries.length > 0) {
+                // 如果本地没有数据，则拉取云端。如果有本地数据，以本地为准（防止覆盖新写的日记）
+                const localEntries = JSON.parse(localStorage.getItem('linguist_entries') || '[]');
+                if (localEntries.length === 0) setEntries(cloudEntries);
+              }
+            } else {
+              // 初次登录，在云端初始化空档
+              await setDoc(docRef, { 
+                uid: fbUser.uid, 
+                displayName: fbUser.displayName, 
+                entries: [],
+                createdAt: Date.now()
+              });
             }
-          } catch (err) {
-            console.warn("Cloud sync failed, staying in local-first mode.");
+          } catch (err: any) {
+            console.error("Cloud Sync detailed error:", err);
+            // 提示用户可能的原因
+            if (err.message?.includes('permission-denied')) {
+              console.warn("提示：请检查 Firebase 控制台的 Firestore 规则是否已设为允许读写。");
+            }
           }
         } else if (savedUser) {
           setUser(JSON.parse(savedUser));
@@ -93,9 +110,7 @@ const App: React.FC = () => {
       });
       return unsubscribe;
     } else {
-      if (savedUser) {
-        setUser(JSON.parse(savedUser));
-      }
+      if (savedUser) setUser(JSON.parse(savedUser));
       setIsInitializing(false);
     }
   }, []);
@@ -104,9 +119,9 @@ const App: React.FC = () => {
     localStorage.setItem('linguist_entries', JSON.stringify(newEntries));
     if (user && !isSandbox && isFirebaseValid && db) {
       try {
-        await updateDoc(doc(db, 'users', user.uid), { entries: newEntries });
+        await setDoc(doc(db, 'users', user.uid), { entries: newEntries }, { merge: true });
       } catch (e) {
-        console.warn("Firebase update failed");
+        console.error("Firebase update failed:", e);
       }
     }
   };
