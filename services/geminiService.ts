@@ -34,12 +34,12 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
       STRICT DIFF RULES (CRITICAL):
       1. 'diffedText' MUST use MINIMAL CHARACTER-LEVEL DIFFS. 
       2. ONLY wrap the EXACT wrong character, particle, or word in <add> and <rem> tags. 
-      3. DO NOT wrap unchanged surrounding context. For example, if adding a comma, ONLY wrap the comma: "文<add>、</add>章". 
-      4. If a verb conjugation changes, try to only wrap the changed suffix if it makes sense, or just the single verb. 
-      5. NEVER wrap an entire phrase if only one word inside it changes.
+      3. PUNCTUATION: If only a comma is added, ONLY use <add>、</add>. DO NOT include adjacent words.
+      4. EXAMPLE: "その時<add>、</add>大きくて" is correct. "<rem>その時</rem><add>その时、</add>" is INCORRECT.
+      5. NEVER wrap an entire phrase if only one word or punctuation inside it changes.
       
       ANNOTATIONS RULE:
-      1. For the 'corrections' array: NEVER use the '[Kanji](furigana)' format. Use PLAIN TEXT ONLY for both 'original' and 'improved' fields.
+      1. For the 'corrections' array: DO NOT use the '[Kanji](furigana)' format. Use PLAIN TEXT ONLY (No brackets, no furigana).
       
       FORMATTING RULES:
       1. For 'overallFeedback' (written in Chinese): Use plain text ONLY.
@@ -146,7 +146,7 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
   } catch (e) { throw new Error("Evaluation failed."); }
 };
 
-// Fix for Error in file components/ReviewVault.tsx on line 3: Validates vocabulary usage.
+// Validates vocabulary usage. (BetterVersion now strictly PLAIN TEXT)
 export const validateVocabUsage = async (word: string, meaning: string, sentence: string, language: string): Promise<{ isCorrect: boolean; feedback: string; betterVersion?: string }> => {
   const ai = getAiInstance();
   const model = 'gemini-3-flash-preview';
@@ -154,7 +154,11 @@ export const validateVocabUsage = async (word: string, meaning: string, sentence
     const response = await ai.models.generateContent({
       model,
       contents: `Evaluate if the word "${word}" (meaning: ${meaning}) is used correctly in the following ${language} sentence: "${sentence}".
-      Provide feedback in Chinese. If it's not perfect, provide a better version.`,
+      
+      RULES:
+      1. Provide feedback in Chinese.
+      2. If not perfect, provide 'betterVersion' in PLAIN TEXT ONLY. 
+      3. FORBIDDEN: Do NOT use '[Kanji](furigana)' format in betterVersion.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -174,7 +178,7 @@ export const validateVocabUsage = async (word: string, meaning: string, sentence
   }
 };
 
-// Fix for Error in file components/Rehearsal.tsx on line 4: Generates practice materials.
+// Generates practice materials.
 export const generatePracticeArtifact = async (language: string, keywords: string, difficulty: string, topic: string): Promise<string> => {
   const ai = getAiInstance();
   const model = 'gemini-3-pro-preview';

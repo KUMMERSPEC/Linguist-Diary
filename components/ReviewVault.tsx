@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useRef } from 'react';
 import { DiaryEntry, AdvancedVocab, PracticeRecord } from '../types';
 import { validateVocabUsage, generateDiaryAudio } from '../services/geminiService';
@@ -91,7 +92,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
 
   if (activeTab === 'all') {
     return (
-      <div className="animate-in fade-in duration-500 space-y-3 p-1">
+      <div className="animate-in fade-in duration-500 space-y-3 p-1 max-w-6xl mx-auto">
         <header className="flex items-center justify-between shrink-0 mb-2">
           <h2 className="text-lg font-bold text-slate-900 serif-font">珍宝档案 Archive</h2>
           <button onClick={() => setActiveTab('gems')} className="text-[11px] font-black text-indigo-600 uppercase">返回 BACK</button>
@@ -117,7 +118,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
   }
 
   return (
-    <div className="flex flex-col animate-in fade-in duration-500 pb-40 md:pb-8 p-0 md:p-2">
+    <div className="flex flex-col animate-in fade-in duration-500 pb-40 md:pb-8 p-0 md:p-2 max-w-6xl mx-auto">
       <header className="flex items-center justify-between mb-6 shrink-0 px-4 md:px-0">
         <div className="flex flex-col">
           <h2 className="text-2xl md:text-3xl font-black text-slate-900 serif-font">珍宝复习馆</h2>
@@ -138,38 +139,38 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
         </div>
       ) : (
         <>
-          <div className="flex flex-col lg:grid lg:grid-cols-2 lg:gap-8 px-2 md:px-0">
+          <div className="flex flex-col lg:grid lg:grid-cols-2 lg:gap-6 px-2 md:px-0">
             <div className="mb-6 lg:mb-0">
               <div className="bg-white rounded-[2.5rem] md:rounded-[3rem] border border-slate-200 shadow-xl overflow-hidden flex flex-col h-full">
-                <div className="p-7 md:p-12 relative flex-1 flex flex-col">
+                <div className="p-7 md:p-12 lg:p-10 relative flex-1 flex flex-col">
                   <div className="absolute top-7 right-7 flex items-center space-x-3">
                     <div className="px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-full uppercase tracking-widest">{currentGem.level}</div>
                     <div className="text-[11px] font-black text-slate-300 tracking-[0.2em]">{currentIndex + 1}/{featuredGems.length}</div>
                   </div>
 
-                  <div className="mt-4 mb-5 md:mb-10">
-                    <div className="flex items-center gap-4 flex-wrap mb-2 md:mb-4">
-                      <h3 className="text-3xl md:text-6xl font-black text-slate-900 serif-font">
+                  <div className="mt-4 mb-5 md:mb-10 lg:mb-6">
+                    <div className="flex items-center gap-4 flex-wrap mb-2 md:mb-4 lg:mb-3">
+                      <h3 className="text-3xl md:text-6xl lg:text-5xl font-black text-slate-900 serif-font">
                         {renderRuby(currentGem.word)}
                       </h3>
                       <button 
                         onClick={() => handlePlayAudio(currentGem.word)}
-                        className={`w-9 h-9 md:w-14 md:h-14 rounded-full flex items-center justify-center transition-all ${playingAudio ? 'bg-indigo-600 text-white animate-pulse shadow-lg' : 'bg-slate-50 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600'}`}
+                        className={`w-9 h-9 md:w-14 md:h-14 lg:w-11 lg:h-11 rounded-full flex items-center justify-center transition-all ${playingAudio ? 'bg-indigo-600 text-white animate-pulse shadow-lg' : 'bg-slate-50 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600'}`}
                       >
-                        <span className="text-base md:text-2xl">🎧</span>
+                        <span className="text-base md:text-2xl lg:text-xl">🎧</span>
                       </button>
                     </div>
-                    <p className="text-lg md:text-2xl text-indigo-900/70 font-bold italic serif-font leading-relaxed">{currentGem.meaning}</p>
+                    <p className="text-lg md:text-2xl lg:text-xl text-indigo-900/70 font-bold italic serif-font leading-relaxed">{currentGem.meaning}</p>
                   </div>
 
-                  <div className="flex-1 space-y-4">
+                  <div className="flex-1 space-y-4 lg:space-y-3">
                     <div className="flex items-center gap-3">
                       <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Contextual Usage</span>
                       <div className="h-[1px] flex-1 bg-slate-100"></div>
                     </div>
-                    <div className="bg-slate-50/70 p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] border border-slate-100 relative group transition-colors hover:bg-white">
+                    <div className="bg-slate-50/70 p-6 md:p-10 lg:p-8 rounded-[2rem] md:rounded-[2.5rem] lg:rounded-[2rem] border border-slate-100 relative group transition-colors hover:bg-white">
                       <span className="absolute top-3 left-5 text-3xl opacity-10 serif-font text-indigo-600">“</span>
-                      <p className="text-lg md:text-2xl text-slate-600 italic serif-font leading-[1.8] relative z-10">
+                      <p className="text-lg md:text-2xl lg:text-xl text-slate-600 italic serif-font leading-[1.8] relative z-10">
                           {renderRuby(currentGem.usage)}
                       </p>
                       <span className="absolute bottom-3 right-5 text-3xl opacity-10 serif-font text-indigo-600 rotate-180">“</span>
@@ -202,8 +203,8 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
             </div>
 
             <div className="flex flex-col">
-              <div className="flex flex-col bg-white rounded-[2.5rem] md:rounded-[3rem] border border-slate-200 shadow-xl p-7 md:p-12 relative min-h-[300px]">
-                  <div className="flex items-center justify-between mb-5">
+              <div className="flex flex-col bg-white rounded-[2.5rem] md:rounded-[3rem] border border-slate-200 shadow-xl p-7 md:p-12 lg:p-10 relative min-h-[300px]">
+                  <div className="flex items-center justify-between mb-5 lg:mb-4">
                     <div className="flex items-center space-x-3">
                       <div className="w-2 h-2 bg-indigo-600 rounded-full animate-pulse"></div>
                       <h4 className="text-[11px] font-black text-slate-800 tracking-[0.2em] uppercase">撰写造句 PRACTICE</h4>
@@ -215,12 +216,12 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                     )}
                   </div>
 
-                  <div className="flex-1 flex flex-col space-y-5">
+                  <div className="flex-1 flex flex-col space-y-5 lg:space-y-4">
                     <textarea
                       value={practiceInput}
                       onChange={(e) => setPracticeInput(e.target.value)}
                       placeholder={`使用“${currentGem.word.replace(/\[(.*?)\]\(.*?\)/g, '$1')}”造句...`}
-                      className="w-full bg-slate-50/40 border border-slate-100 focus:bg-white focus:ring-8 focus:ring-indigo-500/5 focus:border-indigo-200 rounded-[2rem] p-6 md:p-10 text-lg md:text-2xl serif-font placeholder:text-slate-300 resize-none min-h-[160px] md:min-h-[220px] transition-all"
+                      className="w-full bg-slate-50/40 border border-slate-100 focus:bg-white focus:ring-8 focus:ring-indigo-500/5 focus:border-indigo-200 rounded-[2rem] p-6 md:p-10 lg:p-8 text-lg md:text-2xl lg:text-xl serif-font placeholder:text-slate-300 resize-none min-h-[160px] md:min-h-[220px] lg:min-h-[180px] transition-all"
                       disabled={isValidating}
                     />
                     
@@ -228,20 +229,20 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                     <button
                       onClick={handlePracticeSubmit}
                       disabled={!practiceInput.trim() || isValidating}
-                      className={`hidden lg:flex w-full py-5 md:py-6 rounded-3xl font-black transition-all active:scale-[0.98] items-center justify-center space-x-4 shadow-2xl ${
+                      className={`hidden lg:flex w-full py-5 md:py-6 lg:py-5 rounded-3xl font-black transition-all active:scale-[0.98] items-center justify-center space-x-4 shadow-2xl ${
                         isValidating ? 'bg-slate-100 text-slate-300 shadow-none' : 'bg-slate-900 text-white shadow-indigo-100/50 hover:bg-indigo-600'
                       }`}
                     >
                       {isValidating ? (
                         <div className="animate-spin rounded-full h-6 w-6 border-2 border-slate-300 border-t-indigo-500" />
                       ) : (
-                        <span className="text-sm md:text-lg tracking-[0.2em] uppercase">✨ 提交 AI 审阅 SUBMIT</span>
+                        <span className="text-sm md:text-lg lg:text-base tracking-[0.2em] uppercase">✨ 提交 AI 审阅 SUBMIT</span>
                       )}
                     </button>
 
                     {feedback && (
                       <div className="mt-4 animate-in slide-in-from-bottom-5">
-                        <div className={`p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] border-2 shadow-sm ${feedback.isCorrect ? 'bg-emerald-50/50 border-emerald-100' : 'bg-rose-50/50 border-rose-100'}`}>
+                        <div className={`p-6 md:p-10 lg:p-8 rounded-[2rem] md:rounded-[2.5rem] border-2 shadow-sm ${feedback.isCorrect ? 'bg-emerald-50/50 border-emerald-100' : 'bg-rose-50/50 border-rose-100'}`}>
                           <div className="flex items-start gap-4 mb-4">
                             <div className={`w-9 h-9 md:w-11 md:h-11 rounded-2xl flex items-center justify-center shrink-0 text-lg md:text-xl ${feedback.isCorrect ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
                               {feedback.isCorrect ? '✨' : '🧐'}
@@ -251,12 +252,12 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                             </p>
                           </div>
                           {feedback.betterVersion && (
-                            <div className="bg-white/90 p-6 md:p-10 rounded-[1.5rem] md:rounded-[2rem] border border-white/50 shadow-inner relative overflow-hidden">
+                            <div className="bg-white/90 p-6 md:p-10 lg:p-8 rounded-[1.5rem] md:rounded-[2rem] border border-white/50 shadow-inner relative overflow-hidden">
                                 <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-50 rounded-bl-[2rem] opacity-30"></div>
                                 <h5 className="text-[10px] md:text-[11px] font-black text-indigo-400 uppercase tracking-widest mb-3 flex items-center">
                                   <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full mr-2"></span> Masterful Revision
                                 </h5>
-                                <p className="text-lg md:text-2xl font-bold text-indigo-950 serif-font italic leading-relaxed">“{feedback.betterVersion}”</p>
+                                <p className="text-lg md:text-2xl lg:text-xl font-bold text-indigo-950 serif-font italic leading-relaxed">“{feedback.betterVersion}”</p>
                             </div>
                           )}
                         </div>
@@ -265,7 +266,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                   </div>
               </div>
 
-              <div className="hidden lg:flex bg-white/50 border border-slate-100 rounded-[1.5rem] p-6 mt-6 items-center justify-between shrink-0">
+              <div className="hidden lg:flex bg-white/50 border border-slate-100 rounded-[1.5rem] p-6 mt-4 items-center justify-between shrink-0">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Mastery Progress</span>
                 <div className="flex space-x-3">
                   {[1, 2, 3].map(step => (

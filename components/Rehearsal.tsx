@@ -64,9 +64,10 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
     if (!diff) return null;
     let processed = diff.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
     processed = processed
-      .replace(/<add>(.*?)<\/add>/g, '<span class="bg-emerald-50 text-emerald-700 px-1 rounded-md border-b-2 border-emerald-500/30 font-bold mx-0.5 shadow-sm">$1</span>')
-      .replace(/<rem>(.*?)<\/rem>/g, '<span class="bg-rose-50 text-rose-500 line-through decoration-rose-500/40 px-1 rounded-md mx-0.5 opacity-80">$1</span>');
-    return <div className="leading-[2.2] text-lg md:text-2xl text-slate-800 serif-font" dangerouslySetInnerHTML={{ __html: processed }} />;
+      .replace(/<add>(.*?)<\/add>/g, '<span class="bg-emerald-500/20 text-emerald-200 px-1 rounded-md border-b-2 border-emerald-400/30 font-bold mx-0.5 shadow-sm">$1</span>')
+      .replace(/<rem>(.*?)<\/rem>/g, '<span class="text-slate-500 line-through px-1 opacity-60">$1</span>');
+    // 重要修正：将 text-slate-800 改为 text-slate-100 以在深色报告背景下显示
+    return <div className="leading-[2.2] text-lg md:text-2xl text-slate-100 serif-font" dangerouslySetInnerHTML={{ __html: processed }} />;
   };
 
   const startNewSession = async () => {
