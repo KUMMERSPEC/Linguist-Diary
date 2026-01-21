@@ -37,7 +37,6 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
   const [currentIndex, setCurrentIndex] = useState(0);
   const currentGem = featuredGems[currentIndex];
 
-  // 为当前选中的单词获取历史练习记录
   const gemPractices = useMemo(() => {
     if (!currentGem) return [];
     const entry = entries.find(e => e.id === currentGem.entryId);
@@ -157,9 +156,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
         </div>
       ) : (
         <div className="space-y-10">
-          {/* 第一部分：核心练习工作台 */}
           <div className="flex flex-col lg:grid lg:grid-cols-12 lg:gap-8 px-2 md:px-0 items-stretch">
-            {/* 左侧：单词展示卡 (占据 5/12) */}
             <div className="lg:col-span-5 flex flex-col">
               <div className="bg-white rounded-[2.5rem] md:rounded-[3rem] border border-slate-200 shadow-xl overflow-hidden flex flex-col h-full relative group">
                 <div className="p-8 md:p-12 lg:p-10 relative flex-1 flex flex-col min-h-[400px]">
@@ -216,7 +213,6 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
               </div>
             </div>
 
-            {/* 右侧：实验室输入区 (占据 7/12) */}
             <div className="lg:col-span-7 flex flex-col">
               <div className="bg-white rounded-[2.5rem] md:rounded-[3rem] border border-slate-200 shadow-xl p-8 md:p-12 lg:p-10 relative flex-1 flex flex-col space-y-6">
                   <div className="flex items-center justify-between">
@@ -250,7 +246,6 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                     </button>
                   </div>
 
-                  {/* 熟练度指示条 */}
                   <div className="pt-6 border-t border-slate-100 flex items-center justify-between">
                     <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Exhibit Mastery</span>
                     <div className="flex space-x-2">
@@ -263,7 +258,6 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
             </div>
           </div>
 
-          {/* 第二部分：审阅简报 & 履历 (解决拥挤的核心区域) */}
           <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
              <div className="flex items-center space-x-4 mb-6 px-4 md:px-0">
                 <h3 className="text-lg md:text-xl font-black text-slate-900 serif-font">修复履历 Artifact Ledger</h3>
@@ -272,7 +266,6 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
              </div>
 
              <div className="space-y-6">
-                {/* 刚才提交的最新的反馈，如果存在 */}
                 {lastFeedback && (
                   <div className="bg-indigo-600 p-8 md:p-12 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group mb-8 animate-in zoom-in-95">
                     <div className="absolute top-0 right-0 p-8 opacity-10 text-8xl font-serif pointer-events-none">✨</div>
@@ -294,7 +287,6 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                   </div>
                 )}
 
-                {/* 历史记录列表 */}
                 <div className="grid grid-cols-1 gap-4">
                   {gemPractices.length > 0 ? gemPractices.map((record, idx) => (
                     <div key={idx} className="bg-white p-6 md:p-10 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-all group flex flex-col md:flex-row md:items-center gap-6">

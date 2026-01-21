@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
@@ -70,14 +71,22 @@ const App: React.FC = () => {
           };
           setUser(userData);
           setIsSandbox(false);
+          
+          // Fetch cloud data but catch offline errors gracefully
           try {
             const docRef = doc(db!, 'users', fbUser.uid);
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
               const cloudEntries = docSnap.data().entries || [];
-              if (cloudEntries.length > 0) setEntries(cloudEntries);
+              if (cloudEntries.length > 0) {
+                setEntries(cloudEntries);
+                localStorage.setItem('linguist_entries', JSON.stringify(cloudEntries));
+              }
             }
-          } catch (err) { console.error(err); }
+          } catch (err: any) {
+            console.warn("Cloud fetch failed (possibly offline). Using local data.", err.message);
+            // Local data is already set from localStorage at top of useEffect
+          }
         } else if (savedUser) {
           setUser(JSON.parse(savedUser));
         }
