@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { RehearsalEvaluation } from '../types';
 import { generatePracticeArtifact, evaluateRetelling, generateDiaryAudio } from '../services/geminiService';
@@ -42,6 +43,7 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
   const [showSource, setShowSource] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasSaved, setHasSaved] = useState(false);
+  const [viewMode, setViewMode] = useState<'diff' | 'final'>('diff');
 
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
@@ -56,6 +58,14 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
     if (!text) return '';
     const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
     return <span dangerouslySetInnerHTML={{ __html: html }} />;
+  };
+
+  const renderDiffText = (diff: string) => {
+    let processed = diff.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
+    processed = processed
+      .replace(/<add>(.*?)<\/add>/g, '<span class="bg-emerald-50 text-emerald-700 px-1 rounded-md border-b-2 border-emerald-500/30 font-bold mx-0.5 shadow-sm">$1</span>')
+      .replace(/<rem>(.*?)<\/rem>/g, '<span class="bg-rose-50 text-rose-500 line-through decoration-rose-500/40 px-1 rounded-md mx-0.5 opacity-80">$1</span>');
+    return <div className="leading-[2.2] text-lg md:text-2xl text-slate-800 serif-font" dangerouslySetInnerHTML={{ __html: processed }} />;
   };
 
   const startNewSession = async () => {
@@ -107,7 +117,8 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
       return;
     }
     try {
-      const base64Audio = await generateDiaryAudio(textToPlay);
+      const cleanText = textToPlay.replace(/\[(.*?)\]\(.*?\)/g, '$1');
+      const base64Audio = await generateDiaryAudio(cleanText);
       if (!base64Audio) return;
       const binaryString = atob(base64Audio);
       const bytes = new Uint8Array(binaryString.length);
@@ -281,7 +292,6 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
                 </div>
              </div>
              
-             {/* 电脑端按钮：仅在大屏幕且还没有评估结果时显示 */}
              {!evaluation && (
                <button 
                   onClick={handleEvaluate}
@@ -296,25 +306,6 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
                </button>
              )}
           </div>
-        </div>
-      )}
-
-      {/* 移动端悬浮提交按钮：仅在演练激活、未生成评估且是小屏幕时显示 */}
-      {isSessionActive && !evaluation && (
-        <div className="lg:hidden fixed bottom-20 left-0 right-0 px-6 py-4 z-[110] pointer-events-none">
-          <button
-            onClick={handleEvaluate}
-            disabled={!userRetelling.trim() || isEvaluating}
-            className={`w-full py-4 rounded-3xl font-black transition-all active:scale-[0.98] flex items-center justify-center space-x-4 shadow-[0_15px_30px_-5px_rgba(0,0,0,0.3)] pointer-events-auto ${
-              isEvaluating ? 'bg-slate-100 text-slate-300 shadow-none' : 'bg-slate-900 text-white'
-            }`}
-          >
-            {isEvaluating ? (
-              <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-300 border-t-indigo-500" />
-            ) : (
-              <span className="text-sm tracking-[0.2em] uppercase">🏛️ 提交评估报告 SUBMIT</span>
-            )}
-          </button>
         </div>
       )}
 
@@ -376,11 +367,22 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
                         {renderRuby(sourceText)}
                       </p>
                    </div>
-                   <div className="bg-white/5 p-8 md:p-12 rounded-[2.5rem] border border-white/10">
-                      <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-6 block">馆长示范 Masterpiece Suggestion</h4>
-                      <p className="text-lg md:text-2xl text-indigo-100 leading-[1.8] serif-font italic">
-                        “ {renderRuby(evaluation.suggestedVersion)} ”
-                      </p>
+                   <div className="bg-white/10 p-8 md:p-12 rounded-[2.5rem] border border-white/10 shadow-inner">
+                      <div className="flex items-center justify-between mb-6">
+                         <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block">修复后的复述 Restored Retelling</h4>
+                         <div className="flex bg-white/5 p-1 rounded-xl">
+                            <button onClick={() => setViewMode('diff')} className={`px-4 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${viewMode === 'diff' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>对比</button>
+                            <button onClick={() => setViewMode('final')} className={`px-4 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${viewMode === 'final' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>最终</button>
+                         </div>
+                      </div>
+                      <div className="text-indigo-100 italic">
+                        {viewMode === 'diff' ? renderDiffText(evaluation.diffedRetelling) : renderRuby(evaluation.suggestedVersion)}
+                      </div>
+                      <div className="mt-8 flex justify-end">
+                         <button onClick={() => handlePlayAudio(evaluation.suggestedVersion)} className="flex items-center space-x-2 text-[10px] font-black text-indigo-400 uppercase hover:text-white transition-colors">
+                            <span>🎧 收听馆长示范</span>
+                         </button>
+                      </div>
                    </div>
                 </div>
               </div>

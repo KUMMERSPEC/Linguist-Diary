@@ -45,6 +45,7 @@ export interface RehearsalEvaluation {
   contentFeedback: string;
   languageFeedback: string;
   suggestedVersion: string;
+  diffedRetelling: string; // 新增：对比后的复述文本
   sourceText?: string;
   userRetelling?: string;
 }
@@ -64,7 +65,7 @@ export interface DiaryEntry {
   type: 'diary' | 'rehearsal';
   analysis?: DiaryAnalysis;
   rehearsal?: RehearsalEvaluation;
-  iterations?: DiaryIteration[]; // 新增：存储重写历史
+  iterations?: DiaryIteration[]; 
 }
 
 export interface ChatMessage {

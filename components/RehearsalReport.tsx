@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { RehearsalEvaluation } from '../types';
 import { generateDiaryAudio } from '../services/geminiService';
@@ -11,12 +12,21 @@ interface RehearsalReportProps {
 
 const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language, date, onBack }) => {
   const [isPlaying, setIsPlaying] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'diff' | 'final'>('diff');
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   const renderRuby = (text: string) => {
     if (!text) return '';
     const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
     return <span dangerouslySetInnerHTML={{ __html: html }} />;
+  };
+
+  const renderDiffText = (diff: string) => {
+    let processed = diff.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
+    processed = processed
+      .replace(/<add>(.*?)<\/add>/g, '<span class="bg-emerald-500/20 text-emerald-200 px-1 rounded-md border-b-2 border-emerald-400/30 font-bold mx-0.5">$1</span>')
+      .replace(/<rem>(.*?)<\/rem>/g, '<span class="text-slate-500 line-through px-1 opacity-60">$1</span>');
+    return <div className="leading-[2.2] text-lg md:text-2xl text-slate-100 serif-font" dangerouslySetInnerHTML={{ __html: processed }} />;
   };
 
   const handlePlayAudio = async (textToPlay: string, id: string) => {
@@ -27,7 +37,6 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
     }
     setIsPlaying(id);
     try {
-      // 清除之前可能的标记
       const cleanText = textToPlay.replace(/\[(.*?)\]\(.*?\)/g, '$1');
       const base64Audio = await generateDiaryAudio(cleanText);
       if (!base64Audio) {
@@ -78,12 +87,9 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
       </header>
 
       <div className="bg-slate-900 rounded-[2.5rem] md:rounded-[4rem] p-8 md:p-14 text-white shadow-2xl relative overflow-hidden">
-        {/* 背景装饰 */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl -mr-48 -mt-48 pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -ml-32 -mb-32 pointer-events-none"></div>
-
+        
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 relative z-10">
-          {/* 左侧评分与反馈 */}
           <div className="lg:col-span-4 space-y-8">
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-white/5 p-6 rounded-3xl border border-white/10 text-center hover:bg-white/10 transition-colors">
@@ -110,7 +116,6 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
             </div>
           </div>
 
-          {/* 右侧文本对比 */}
           <div className="lg:col-span-8 space-y-8">
             <div className="bg-white/5 p-8 md:p-12 rounded-[2.5rem] border border-white/5 relative group">
               <div className="flex items-center justify-between mb-6">
@@ -127,19 +132,25 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
               </p>
             </div>
 
-            <div className="bg-white/5 p-8 md:p-12 rounded-[3rem] border border-white/10 shadow-inner relative group">
+            <div className="bg-white/10 p-8 md:p-12 rounded-[3rem] border border-white/10 shadow-inner relative group">
               <div className="flex items-center justify-between mb-6">
-                <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">馆长示范 Masterpiece Suggestion</h4>
-                <button 
-                  onClick={() => handlePlayAudio(evaluation.suggestedVersion, 'suggested')}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isPlaying === 'suggested' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-slate-400 hover:text-white'}`}
-                >
-                  {isPlaying === 'suggested' ? '⏹' : '🎧'}
-                </button>
+                <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">修复后的复述 Restored Version</h4>
+                <div className="flex items-center space-x-4">
+                  <div className="flex bg-white/5 p-1 rounded-xl">
+                    <button onClick={() => setViewMode('diff')} className={`px-4 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${viewMode === 'diff' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>对比</button>
+                    <button onClick={() => setViewMode('final')} className={`px-4 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${viewMode === 'final' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>最终</button>
+                  </div>
+                  <button 
+                    onClick={() => handlePlayAudio(evaluation.suggestedVersion, 'suggested')}
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isPlaying === 'suggested' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-slate-400 hover:text-white'}`}
+                  >
+                    {isPlaying === 'suggested' ? '⏹' : '🎧'}
+                  </button>
+                </div>
               </div>
-              <p className="text-lg md:text-2xl text-indigo-100 leading-[1.8] serif-font italic">
-                “ {renderRuby(evaluation.suggestedVersion)} ”
-              </p>
+              <div className="italic">
+                {viewMode === 'diff' ? renderDiffText(evaluation.diffedRetelling) : renderRuby(evaluation.suggestedVersion)}
+              </div>
             </div>
           </div>
         </div>

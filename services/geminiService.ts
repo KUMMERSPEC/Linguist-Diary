@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { DiaryAnalysis, ChatMessage, RehearsalEvaluation, DiaryEntry } from "../types";
 
@@ -151,13 +152,14 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
       USER'S RETELLING: "${retelling}"
       
       TASKS:
-      1. Compare accuracy and detail.
-      2. Analyze language quality.
-      3. CRITICAL: 'suggestedVersion' MUST be a polished version of the *USER'S RETELLING*.
+      1. Compare accuracy and detail between source and retelling.
+      2. Analyze language quality of the retelling.
+      3. 'suggestedVersion' MUST be a polished version of the *USER'S RETELLING*.
+      4. 'diffedRetelling' MUST be a diff between *USER'S RETELLING* and 'suggestedVersion' using <add> and <rem> tags.
       
       FORMATTING RULES:
-      1. Provide 'contentFeedback' and 'languageFeedback' in Chinese. USE PLAIN TEXT ONLY. DO NOT use '[Kanji](furigana)' brackets in these two feedback fields.
-      2. For 'suggestedVersion' field specifically: ${getJapaneseInstruction(language)}
+      1. Provide 'contentFeedback' and 'languageFeedback' in Chinese. USE PLAIN TEXT ONLY.
+      2. For 'suggestedVersion' and 'diffedRetelling': ${getJapaneseInstruction(language)}
       3. 'accuracyScore' and 'qualityScore' must be INTEGERS 0-100.`,
       config: {
         thinkingConfig: { thinkingBudget: 4000 },
@@ -169,9 +171,10 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
             qualityScore: { type: Type.INTEGER },
             contentFeedback: { type: Type.STRING },
             languageFeedback: { type: Type.STRING },
-            suggestedVersion: { type: Type.STRING }
+            suggestedVersion: { type: Type.STRING },
+            diffedRetelling: { type: Type.STRING }
           },
-          required: ["accuracyScore", "qualityScore", "contentFeedback", "languageFeedback", "suggestedVersion"]
+          required: ["accuracyScore", "qualityScore", "contentFeedback", "languageFeedback", "suggestedVersion", "diffedRetelling"]
         }
       }
     });
