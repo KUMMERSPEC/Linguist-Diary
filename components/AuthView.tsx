@@ -1,44 +1,47 @@
+
 import React, { useState } from 'react';
-import { signInWithPopup, GoogleAuthProvider, signInAnonymously, Auth } from 'firebase/auth';
+import { signInWithPopup, GoogleAuthProvider, Auth } from 'firebase/auth';
 
 interface AuthViewProps {
   auth: Auth | null;
-  onSandboxLogin: () => void;
+  isFirebaseValid: boolean;
+  onLogin: (userData: { uid: string, displayName: string, photoURL: string }, isMock: boolean) => void;
 }
 
-const AuthView: React.FC<AuthViewProps> = ({ auth, onSandboxLogin }) => {
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+const AuthView: React.FC<AuthViewProps> = ({ auth, isFirebaseValid, onLogin }) => {
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [showDemoNotice, setShowDemoNotice] = useState(false);
 
   const handleGoogleLogin = async () => {
-    if (!auth) {
-      setErrorMsg("Firebase 未初始化：请检查配置或尝试【本地馆长模式】。");
+    if (!isFirebaseValid || !auth) {
+      // 执行演示登录
+      setIsLoggingIn(true);
+      setShowDemoNotice(true);
+      setTimeout(() => {
+        onLogin({
+          uid: 'demo_user',
+          displayName: '演示馆长 (Demo)',
+          photoURL: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix'
+        }, true);
+        setIsLoggingIn(false);
+      }, 1500);
       return;
     }
-    setErrorMsg(null);
+    
+    setIsLoggingIn(true);
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      onLogin({
+        uid: result.user.uid,
+        displayName: result.user.displayName || "馆长",
+        photoURL: result.user.photoURL || ""
+      }, false);
     } catch (error: any) {
-      if (error.code === 'auth/network-request-failed') {
-        setErrorMsg("网络错误：无法连接到 Firebase 服务，请检查网络。");
-      } else if (error.code === 'auth/api-key-not-valid.-please-pass-a-valid-api-key.') {
-        setErrorMsg("Firebase 配置无效：API Key 错误。建议使用【本地馆长模式】预览。");
-      } else {
-        setErrorMsg("登录失败：" + error.message);
-      }
-    }
-  };
-
-  const handleGuestLogin = async () => {
-    if (!auth) {
-      onSandboxLogin();
-      return;
-    }
-    try {
-      await signInAnonymously(auth);
-    } catch (error: any) {
-      // If auth fails for any reason, fallback to sandbox
-      onSandboxLogin();
+      console.error("Login Error:", error);
+      alert(`登录失败: ${error.message}\n建议使用“本地馆长模式”进入。`);
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -59,31 +62,36 @@ const AuthView: React.FC<AuthViewProps> = ({ auth, onSandboxLogin }) => {
             </p>
           </div>
 
-          {errorMsg && (
-            <div className="bg-red-50 border border-red-100 text-red-600 p-4 rounded-2xl text-xs text-left leading-relaxed animate-in fade-in zoom-in">
-              <p className="font-bold mb-1">⚠️ 系统提示：</p>
-              {errorMsg}
+          {showDemoNotice && (
+            <div className="bg-amber-50 border border-amber-100 text-amber-700 p-4 rounded-2xl text-xs text-left leading-relaxed animate-in fade-in zoom-in">
+              <p className="font-bold mb-1">🏛️ 环境提醒：</p>
+              检测到未配置 Firebase。已为你开启“演示模式”，数据将保存在本地浏览器中。
             </div>
           )}
 
           <div className="space-y-4">
             <button 
               onClick={handleGoogleLogin}
-              className="w-full flex items-center justify-center space-x-3 bg-white border-2 border-slate-100 hover:border-indigo-600 hover:bg-indigo-50 transition-all p-4 rounded-2xl font-semibold text-slate-700 shadow-sm"
+              disabled={isLoggingIn}
+              className={`w-full flex items-center justify-center space-x-3 bg-white border-2 border-slate-100 hover:border-indigo-600 hover:bg-indigo-50 transition-all p-4 rounded-2xl font-semibold text-slate-700 shadow-sm ${isLoggingIn ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
-              <span>使用 Google 账号同步</span>
+              {isLoggingIn ? (
+                <div className="w-5 h-5 border-2 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin"></div>
+              ) : (
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
+              )}
+              <span>{isLoggingIn ? '正在准备展厅...' : '使用 Google 账号进入'}</span>
             </button>
             
             <button 
-              onClick={handleGuestLogin}
+              onClick={() => onLogin({ uid: 'local_user', displayName: '本地馆长', photoURL: '' }, true)}
               className="w-full bg-slate-900 text-white p-4 rounded-2xl font-bold shadow-lg hover:bg-indigo-600 transition-all active:scale-95"
             >
-              ✨ 本地馆长模式 (Sandbox)
+              ✨ 访客直接进入 (本地模式)
             </button>
             
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-              本地模式将数据保存在浏览器，无需 Firebase 配置
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-relaxed">
+              数据将加密存储在您的设备本地<br/>随时可以开始撰写
             </p>
           </div>
 

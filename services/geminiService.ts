@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { DiaryAnalysis, ChatMessage, RehearsalEvaluation, DiaryEntry } from "../types";
 
@@ -14,25 +15,28 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
   const model = 'gemini-3-pro-preview';
   const isJapanese = language.toLowerCase() === 'japanese' || language === '日本語';
   
-  // 提取历史数据中的纠错信息作为 AI 的记忆背景
   const historyContext = history.length > 0 
-    ? `\n[USER MUSEUM HISTORY]\n${history.map(h => `- Date: ${h.date}, Lang: ${h.language}, Key Corrections: ${h.analysis?.corrections.map(c => c.improved).join(', ')}`).join('\n')}`
+    ? `\n[MUSEUM ARCHIVES - PREVIOUS ENTRIES]\n${history.map(h => `- Date: ${h.date}, Key Corrections: ${h.analysis?.corrections.map(c => c.improved).slice(0, 2).join(', ')}`).join('\n')}`
     : "";
 
   const japaneseInstruction = isJapanese 
     ? "IMPORTANT for Japanese: For BOTH 'modifiedText' and 'diffedText', provide Furigana for ALL Kanji using the syntax '[Kanji](furigana)'. Example: [今日](きょう)."
     : "";
 
-  const diffInstruction = "In the 'diffedText' field, you MUST wrap deleted parts in '<rem>...</rem>' and added/corrected parts in '<add>...</add>'.";
+  const diffInstruction = "In the 'diffedText' field, you MUST wrap deleted/incorrect parts in '<rem>...</rem>' and added/corrected parts in '<add>...</add>'. This should create a clear comparison within the original sentence structure.";
 
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `You are an elite language professor and museum curator. Analyze this ${language} diary: "${text}". 
+      contents: `You are the Lead Curator of the Linguist Diary Museum. Analyze this ${language} artifact (diary entry): "${text}". 
       ${historyContext}
       
-      CRITICAL INSTRUCTION (MEMORY CHAIN):
-      Look at the provided [USER MUSEUM HISTORY]. If you find recurring grammar mistakes, patterns of error, or overused simple words compared to previous entries, explicitly mention this in 'overallFeedback' as a "Memory Link". Use a warm, observant, and encouraging tone.
+      ROLE:
+      Analyze the text for grammatical precision, vocabulary elegance, and stylistic flow. 
+      Provide a "Museum Restoration" report.
+      
+      MEMORY LINK:
+      Reference patterns from [MUSEUM ARCHIVES] in your 'overallFeedback'. If they made the same mistake before, point it out gently as a "recurring restoration challenge".
       
       ${diffInstruction}
       ${japaneseInstruction}`,
@@ -43,7 +47,7 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
           properties: {
             modifiedText: { type: Type.STRING },
             diffedText: { type: Type.STRING },
-            overallFeedback: { type: Type.STRING, description: "Include Memory Link insights here if applicable, connecting this entry to past ones." },
+            overallFeedback: { type: Type.STRING, description: "Professional, encouraging curator's feedback. Connect to history if possible." },
             corrections: {
               type: Type.ARRAY,
               items: {
@@ -98,22 +102,16 @@ export const generatePracticeArtifact = async (language: string, keywords?: stri
   const model = 'gemini-3-flash-preview';
   
   const keywordInstruction = keywords 
-    ? `CRITICAL: You MUST include these specific keywords in the text: "${keywords}". Ensure they are used naturally.` 
-    : "Generate a short description of a random daily object, culture fact, or tiny story.";
+    ? `CRITICAL: You MUST include these specific keywords: "${keywords}".` 
+    : "Generate a short description of a daily scene or museum object.";
 
   try {
     const response = await ai.models.generateContent({
       model,
       contents: `${keywordInstruction} 
-      The text must be in ${language}.
-      
-      CONSTRAINTS:
-      1. Length: Approximately 40-50 words/characters. Keep it very short and simple.
-      2. Language: Output ONLY the text in ${language}. 
-      3. NO English: Do NOT include any English headers, descriptions, or translations.
-      4. NO Markdown headers: Just the plain text content.`,
+      The text must be in ${language}. 40-50 words max. Plain text only. No English.`,
     });
-    return response.text?.replace(/#{1,6}\s.*?\n/g, '').trim() || "No text generated.";
+    return response.text?.trim() || "No text generated.";
   } catch (e) {
     return "Error generating practice text.";
   }
@@ -125,14 +123,11 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `Compare the user's retelling of a source text.
+      contents: `Museum Exhibition Rehearsal.
       Source: "${source}"
       Retelling: "${retelling}"
       Language: ${language}
-      
-      Score Accuracy (0-100) based on content preservation.
-      Score Quality (0-100) based on grammar and style.
-      Provide helpful feedback in Chinese.`,
+      Evaluate accuracy and quality. Response in Chinese.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -160,19 +155,15 @@ export const validateVocabUsage = async (word: string, meaning: string, sentence
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `Act as a language tutor. The user is trying to use the word/phrase "${word}" (which means: ${meaning}) in a ${language} sentence: "${sentence}".
-      1. Check if the usage is naturally and grammatically correct.
-      2. If not correct, explain why and provide a better version.
-      3. Always encourage the user.
-      Provide feedback in Chinese.`,
+      contents: `Check if "${word}" (Meaning: ${meaning}) is used correctly in: "${sentence}" (${language}). Provide feedback in Chinese.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
             isCorrect: { type: Type.BOOLEAN },
-            feedback: { type: Type.STRING, description: "Feedback for the user in Chinese." },
-            betterVersion: { type: Type.STRING, description: "A corrected or more natural version of the sentence." }
+            feedback: { type: Type.STRING },
+            betterVersion: { type: Type.STRING }
           },
           required: ["isCorrect", "feedback"]
         }
@@ -180,7 +171,7 @@ export const validateVocabUsage = async (word: string, meaning: string, sentence
     });
     return JSON.parse(response.text);
   } catch (error) {
-    return { isCorrect: false, feedback: "馆长刚才开了个小差，没能给出精准的建议。请检查网络并重试。" };
+    return { isCorrect: false, feedback: "系统繁忙，请重试。" };
   }
 };
 
@@ -209,15 +200,7 @@ export const getChatFollowUp = async (history: ChatMessage[], language: string):
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `You are a warm, curious, and sympathetic conversation partner. 
-      Analyze this chat history (in ${language}): ${JSON.stringify(history)}.
-      
-      CRITICAL INSTRUCTIONS:
-      1. Provide EXACTLY ONE single conversational response or follow-up question. 
-      2. ABSOLUTELY DO NOT provide options, lists (Option 1, Option 2...), or multiple versions.
-      3. Respond DIRECTLY and ONLY in ${language}.
-      4. Keep the tone natural, human-like, and supportive.
-      5. Your output should be ready to be shown directly to the user as a single message bubble.`,
+      contents: `Museum Chat Partner. Reply in ${language} to: ${JSON.stringify(history)}. Single message bubble only.`,
     });
     return response.text?.trim() || "Tell me more.";
   } catch (e) { return "Go on..."; }
