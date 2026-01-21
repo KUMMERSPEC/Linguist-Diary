@@ -254,7 +254,7 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
              <div className={`bg-white p-8 md:p-14 rounded-[2.5rem] md:rounded-[3rem] border border-slate-200 shadow-xl relative min-h-[300px] flex items-center justify-center text-center transition-all duration-700 overflow-hidden ${!showSource ? 'blur-3xl grayscale' : ''}`}>
                 <div className="absolute inset-0 opacity-[0.02] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#4f46e5 1px, transparent 1px)', backgroundSize: '32px 32px' }}></div>
                 <div className="max-w-2xl mx-auto relative z-10">
-                  <p className="text-xl md:text-3xl text-slate-700 leading-[2.2] serif-font italic">
+                  <p className="text-lg md:text-2xl text-slate-700 leading-[2.2] serif-font italic">
                     “ {renderRuby(sourceText)} ”
                   </p>
                 </div>
@@ -273,7 +273,7 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
                   value={userRetelling}
                   onChange={(e) => setUserRetelling(e.target.value)}
                   placeholder="凭记忆，尝试复述刚才的内容..."
-                  className="flex-1 w-full border-none focus:ring-0 p-8 md:p-14 text-xl md:text-3xl leading-relaxed serif-font resize-none bg-transparent placeholder:text-slate-300"
+                  className="flex-1 w-full border-none focus:ring-0 p-8 md:p-14 text-lg md:text-2xl leading-relaxed serif-font resize-none bg-transparent placeholder:text-slate-300"
                 />
                 <div className="px-8 py-4 bg-slate-50/50 border-t border-slate-50 flex items-center justify-between shrink-0">
                   <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Retelling Analysis</span>
@@ -372,13 +372,13 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
                 <div className="lg:col-span-8 space-y-8">
                    <div className="bg-white/5 p-8 md:p-10 rounded-[2rem] border border-white/5">
                       <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 block">源文物 Archive Source</h4>
-                      <p className="text-lg md:text-xl text-slate-400 leading-[1.8] serif-font italic">
+                      <p className="text-lg md:text-2xl text-slate-400 leading-[1.8] serif-font italic">
                         {renderRuby(sourceText)}
                       </p>
                    </div>
                    <div className="bg-white/5 p-8 md:p-12 rounded-[2.5rem] border border-white/10">
                       <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-6 block">馆长示范 Masterpiece Suggestion</h4>
-                      <p className="text-xl md:text-3xl text-indigo-100 leading-[2.2] serif-font italic">
+                      <p className="text-lg md:text-2xl text-indigo-100 leading-[1.8] serif-font italic">
                         “ {renderRuby(evaluation.suggestedVersion)} ”
                       </p>
                    </div>

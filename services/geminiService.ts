@@ -10,7 +10,7 @@ const getAiInstance = () => {
 const getJapaneseInstruction = (language: string) => {
   const isJapanese = language.toLowerCase() === 'japanese' || language === '日本語';
   return isJapanese 
-    ? "CRITICAL: For Japanese, ALWAYS use '[Kanji](furigana)' format for ALL kanji. Example: [今日](きょう). NEVER output plain kanji without brackets. DO NOT add any headers or sections."
+    ? "CRITICAL for Japanese: ALWAYS use '[Kanji](furigana)' format for kanji in the target language text. Example: [今日](きょう). NEVER output plain kanji without brackets for study text."
     : "";
 };
 
@@ -27,7 +27,10 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
       contents: `Role: Lead Curator. Analyze artifact: "${text}" in ${language}. 
       ${historyContext}
       Format 'diffedText' with <add> and <rem>. 
-      ${getJapaneseInstruction(language)}`,
+      
+      FORMATTING RULES:
+      1. For 'overallFeedback' (written in Chinese): Use plain text ONLY. DO NOT use '[Kanji](furigana)' brackets.
+      2. For 'modifiedText', 'diffedText', and language examples: ${getJapaneseInstruction(language)}`,
       config: {
         thinkingConfig: { thinkingBudget: 4000 },
         responseMimeType: "application/json",
@@ -90,7 +93,9 @@ export const validateVocabUsage = async (word: string, meaning: string, sentence
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `Check usage of "${word}" in "${sentence}" (${language}). Output JSON. ${getJapaneseInstruction(language)}`,
+      contents: `Check usage of "${word}" in "${sentence}" (${language}). Output JSON. 
+      For 'feedback' (Chinese): Use plain text.
+      For 'betterVersion': ${getJapaneseInstruction(language)}`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -142,19 +147,18 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
       model,
       contents: `Evaluate a language retelling exercise in ${language}. 
       
-      ARCHIVE SOURCE (The baseline information): "${source}"
-      USER'S RETELLING (What the user produced): "${retelling}"
+      ARCHIVE SOURCE: "${source}"
+      USER'S RETELLING: "${retelling}"
       
       TASKS:
-      1. Compare the retelling to the source for accuracy and detail.
-      2. Analyze the language quality of the user's retelling.
-      3. CRITICAL: The 'suggestedVersion' MUST be a polished, corrected, and more natural version of the *USER'S RETELLING*. 
-         Do NOT just repeat or modify the source text. Instead, take what the user tried to say, fix their mistakes, and elevate their expression while keeping their original narrative perspective.
+      1. Compare accuracy and detail.
+      2. Analyze language quality.
+      3. CRITICAL: 'suggestedVersion' MUST be a polished version of the *USER'S RETELLING*.
       
-      CRITICAL REQUIREMENTS:
-      1. Provide response in Chinese (feedback sections).
-      2. 'accuracyScore' and 'qualityScore' MUST be INTEGERS between 0 and 100.
-      3. ${getJapaneseInstruction(language)}`,
+      FORMATTING RULES:
+      1. Provide 'contentFeedback' and 'languageFeedback' in Chinese. USE PLAIN TEXT ONLY. DO NOT use '[Kanji](furigana)' brackets in these two feedback fields.
+      2. For 'suggestedVersion' field specifically: ${getJapaneseInstruction(language)}
+      3. 'accuracyScore' and 'qualityScore' must be INTEGERS 0-100.`,
       config: {
         thinkingConfig: { thinkingBudget: 4000 },
         responseMimeType: "application/json",
@@ -210,7 +214,8 @@ export const getChatFollowUp = async (history: ChatMessage[], language: string):
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Reply in ${language} to: ${JSON.stringify(history)}. ${getJapaneseInstruction(language)}`,
+      contents: `Reply in ${language} to: ${JSON.stringify(history)}. 
+      For the reply: ${getJapaneseInstruction(language)}`,
     });
     return response.text?.trim() || "";
   } catch (e) { return "..."; }

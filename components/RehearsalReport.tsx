@@ -27,7 +27,9 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
     }
     setIsPlaying(id);
     try {
-      const base64Audio = await generateDiaryAudio(textToPlay || "");
+      // 清除之前可能的标记
+      const cleanText = textToPlay.replace(/\[(.*?)\]\(.*?\)/g, '$1');
+      const base64Audio = await generateDiaryAudio(cleanText);
       if (!base64Audio) {
         setIsPlaying(null);
         return;
@@ -45,7 +47,10 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
       source.onended = () => setIsPlaying(null);
       source.start();
       audioSourceRef.current = source;
-    } catch (e) { setIsPlaying(null); }
+    } catch (e) {
+      console.error(e);
+      setIsPlaying(null);
+    }
   };
 
   const getGrade = (score: number) => {
@@ -57,111 +62,84 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
   };
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
-      <header className="mb-8 flex items-center justify-between px-2">
+    <div className="flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-700 pb-24">
+      <header className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4 px-2">
         <div>
           <button onClick={onBack} className="text-slate-400 hover:text-indigo-600 text-[10px] font-black uppercase tracking-widest mb-1 flex items-center group">
-            <span className="mr-1 group-hover:-translate-x-1 transition-transform">←</span> 返回馆藏 BACK TO COLLECTION
+            <span className="mr-1 group-hover:-translate-x-1 transition-transform">←</span> 返回收藏馆 BACK TO EXHIBITS
           </button>
-          <h2 className="text-2xl md:text-4xl font-bold text-slate-900 serif-font">演练回顾 Rehearsal Review</h2>
-          <p className="text-slate-400 text-xs md:text-sm mt-1">{date} · {language} Exhibit</p>
+          <h2 className="text-2xl md:text-4xl font-bold text-slate-900 serif-font">演练评估报告 Rehearsal Review</h2>
+        </div>
+        <div className="flex items-center space-x-3 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white px-4 py-2 rounded-xl border border-slate-100 shadow-sm">
+          <span>{date}</span>
+          <span className="text-slate-200">|</span>
+          <span className="text-indigo-600">{language}</span>
         </div>
       </header>
 
       <div className="bg-slate-900 rounded-[2.5rem] md:rounded-[4rem] p-8 md:p-14 text-white shadow-2xl relative overflow-hidden">
-        <div className="absolute bottom-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl -mr-40 -mb-40"></div>
-
-        <div className="flex items-center space-x-4 mb-10">
-          <div className="w-3 h-10 bg-indigo-500 rounded-full"></div>
-          <h3 className="text-xl md:text-3xl font-bold serif-font tracking-tight">历史评估报告 Archive Report</h3>
-        </div>
+        {/* 背景装饰 */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl -mr-48 -mt-48 pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -ml-32 -mb-32 pointer-events-none"></div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 relative z-10">
-          {/* 左侧：分数与指标 */}
-          <div className="lg:col-span-4 space-y-10">
-            <div className="grid grid-cols-2 gap-6">
-              <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10 text-center">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3">还原度 Accuracy</p>
-                <div className={`text-5xl md:text-7xl font-black serif-font ${getGrade(evaluation.accuracyScore).color}`}>
-                  {getGrade(evaluation.accuracyScore).label}
-                </div>
-                <p className="text-xs font-bold text-slate-400 mt-3">{Math.round(evaluation.accuracyScore)}/100</p>
+          {/* 左侧评分与反馈 */}
+          <div className="lg:col-span-4 space-y-8">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white/5 p-6 rounded-3xl border border-white/10 text-center hover:bg-white/10 transition-colors">
+                <span className="text-[9px] font-black text-slate-500 uppercase block mb-2">还原度 Accuracy</span>
+                <div className={`text-4xl font-black serif-font ${getGrade(evaluation.accuracyScore).color}`}>{getGrade(evaluation.accuracyScore).label}</div>
+                <span className="text-[10px] font-bold text-slate-400 mt-2 block">{Math.round(evaluation.accuracyScore)}/100</span>
               </div>
-              <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10 text-center">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3">表现力 Quality</p>
-                <div className={`text-5xl md:text-7xl font-black serif-font ${getGrade(evaluation.qualityScore).color}`}>
-                  {getGrade(evaluation.qualityScore).label}
-                </div>
-                <p className="text-xs font-bold text-slate-400 mt-3">{Math.round(evaluation.qualityScore)}/100</p>
+              <div className="bg-white/5 p-6 rounded-3xl border border-white/10 text-center hover:bg-white/10 transition-colors">
+                <span className="text-[9px] font-black text-slate-500 uppercase block mb-2">表现力 Quality</span>
+                <div className={`text-4xl font-black serif-font ${getGrade(evaluation.qualityScore).color}`}>{getGrade(evaluation.qualityScore).label}</div>
+                <span className="text-[10px] font-bold text-slate-400 mt-2 block">{Math.round(evaluation.qualityScore)}/100</span>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6">
-              <div className="bg-indigo-500/5 p-6 rounded-3xl border border-indigo-500/10">
-                <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3 flex items-center">
-                  <span className="mr-3">📝</span> 内容反馈 Content
-                </h4>
-                <p className="text-sm md:text-lg text-indigo-50/80 leading-relaxed italic">{evaluation.contentFeedback}</p>
+            <div className="space-y-4">
+              <div className="bg-white/5 p-6 rounded-3xl border border-white/5">
+                <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">内容评价 Content</h4>
+                <p className="text-sm text-slate-300 leading-relaxed italic">{evaluation.contentFeedback}</p>
               </div>
-              <div className="bg-emerald-500/5 p-6 rounded-3xl border border-emerald-500/10">
-                <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-3 flex items-center">
-                  <span className="mr-3">✨</span> 语言反馈 Language
-                </h4>
-                <p className="text-sm md:text-lg text-emerald-50/80 leading-relaxed italic">{evaluation.languageFeedback}</p>
+              <div className="bg-white/5 p-6 rounded-3xl border border-white/5">
+                <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-3">语言评析 Language</h4>
+                <p className="text-sm text-slate-300 leading-relaxed italic">{evaluation.languageFeedback}</p>
               </div>
             </div>
           </div>
 
-          {/* 右侧：演进过程 (原文 -> 复述 -> 示范) */}
-          <div className="lg:col-span-8 flex flex-col space-y-8">
-            {/* 1. 溯源原文 */}
-            <div className="flex flex-col opacity-50">
-               <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500 mr-3"></span>
-                    源文物 Archive Source
-                  </h4>
-                  <button 
-                    onClick={() => handlePlayAudio(evaluation.sourceText || "", 'source')}
-                    className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${isPlaying === 'source' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-slate-400'}`}
-                  >
-                    {isPlaying === 'source' ? '⏹' : '🎧'}
-                  </button>
-               </div>
-               <div className="bg-white/5 p-8 rounded-[2.5rem] border border-dashed border-white/10 text-slate-400 italic serif-font text-base md:text-xl leading-relaxed">
-                  “ {renderRuby(evaluation.sourceText || "")} ”
-               </div>
-            </div>
-
-            {/* 2. 您的复述 */}
-            <div className="flex flex-col">
-               <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center">
-                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-3"></span>
-                 您的复述 Your Retelling
-               </h4>
-               <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/5 text-slate-300 italic serif-font text-base md:text-xl leading-relaxed">
-                  “ {evaluation.userRetelling} ”
-               </div>
-            </div>
-
-            {/* 3. 馆长示范 */}
-            <div className="flex flex-col">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center">
-                  <span className="w-2 h-2 rounded-full bg-indigo-500 mr-3"></span>
-                  馆长示范 Masterwork Suggestion
-                </h4>
+          {/* 右侧文本对比 */}
+          <div className="lg:col-span-8 space-y-8">
+            <div className="bg-white/5 p-8 md:p-12 rounded-[2.5rem] border border-white/5 relative group">
+              <div className="flex items-center justify-between mb-6">
+                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">源文物 Archive Source</h4>
                 <button 
-                  onClick={() => handlePlayAudio(evaluation.suggestedVersion || "", 'suggest')}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isPlaying === 'suggest' ? 'bg-indigo-600 text-white animate-pulse shadow-lg' : 'bg-white/5 text-slate-400 hover:text-white'}`}
+                  onClick={() => handlePlayAudio(evaluation.sourceText || "", 'source')}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isPlaying === 'source' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-slate-400 hover:text-white'}`}
                 >
-                  {isPlaying === 'suggest' ? '⏹' : '🎧'}
+                  {isPlaying === 'source' ? '⏹' : '🎧'}
                 </button>
               </div>
-              <div className="bg-indigo-600/10 p-10 md:p-14 rounded-[3rem] md:rounded-[4rem] border border-indigo-500/20 text-indigo-100 italic serif-font text-lg md:text-2xl lg:text-3xl leading-[2.2] relative">
-                <div className="absolute top-6 right-8 text-6xl opacity-10 font-serif">”</div>
-                {renderRuby(evaluation.suggestedVersion)}
+              <p className="text-lg md:text-2xl text-slate-400 leading-[1.8] serif-font italic">
+                “ {renderRuby(evaluation.sourceText || "")} ”
+              </p>
+            </div>
+
+            <div className="bg-white/5 p-8 md:p-12 rounded-[3rem] border border-white/10 shadow-inner relative group">
+              <div className="flex items-center justify-between mb-6">
+                <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">馆长示范 Masterpiece Suggestion</h4>
+                <button 
+                  onClick={() => handlePlayAudio(evaluation.suggestedVersion, 'suggested')}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isPlaying === 'suggested' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-slate-400 hover:text-white'}`}
+                >
+                  {isPlaying === 'suggested' ? '⏹' : '🎧'}
+                </button>
               </div>
+              <p className="text-lg md:text-2xl text-indigo-100 leading-[1.8] serif-font italic">
+                “ {renderRuby(evaluation.suggestedVersion)} ”
+              </p>
             </div>
           </div>
         </div>
