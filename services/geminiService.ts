@@ -1,6 +1,6 @@
-
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { DiaryAnalysis, ChatMessage, RehearsalEvaluation, DiaryEntry } from "../types";
+import { decode, decodeAudioData } from '../utils/audioHelpers';
 
 // Helper to initialize the GenAI client using the environment's API key.
 const getAiInstance = () => {
@@ -36,7 +36,7 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
       2. ONLY wrap the EXACT wrong character, particle, or word in <add> and <rem> tags. 
       3. PUNCTUATION: If only a comma is added, ONLY use <add>、</add>. DO NOT include adjacent words.
       4. EXAMPLE: "その時<add>、</add>大きくて" is correct. "<rem>その時</rem><add>その时、</add>" is INCORRECT.
-      5. NEVER wrap an entire phrase if only one word or punctuation inside it changes.
+      5. NEVER wrap an entire phrase if only one word or punctuation inside it changes. If a word needs to be entirely replaced, wrap only that word: <rem>oldword</rem><add>newword</add>.
       
       ANNOTATIONS RULE:
       1. For the 'corrections' array: DO NOT use the '[Kanji](furigana)' format. Use PLAIN TEXT ONLY (No brackets, no furigana).
@@ -116,6 +116,9 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
       1. 'suggestedVersion' MUST be a polished version of the USER'S RETELLING.
       2. 'diffedRetelling' MUST use MINIMAL CHARACTER-LEVEL DIFFS between USER'S RETELLING and suggestedVersion using <add> and <rem> tags.
       3. For 'diffedRetelling' and 'suggestedVersion': ${getJapaneseInstruction(language)}
+      4. PUNCTUATION: If only a comma is added, ONLY use <add>、</add>. DO NOT include adjacent words.
+      5. EXAMPLE: "その時<add>、</add>大きくて" is correct. "<rem>その時</rem><add>その时、</add>" is INCORRECT.
+      6. NEVER wrap an entire phrase if only one word or punctuation inside it changes. If a word needs to be entirely replaced, wrap only that word: <rem>oldword</rem><add>newword</add>.
       
       FORMATTING RULES:
       1. Provide 'contentFeedback' and 'languageFeedback' in Chinese using PLAIN TEXT.

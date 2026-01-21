@@ -1,7 +1,7 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { DiaryAnalysis, DiaryIteration, Correction } from '../types';
 import { generateDiaryAudio } from '../services/geminiService';
+import { decode, decodeAudioData } from '../utils/audioHelpers'; // Import new helpers
 
 interface ReviewProps {
   analysis: DiaryAnalysis;
@@ -34,11 +34,18 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations = [], on
   };
 
   const handlePlayAudio = async (text: string, id: string = 'main') => {
-    if (!text || playingAudioId === id) {
-      audioSourceRef.current?.stop();
-      setPlayingAudioId(null);
-      return;
+    if (!text) return;
+
+    // Stop current audio if playing and it's the same ID or trying to play new audio
+    if (audioSourceRef.current) {
+      audioSourceRef.current.stop();
+      audioSourceRef.current = null;
+      if (playingAudioId === id) { // Toggling off the current audio
+        setPlayingAudioId(null);
+        return;
+      }
     }
+    
     setPlayingAudioId(id);
     try {
       const base64Audio = await generateDiaryAudio(text);
@@ -46,28 +53,26 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations = [], on
         setPlayingAudioId(null);
         return;
       }
-      const binaryString = atob(base64Audio);
-      if (binaryString.length === 0) {
+      
+      const bytes = decode(base64Audio);
+      if (bytes.length === 0) {
         setPlayingAudioId(null);
         return;
       }
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      const dataInt16 = new Int16Array(bytes.buffer);
-      if (dataInt16.length === 0) {
-        setPlayingAudioId(null);
-        return;
-      }
-      const audioBuffer = audioCtx.createBuffer(1, dataInt16.length, 24000);
-      audioBuffer.getChannelData(0).set(Array.from(dataInt16).map(v => v / 32768));
+      const audioBuffer = await decodeAudioData(bytes, audioCtx, 24000, 1);
+
       const source = audioCtx.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(audioCtx.destination);
       source.onended = () => setPlayingAudioId(null);
       source.start();
       audioSourceRef.current = source;
-    } catch (e) { setPlayingAudioId(null); }
+    } catch (e) { 
+      console.error("Error playing audio:", e);
+      setPlayingAudioId(null); 
+    }
   };
 
   const renderDiffText = (diff?: string) => {

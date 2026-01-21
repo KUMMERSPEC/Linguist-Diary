@@ -1,7 +1,9 @@
 
+
 import React, { useState, useRef } from 'react';
 import { RehearsalEvaluation } from '../types';
 import { generateDiaryAudio } from '../services/geminiService';
+import { decode, decodeAudioData } from '../utils/audioHelpers'; // Import new helpers
 
 interface RehearsalReportProps {
   evaluation: RehearsalEvaluation;
@@ -32,11 +34,16 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
 
   const handlePlayAudio = async (textToPlay: string, id: string) => {
     if (!textToPlay) return;
-    if (isPlaying === id) {
-      audioSourceRef.current?.stop();
-      setIsPlaying(null);
-      return;
+
+    if (audioSourceRef.current) {
+      audioSourceRef.current.stop();
+      audioSourceRef.current = null;
+      if (isPlaying === id) { // Toggling off the current audio
+        setIsPlaying(null);
+        return;
+      }
     }
+    
     setIsPlaying(id);
     try {
       const cleanText = textToPlay.replace(/\[(.*?)\]\(.*?\)/g, '$1');
@@ -45,21 +52,23 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
         setIsPlaying(null);
         return;
       }
-      const binaryString = atob(base64Audio);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+      const bytes = decode(base64Audio);
+      if (bytes.length === 0) {
+        setIsPlaying(null);
+        return;
+      }
+
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      const dataInt16 = new Int16Array(bytes.buffer);
-      const buffer = audioCtx.createBuffer(1, dataInt16.length, 24000);
-      buffer.getChannelData(0).set(Array.from(dataInt16).map(v => v / 32768.0));
+      const audioBuffer = await decodeAudioData(bytes, audioCtx, 24000, 1);
+      
       const source = audioCtx.createBufferSource();
-      source.buffer = buffer;
+      source.buffer = audioBuffer;
       source.connect(audioCtx.destination);
       source.onended = () => setIsPlaying(null);
       source.start();
       audioSourceRef.current = source;
     } catch (e) {
-      console.error(e);
+      console.error("Error playing audio:", e);
       setIsPlaying(null);
     }
   };
