@@ -42,11 +42,23 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations = [], on
     setPlayingAudioId(id);
     try {
       const base64Audio = await generateDiaryAudio(text);
+      if (!base64Audio) {
+        setPlayingAudioId(null);
+        return;
+      }
       const binaryString = atob(base64Audio);
+      if (binaryString.length === 0) {
+        setPlayingAudioId(null);
+        return;
+      }
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       const dataInt16 = new Int16Array(bytes.buffer);
+      if (dataInt16.length === 0) {
+        setPlayingAudioId(null);
+        return;
+      }
       const audioBuffer = audioCtx.createBuffer(1, dataInt16.length, 24000);
       audioBuffer.getChannelData(0).set(Array.from(dataInt16).map(v => v / 32768));
       const source = audioCtx.createBufferSource();

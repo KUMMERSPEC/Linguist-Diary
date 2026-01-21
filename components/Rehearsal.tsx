@@ -78,12 +78,16 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
     }
     try {
       const base64Audio = await generateDiaryAudio(sourceText);
+      if (!base64Audio) return;
       const binaryString = atob(base64Audio);
+      if (binaryString.length === 0) return;
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
       
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       const dataInt16 = new Int16Array(bytes.buffer);
+      if (dataInt16.length === 0) return;
+      
       const buffer = audioCtx.createBuffer(1, dataInt16.length, 24000);
       const channelData = buffer.getChannelData(0);
       for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;

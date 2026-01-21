@@ -96,12 +96,24 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
     setPlayingAudioId(id);
     try {
       const base64Audio = await generateDiaryAudio(text);
+      if (!base64Audio) {
+        setPlayingAudioId(null);
+        return;
+      }
       const binaryString = atob(base64Audio);
+      if (binaryString.length === 0) {
+        setPlayingAudioId(null);
+        return;
+      }
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       audioContextRef.current = audioCtx;
       const dataInt16 = new Int16Array(bytes.buffer);
+      if (dataInt16.length === 0) {
+        setPlayingAudioId(null);
+        return;
+      }
       const buffer = audioCtx.createBuffer(1, dataInt16.length, 24000);
       const channelData = buffer.getChannelData(0);
       for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
@@ -129,7 +141,7 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
       
       const newMastery = result.isCorrect ? Math.min((currentGem.mastery || 0) + 1, 3) : Math.max((currentGem.mastery || 0) - 1, 0);
       
-      // 核心修改：只有在完全正确时才创建练习记录 record
+      // 核心修改：只有在完全正确 (Perfect) 时才创建练习记录 record，不再保存 Polished 句子
       const recordToSave: PracticeRecord | undefined = result.isCorrect ? {
         sentence: userSentence,
         originalAttempt: userSentence,
