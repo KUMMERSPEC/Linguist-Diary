@@ -30,8 +30,14 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          # 核心修正：使用 API_KEY 匹配用户的 Secrets 命名
+          # 核心修正：确保所有密钥都在构建时注入
           API_KEY: ${{ secrets.API_KEY }}
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_AUTH_DOMAIN: ${{ secrets.FIREBASE_AUTH_DOMAIN }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
       - name: Setup Pages
         uses: actions/configure-pages@v4
       - name: Upload artifact
