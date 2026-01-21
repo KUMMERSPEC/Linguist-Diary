@@ -8,11 +8,10 @@ const getAiInstance = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-// 抽取公共的日语指令
 const getJapaneseInstruction = (language: string) => {
   const isJapanese = language.toLowerCase() === 'japanese' || language === '日本語';
   return isJapanese 
-    ? "CRITICAL: For Japanese, ALWAYS use '[Kanji](furigana)' format for ALL kanji in ALL fields (including word, meaning, usage, and feedback). Example: [今日](きょう). NEVER output plain kanji without brackets."
+    ? "CRITICAL: For Japanese, ALWAYS use '[Kanji](furigana)' format for ALL kanji. Example: [今日](きょう). NEVER output plain kanji without brackets. DO NOT add any headers or sections."
     : "";
 };
 
@@ -110,16 +109,30 @@ export const validateVocabUsage = async (word: string, meaning: string, sentence
   } catch (error) { return { isCorrect: false, feedback: "Error." }; }
 };
 
-export const generatePracticeArtifact = async (language: string, keywords?: string): Promise<string> => {
+export const generatePracticeArtifact = async (language: string, keywords: string = '', difficulty: string = 'Intermediate', topic: string = 'Random'): Promise<string> => {
   const ai = getAiInstance();
   const model = 'gemini-3-flash-preview';
+  
+  const difficultyPrompt = {
+    'Beginner': 'Use very simple A1-A2 level grammar, common high-frequency words, and short sentences.',
+    'Intermediate': 'Use B1-B2 level vocabulary, natural compound sentences, and standard daily expressions.',
+    'Advanced': 'Use C1 level sophisticated vocabulary, complex structures, metaphors, and literary or professional style.'
+  }[difficulty as 'Beginner' | 'Intermediate' | 'Advanced'] || 'Intermediate';
+
+  const topicPrompt = topic === 'Random' ? 'any interesting observation' : `the topic of ${topic}`;
+
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: `Generate 40-word text in ${language}. ${keywords ? `Include: ${keywords}` : ""} ${getJapaneseInstruction(language)}`,
+      contents: `Generate a short (approx 40-50 words) text for language practice in ${language}. 
+      Difficulty Level: ${difficulty}. ${difficultyPrompt}
+      Topic: ${topicPrompt}.
+      ${keywords ? `MUST INCLUDE THESE SPECIFIC WORDS: ${keywords}.` : ""}
+      CRITICAL: Output ONLY the raw text passage. DO NOT include any labels like 'Text:', 'Word:', or headers. 
+      ${getJapaneseInstruction(language)}`,
     });
     return response.text?.trim() || "";
-  } catch (e) { return "Error."; }
+  } catch (e) { return "Error generating artifact."; }
 };
 
 export const evaluateRetelling = async (source: string, retelling: string, language: string): Promise<RehearsalEvaluation> => {
@@ -156,7 +169,7 @@ export const generateDiaryAudio = async (text: string): Promise<string> => {
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text: cleanText }] }],
       config: {
-        responseModalities: [Modality.AUDIO],
+        responseModalalities: [Modality.AUDIO],
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
       },
     });
