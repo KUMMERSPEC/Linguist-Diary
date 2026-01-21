@@ -9,12 +9,17 @@ const getAiInstance = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-// Provides language-specific instructions for Japanese study text formatting.
+// Provides language-specific instructions for Japanese study text formatting,
+// and general strict output rules for all languages to prevent prompt leakage.
 const getJapaneseInstruction = (language: string) => {
   const isJapanese = language.toLowerCase() === 'japanese' || language === '日本語';
-  return isJapanese 
-    ? "CRITICAL for Japanese: ALWAYS use '[Kanji](furigana)' format for kanji in the target language text. Example: [今日](きょう). NEVER output plain kanji without brackets for study text."
-    : "";
+  // CRITICAL: Always output EXCLUSIVELY in the target language.
+  // CRITICAL: NEVER include any prompt instructions, meta-comments, or extraneous text in the final output.
+  const baseInstruction = `Output MUST be EXCLUSIVELY in ${language}. DO NOT include any English or other languages, nor any meta-comments or instructions from this prompt in your final text.`;
+
+  return isJapanese
+    ? `CRITICAL for Japanese: ALWAYS use '[Kanji](furigana)' format for kanji in the target language text. Example: [今日](きょう). NEVER output plain kanji without brackets for study text. ${baseInstruction}`
+    : baseInstruction;
 };
 
 // Analyzes a diary entry for grammar, vocabulary, and style improvements.

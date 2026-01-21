@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { DiaryEntry, AdvancedVocab, PracticeRecord } from '../types';
 import { validateVocabUsage, generateDiaryAudio } from '../services/geminiService';
 import { decode, decodeAudioData } from '../utils/audioHelpers';
@@ -16,8 +16,18 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
   const [isValidating, setIsValidating] = useState(false);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [lastFeedback, setLastFeedback] = useState<{ isCorrect: boolean; feedback: string; betterVersion?: string } | null>(null);
+  
+  // State for selected word
   const [selectedWord, setSelectedWord] = useState<ExtendedVocab | null>(null);
+  // State for mobile view: true when practice detail is shown, false for list
+  const [showPracticeDetail, setShowPracticeDetail] = useState(false); 
+
+  // States for practice mode
+  const [isPracticeMode, setIsPracticeMode] = useState(false);
+  const [currentPracticeIndex, setCurrentPracticeIndex] = useState(0);
+
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const listRef = useRef<HTMLDivElement>(null); // Ref to scroll the list into view
 
   const [filterLanguage, setFilterLanguage] = useState('All');
   const [filterLevel, setFilterLevel] = useState('All');
@@ -87,10 +97,35 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
   const availableLanguages = useMemo(() => ['All', ...Array.from(new Set(allVocab.map(v => v.language)))], [allVocab]);
   const availableLevels = useMemo(() => ['All', ...Array.from(new Set(allVocab.map(v => v.level)))], [allVocab]);
 
+  // Reset practice input and feedback when selected word changes
   useEffect(() => {
     setLastFeedback(null);
     setPracticeInput('');
   }, [selectedWord]);
+
+  // Effect for practice mode to update selected word
+  useEffect(() => {
+    if (isPracticeMode && filteredAndSortedVocab.length > 0) {
+      const newIndex = Math.max(0, Math.min(currentPracticeIndex, filteredAndSortedVocab.length - 1));
+      setSelectedWord(filteredAndSortedVocab[newIndex]);
+      setCurrentPracticeIndex(newIndex); // Ensure index is within bounds
+      setShowPracticeDetail(true); // Always show detail in practice mode
+    } else if (!isPracticeMode && selectedWord && !showPracticeDetail) {
+      // If practice mode ends and detail is not explicitly shown, clear selected word
+      setSelectedWord(null);
+    }
+  }, [isPracticeMode, currentPracticeIndex, filteredAndSortedVocab, showPracticeDetail]);
+
+  // Scroll selected word into view if in practice mode or manually selected
+  useEffect(() => {
+    if (listRef.current && selectedWord) {
+      const element = listRef.current.querySelector(`[data-vocab-id="${selectedWord.word}-${selectedWord.date}-${selectedWord.entryId}"]`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }, [selectedWord]);
+
 
   const renderRuby = (text: string) => {
     if (!text) return '';
@@ -144,6 +179,71 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
     }
   };
 
+  const handleSelectWord = (vocab: ExtendedVocab) => {
+    setSelectedWord(vocab);
+    setShowPracticeDetail(true); // Show detail on mobile click
+    if (!isPracticeMode) {
+      // If not in practice mode, find the index of the selected word
+      const index = filteredAndSortedVocab.findIndex(v => 
+        v.word === vocab.word && v.date === vocab.date && v.entryId === vocab.entryId
+      );
+      if (index !== -1) {
+        setCurrentPracticeIndex(index);
+      }
+    }
+  };
+
+  const handleBackToList = () => {
+    setShowPracticeDetail(false);
+    setSelectedWord(null);
+    setIsPracticeMode(false); // Exit practice mode when going back to list
+    setLastFeedback(null);
+    setPracticeInput('');
+  };
+
+  const handleNextWord = useCallback(() => {
+    setLastFeedback(null);
+    setPracticeInput('');
+    if (currentPracticeIndex < filteredAndSortedVocab.length - 1) {
+      setCurrentPracticeIndex(prev => prev + 1);
+    } else {
+      // Optionally loop or end practice
+      alert("恭喜您完成了所有单词练习！");
+      setIsPracticeMode(false);
+      setSelectedWord(null);
+      setShowPracticeDetail(false);
+    }
+  }, [currentPracticeIndex, filteredAndSortedVocab.length]);
+
+  const handlePrevWord = useCallback(() => {
+    setLastFeedback(null);
+    setPracticeInput('');
+    if (currentPracticeIndex > 0) {
+      setCurrentPracticeIndex(prev => prev - 1);
+    } else {
+      alert("已经是第一个单词了。");
+    }
+  }, [currentPracticeIndex]);
+
+  const handleStartPractice = () => {
+    if (filteredAndSortedVocab.length === 0) {
+      alert("没有词汇可以练习。");
+      return;
+    }
+    setIsPracticeMode(true);
+    setCurrentPracticeIndex(0);
+    // setSelectedWord will be updated by useEffect
+    // setShowPracticeDetail will be updated by useEffect
+  };
+
+  const handleExitPracticeMode = () => {
+    setIsPracticeMode(false);
+    setSelectedWord(null);
+    setShowPracticeDetail(false);
+    setLastFeedback(null);
+    setPracticeInput('');
+  };
+
   const handleValidatePractice = async () => {
     if (!selectedWord || !practiceInput.trim() || isValidating) return;
     setIsValidating(true);
@@ -167,6 +267,13 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
         status: feedback.isCorrect ? 'Perfect' : 'Polished', // Differentiate perfect from polished
       };
       onUpdateMastery(selectedWord.entryId, selectedWord.word, newMastery, newPracticeRecord);
+
+      // Auto-advance if in practice mode and correct
+      if (isPracticeMode && feedback.isCorrect) {
+        setTimeout(() => {
+          handleNextWord();
+        }, 1500); // Give user a moment to see feedback
+      }
 
     } catch (e) {
       console.error("Validation failed:", e);
@@ -203,9 +310,9 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
   );
 
   return (
-    <div className="flex h-full animate-in fade-in duration-500 overflow-hidden w-full">
-      {/* 左侧：词汇列表 */}
-      <aside className={`flex-shrink-0 bg-white border-r border-slate-100 p-6 flex flex-col transition-all duration-300 ${selectedWord ? 'w-full md:w-1/2 lg:w-1/3 max-w-lg' : 'w-full'}`}>
+    <div className="flex h-full animate-in fade-in duration-500 overflow-hidden w-full relative">
+      {/* 左侧：词汇列表 - Conditionally hidden on mobile when detail is shown */}
+      <aside className={`flex-shrink-0 bg-white border-r border-slate-100 p-6 flex flex-col transition-all duration-300 ${showPracticeDetail ? 'hidden md:flex w-1/2 lg:w-1/3 max-w-lg' : 'w-full md:w-1/2 lg:w-1/3 max-w-lg'}`}>
         <header className="mb-6 space-y-4 shrink-0">
           <h2 className="text-3xl md:text-4xl font-black text-slate-900 serif-font">珍宝复习 Review Vault</h2>
           <p className="text-slate-500 text-sm italic">在这里，重温并强化您所学到的宝贵词汇。</p>
@@ -258,14 +365,33 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
               掌握度 {sortBy === 'mastery' && (sortOrder === 'desc' ? '↓' : '↑')}
             </button>
           </div>
+          
+          {/* Start Practice Button */}
+          {!isPracticeMode ? (
+            <button
+              onClick={handleStartPractice}
+              disabled={filteredAndSortedVocab.length === 0}
+              className="w-full bg-indigo-600 text-white py-3 rounded-2xl text-sm font-bold shadow-lg hover:bg-indigo-700 transition-all active:scale-95 mt-4"
+            >
+              🚀 开始练习 Start Practice
+            </button>
+          ) : (
+            <button
+              onClick={handleExitPracticeMode}
+              className="w-full bg-slate-200 text-slate-700 py-3 rounded-2xl text-sm font-bold shadow-md hover:bg-slate-300 transition-all active:scale-95 mt-4"
+            >
+              🔚 退出练习 Exit Practice
+            </button>
+          )}
 
         </header>
 
-        <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-20">
+        <div ref={listRef} className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-20">
           {filteredAndSortedVocab.length > 0 ? filteredAndSortedVocab.map((vocab, idx) => (
             <button
-              key={vocab.word + vocab.date + idx}
-              onClick={() => setSelectedWord(vocab)}
+              key={vocab.word + vocab.date + vocab.entryId + idx} // Unique key including index to prevent issues with duplicate words/dates
+              data-vocab-id={`${vocab.word}-${vocab.date}-${vocab.entryId}`} // Data attribute for scrolling
+              onClick={() => handleSelectWord(vocab)}
               className={`w-full text-left p-5 rounded-2xl border transition-all duration-300 relative group/vocab ${
                 selectedWord?.word === vocab.word && selectedWord?.date === vocab.date && selectedWord?.entryId === vocab.entryId
                   ? 'bg-indigo-50 border-indigo-200 shadow-lg scale-[1.01]'
@@ -295,10 +421,27 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
         </div>
       </aside>
 
-      {/* 右侧：实践与详情 */}
+      {/* 右侧：实践与详情 - Conditionally shown on mobile when detail is shown */}
       {selectedWord && (
-        <main className="flex-1 flex flex-col p-6 bg-slate-50 animate-in fade-in slide-in-from-right-4 duration-300 overflow-y-auto no-scrollbar pb-24">
+        <main className={`flex-1 flex flex-col p-6 bg-slate-50 animate-in fade-in slide-in-from-right-4 duration-300 overflow-y-auto no-scrollbar pb-24 ${!showPracticeDetail ? 'hidden md:flex' : 'fixed inset-0 z-50 bg-slate-50 md:relative'}`}>
           <div className="max-w-3xl mx-auto w-full space-y-8">
+            {/* Mobile Back Button */}
+            {showPracticeDetail && (
+              <div className="md:hidden flex items-center justify-between mb-6 pt-4 px-2">
+                <button 
+                  onClick={handleBackToList} 
+                  className="flex items-center space-x-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline"
+                >
+                  ← 返回列表
+                </button>
+                {isPracticeMode && (
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    练习模式 {currentPracticeIndex + 1} / {filteredAndSortedVocab.length}
+                  </span>
+                )}
+              </div>
+            )}
+
             <header className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl space-y-5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
@@ -379,6 +522,29 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                 </div>
               )}
             </div>
+
+            {/* Practice Mode Navigation */}
+            {isPracticeMode && (
+              <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                <button
+                  onClick={handlePrevWord}
+                  disabled={currentPracticeIndex === 0}
+                  className="flex items-center space-x-2 text-[10px] font-black text-slate-500 uppercase hover:text-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  ← 上一词
+                </button>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  {currentPracticeIndex + 1} / {filteredAndSortedVocab.length}
+                </span>
+                <button
+                  onClick={handleNextWord}
+                  disabled={currentPracticeIndex === filteredAndSortedVocab.length - 1 && lastFeedback?.isCorrect} // Can't go next if last word and not correct
+                  className="flex items-center space-x-2 text-[10px] font-black text-indigo-600 uppercase hover:text-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  下一词 →
+                </button>
+              </div>
+            )}
 
             {/* 练习历史 */}
             {selectedWord.practices && selectedWord.practices.length > 0 && (
