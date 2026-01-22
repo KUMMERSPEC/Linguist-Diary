@@ -16,6 +16,7 @@ export interface PracticeRecord {
 }
 
 export interface AdvancedVocab {
+  id?: string; // Added for Firestore document ID
   word: string;
   meaning: string;
   usage: string;
@@ -77,4 +78,4 @@ export interface ChatMessage {
 }
 
 // 更新 ViewState 类型，新增 profile 视图
-export type ViewState = 'dashboard' | 'editor' | 'review' | 'history' | 'chat' | 'vocab_list' | 'vocab_practice' | 'practice_history' | 'rehearsal' | 'rehearsal_report' | 'vocab_practice_detail' | 'profile';
+export type ViewState = 'dashboard' | 'editor' | 'review' | 'history' | 'chat' | 'vocab_list' | 'vocab_practice' | 'vocab_practice_detail' | 'practice_history' | 'rehearsal' | 'rehearsal_report' | 'profile';

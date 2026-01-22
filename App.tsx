@@ -1,8 +1,20 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, User as FirebaseAuthUser } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, Firestore } from 'firebase/firestore';
+import { getAuth, onAuthStateChanged, User as FirebaseAuthUser, updateProfile } from 'firebase/auth';
+import { 
+  getFirestore, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  Firestore, 
+  collection, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  getDocs, 
+  query 
+} from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 
 import Layout from './components/Layout';
@@ -87,10 +99,12 @@ const App: React.FC = () => {
     if (!auth) return;
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseAuthUser | null) => {
       if (firebaseUser) {
+        // Ensure photoURL has a fallback if not set by provider
+        const userPhotoURL = firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`;
         setUser({
           uid: firebaseUser.uid,
           displayName: firebaseUser.displayName || firebaseUser.email || '馆长',
-          photoURL: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
+          photoURL: userPhotoURL,
           isMock: false
         });
       } else {
@@ -107,6 +121,7 @@ const App: React.FC = () => {
     setError(null);
     try {
       if (!db || isMock) {
+        // Mock users continue using localStorage for full arrays
         const localEntries = localStorage.getItem(`linguist_entries_${userId}`);
         if (localEntries) setEntries(JSON.parse(localEntries));
         const localVocab = localStorage.getItem(`linguist_vocab_${userId}`);
@@ -118,16 +133,38 @@ const App: React.FC = () => {
           setUser(prev => prev ? { ...prev, displayName, photoURL } : null);
         }
       } else {
-        const docRef = doc(db, 'users', userId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          if (data.entries) setEntries(data.entries);
-          if (data.advancedVocab) setAllAdvancedVocab(data.advancedVocab);
+        // --- Load Profile from main user document ---
+        const userDocRef = doc(db, 'users', userId);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists()) {
+          const data = userDocSnap.data();
           if (data.profile) {
              setUser(prev => prev ? { ...prev, ...data.profile } : null);
+          } else {
+             // Fallback for existing users without profile field, use auth data directly
+             setUser(prev => prev ? { ...prev, displayName: auth.currentUser?.displayName || prev.displayName, photoURL: auth.currentUser?.photoURL || prev.photoURL } : null);
           }
+        } else {
+          // If user document doesn't exist, create it with initial profile from auth
+          await setDoc(userDocRef, { 
+            profile: { 
+              displayName: auth.currentUser?.displayName || '馆长', 
+              photoURL: auth.currentUser?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`
+            }
+          });
         }
+
+        // --- Load Diary Entries from subcollection ---
+        const diaryEntriesColRef = collection(db, 'users', userId, 'diaryEntries');
+        const diaryEntriesSnapshot = await getDocs(query(diaryEntriesColRef));
+        const loadedEntries: DiaryEntry[] = diaryEntriesSnapshot.docs.map(d => ({ ...d.data(), id: d.id })) as DiaryEntry[];
+        setEntries(loadedEntries.sort((a, b) => b.timestamp - a.timestamp)); // Sort by timestamp descending
+
+        // --- Load Advanced Vocab from subcollection ---
+        const advancedVocabColRef = collection(db, 'users', userId, 'advancedVocab');
+        const advancedVocabSnapshot = await getDocs(query(advancedVocabColRef));
+        const loadedVocab: (AdvancedVocab & { language: string })[] = advancedVocabSnapshot.docs.map(d => ({ ...d.data(), id: d.id })) as (AdvancedVocab & { language: string })[];
+        setAllAdvancedVocab(loadedVocab);
       }
     } catch (e) {
       console.error("Error loading user data:", e);
@@ -135,21 +172,25 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [auth]);
 
-  const saveUserData = useCallback(async (userId: string, isMock: boolean, currentEntries: DiaryEntry[], currentVocab: (AdvancedVocab & { language: string })[]) => {
+  // This saveUserData is now only for profile, removed entries/vocab array saving
+  const saveProfileData = useCallback(async (userId: string, isMock: boolean, updatedProfile: { displayName: string, photoURL: string }) => {
     try {
       if (!db || isMock) {
-        localStorage.setItem(`linguist_entries_${userId}`, JSON.stringify(currentEntries));
-        localStorage.setItem(`linguist_vocab_${userId}`, JSON.stringify(currentVocab));
+        localStorage.setItem(`linguist_profile_${userId}`, JSON.stringify(updatedProfile));
       } else {
         const docRef = doc(db, 'users', userId);
-        await setDoc(docRef, { entries: currentEntries, advancedVocab: currentVocab }, { merge: true });
+        await setDoc(docRef, { profile: updatedProfile }, { merge: true });
+        // Also update Firebase Auth profile
+        if (auth.currentUser) {
+          await updateProfile(auth.currentUser, updatedProfile);
+        }
       }
     } catch (e) {
-      console.error("Error saving user data:", e);
+      console.error("Error saving profile data:", e);
     }
-  }, []);
+  }, [auth]);
 
   useEffect(() => {
     if (user) {
@@ -157,11 +198,15 @@ const App: React.FC = () => {
     }
   }, [user?.uid, user?.isMock, loadUserData]);
 
+  // No longer debounce save for entire arrays. Each data modification directly calls Firestore.
+  // This useEffect now just ensures the profile is saved if it changes
   useEffect(() => {
-    if (user) {
-      saveUserData(user.uid, user.isMock, entries, allAdvancedVocab);
+    if (user && user.displayName && user.photoURL && (user.displayName !== editName || user.photoURL !== editPhoto)) {
+      setEditName(user.displayName);
+      setEditPhoto(user.photoURL);
     }
-  }, [entries, allAdvancedVocab, user?.uid, saveUserData]);
+  }, [user?.displayName, user?.photoURL]);
+
 
   const handleLogin = (userData: { uid: string, displayName: string, photoURL: string }, isMock: boolean) => {
     setUser({ ...userData, isMock });
@@ -199,61 +244,84 @@ const App: React.FC = () => {
     if (!user) return;
     setIsLoading(true);
     const updatedUser = { ...user, displayName: editName, photoURL: editPhoto };
-    setUser(updatedUser);
+    setUser(updatedUser); // Optimistic UI update
     
     try {
-      if (!db || user.isMock) {
-        localStorage.setItem(`linguist_profile_${user.uid}`, JSON.stringify({ displayName: editName, photoURL: editPhoto }));
-      } else {
-        const docRef = doc(db, 'users', user.uid);
-        await setDoc(docRef, { profile: { displayName: editName, photoURL: editPhoto } }, { merge: true });
-      }
+      await saveProfileData(user.uid, user.isMock, { displayName: editName, photoURL: editPhoto });
       alert("馆长档案已云端同步！");
     } catch (e) {
       console.error("Error saving profile:", e);
       setError("保存个人配置失败。");
+      // Revert UI if save fails
+      setUser(user); 
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleAnalyze = async (text: string, language: string) => {
-    if (!user) return;
+    if (!user || !db) return;
     setIsLoading(true);
     setError(null);
     try {
-      const historyContext = entries.filter(e => e.language === language && e.analysis).slice(-5);
+      // Fetch only relevant history for context, e.g., last 5 entries in the same language
+      const historyContext = entries
+        .filter(e => e.language === language && e.analysis)
+        .sort((a, b) => b.timestamp - a.timestamp) // Ensure newest first
+        .slice(0, 5); // Limit to 5 for context window
+
       const analysis = await analyzeDiaryEntry(text, language, historyContext);
 
       const timestamp = Date.now();
       const date = new Date(timestamp).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
 
       if (rewriteBaseId && currentEntry) {
-        const baseEntryIndex = entries.findIndex(e => e.id === rewriteBaseId);
-        if (baseEntryIndex !== -1) {
-          const updatedEntries = [...entries];
-          const baseEntry = { ...updatedEntries[baseEntryIndex] };
-          if (!baseEntry.iterations) baseEntry.iterations = [];
-          if (baseEntry.analysis && baseEntry.iterations.length === 0) {
-              baseEntry.iterations.push({
-                  text: baseEntry.originalText,
-                  timestamp: baseEntry.timestamp,
-                  analysis: baseEntry.analysis
-              });
-          }
-          baseEntry.iterations.push({
-            text: text,
-            timestamp: timestamp,
-            analysis: analysis
-          });
-          updatedEntries[baseEntryIndex] = baseEntry;
-          setEntries(updatedEntries);
-          setCurrentEntry(baseEntry);
-          setRewriteBaseId(null);
+        const baseEntryDocRef = doc(db, 'users', user.uid, 'diaryEntries', rewriteBaseId);
+        const updatedIterations = [...(currentEntry.iterations || [])];
+
+        // If it's the first iteration, push the original text and its analysis
+        if (currentEntry.analysis && updatedIterations.length === 0) {
+            updatedIterations.push({
+                text: currentEntry.originalText,
+                timestamp: currentEntry.timestamp,
+                analysis: currentEntry.analysis
+            });
         }
+        // Add the new iteration
+        updatedIterations.push({
+          text: text,
+          timestamp: timestamp,
+          analysis: analysis
+        });
+
+        // Update the existing document in Firestore
+        await updateDoc(baseEntryDocRef, {
+          iterations: updatedIterations,
+          analysis: analysis, // The analysis for the latest iteration becomes the "main" analysis
+          originalText: text, // The "original" text of the entry effectively becomes the latest iteration's text
+          timestamp: timestamp, // Update timestamp to reflect latest modification
+        });
+
+        // Update local state
+        setEntries(prev => prev.map(e => e.id === rewriteBaseId ? { 
+          ...e, 
+          iterations: updatedIterations, 
+          analysis: analysis,
+          originalText: text,
+          timestamp: timestamp
+        } : e));
+        setCurrentEntry(prev => prev ? { 
+          ...prev, 
+          iterations: updatedIterations, 
+          analysis: analysis,
+          originalText: text,
+          timestamp: timestamp
+        } : null);
+        setRewriteBaseId(null);
+
       } else {
         const newEntry: DiaryEntry = {
-          id: uuidv4(),
+          id: uuidv4(), // ID will be overridden by Firestore if addDoc is used, but useful for local state
           timestamp: timestamp,
           date: date,
           originalText: text,
@@ -262,28 +330,49 @@ const App: React.FC = () => {
           analysis: analysis,
           iterations: []
         };
+        
+        // Add new document to subcollection
+        const docRef = await addDoc(collection(db, 'users', user.uid, 'diaryEntries'), newEntry);
+        newEntry.id = docRef.id; // Use Firestore generated ID
+
         setEntries(prev => [newEntry, ...prev]);
         setCurrentEntry(newEntry);
       }
 
+      // Update Advanced Vocab
       setAllAdvancedVocab(prevVocab => {
-        const vocabMap = new Map<string, AdvancedVocab & { language: string }>();
-        prevVocab.forEach(v => vocabMap.set(`${v.word.toLowerCase()}-${v.language.toLowerCase()}`, v));
-        analysis.advancedVocab.forEach(newV => {
+        const updatedVocabMap = new Map<string, AdvancedVocab & { language: string }>();
+        prevVocab.forEach(v => updatedVocabMap.set(`${v.word.toLowerCase()}-${v.language.toLowerCase()}`, v));
+        
+        const newVocabDocs: (AdvancedVocab & { language: string })[] = [];
+
+        analysis.advancedVocab.forEach(async (newV) => {
           const key = `${newV.word.toLowerCase()}-${language.toLowerCase()}`;
-          const existing = vocabMap.get(key);
+          const existing = updatedVocabMap.get(key);
+
           if (existing) {
-            vocabMap.set(key, { 
+            // Update existing vocab document
+            const vocabDocRef = doc(db, 'users', user.uid, 'advancedVocab', existing.id!);
+            await updateDoc(vocabDocRef, { 
+              meaning: newV.meaning,
+              usage: newV.usage,
+              level: newV.level
+            });
+            updatedVocabMap.set(key, { 
               ...existing, 
               meaning: newV.meaning,
               usage: newV.usage,
               level: newV.level
             });
           } else {
-            vocabMap.set(key, { ...newV, language, mastery: 0, practices: [] });
+            // Add new vocab document
+            const vocabToAdd = { ...newV, language, mastery: 0, practices: [] };
+            const vocabDocRef = await addDoc(collection(db, 'users', user.uid, 'advancedVocab'), vocabToAdd);
+            vocabToAdd.id = vocabDocRef.id; // Use Firestore generated ID
+            updatedVocabMap.set(key, vocabToAdd);
           }
         });
-        return Array.from(vocabMap.values());
+        return Array.from(updatedVocabMap.values());
       });
 
       setPrefilledEditorText('');
@@ -326,15 +415,23 @@ const App: React.FC = () => {
     setView('editor');
   };
 
-  const handleDeleteEntry = (id: string) => {
+  const handleDeleteEntry = async (id: string) => {
+    if (!user || !db) return;
     if (window.confirm("确定要删除这篇馆藏吗？")) {
-      setEntries(prev => prev.filter(entry => entry.id !== id));
+      try {
+        await deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id));
+        setEntries(prev => prev.filter(entry => entry.id !== id));
+      } catch (e) {
+        console.error("Error deleting entry:", e);
+        setError("删除失败。");
+      }
     }
   };
 
-  const handleSaveRehearsalToMuseum = (language: string, evaluation: RehearsalEvaluation) => {
+  const handleSaveRehearsalToMuseum = async (language: string, evaluation: RehearsalEvaluation) => {
+    if (!user || !db) return;
     const newEntry: DiaryEntry = {
-      id: uuidv4(),
+      id: uuidv4(), // ID will be overridden by Firestore if addDoc is used, but useful for local state
       timestamp: Date.now(),
       date: new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
       originalText: evaluation.userRetelling || evaluation.sourceText || '',
@@ -343,38 +440,57 @@ const App: React.FC = () => {
       rehearsal: evaluation,
       iterations: []
     };
-    setEntries(prev => [newEntry, ...prev]);
-    alert("演练报告已存入！");
-    setView('history');
+
+    try {
+      const docRef = await addDoc(collection(db, 'users', user.uid, 'diaryEntries'), newEntry);
+      newEntry.id = docRef.id; // Use Firestore generated ID
+      setEntries(prev => [newEntry, ...prev]);
+      alert("演练报告已存入！");
+      setView('history');
+    } catch (e) {
+      console.error("Error saving rehearsal:", e);
+      setError("保存演练报告失败。");
+    }
   };
 
-  const handleUpdateMastery = useCallback((entryId: string, word: string, newMastery: number, record?: PracticeRecord) => {
+  const handleUpdateMastery = useCallback(async (vocabId: string, word: string, newMastery: number, record?: PracticeRecord) => {
+    if (!user || !db) return;
+    const vocabDocRef = doc(db, 'users', user.uid, 'advancedVocab', vocabId);
+
     setAllAdvancedVocab(prev => {
       return prev.map(vocab => {
-        if (vocab.word === word) {
+        if (vocab.id === vocabId) { // Use id for matching
           const updatedVocab = { ...vocab, mastery: newMastery };
-          if (record && record.status === 'Perfect') {
+          if (record) { // Only add record if it's a Perfect status
             if (!updatedVocab.practices) updatedVocab.practices = [];
             updatedVocab.practices = [...updatedVocab.practices, record];
           }
+          // Update Firestore
+          updateDoc(vocabDocRef, { 
+            mastery: newMastery, 
+            practices: updatedVocab.practices 
+          }).catch(e => {
+            console.error("Error updating vocab mastery:", e);
+            setError("更新词汇掌握度失败。");
+          });
           return updatedVocab;
         }
         return vocab;
       });
     });
-  }, []);
+  }, [user, db]);
 
   const getCombinedAllGems = useCallback(() => {
-    const vocabMap = new Map<string, AdvancedVocab & { language: string }>();
-    allAdvancedVocab.forEach(v => vocabMap.set(`${v.word.toLowerCase()}-${v.language.toLowerCase()}`, v));
-    return Array.from(vocabMap.values());
+    // allAdvancedVocab is already a flat array of (AdvancedVocab & { language: string })
+    return allAdvancedVocab;
   }, [allAdvancedVocab]);
 
   const handleStartReviewFromDashboard = () => {
     if (allAdvancedVocab.length > 0) {
       const randomIndex = Math.floor(Math.random() * allAdvancedVocab.length);
       const selectedVocab = allAdvancedVocab[randomIndex];
-      const vocabId = `${selectedVocab.word}-${selectedVocab.language}`;
+      // Pass the Firestore document ID for selected vocab
+      const vocabId = selectedVocab.id; 
       handleViewChange('vocab_practice', vocabId, true);
     } else {
       alert("珍宝库中没有词汇可供练习。");
