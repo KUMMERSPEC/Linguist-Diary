@@ -66,19 +66,34 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
           <NavItem view={['rehearsal', 'rehearsal_report']} label="展厅演练 / Rehearsal" icon="🎤" />
           <NavItem view={['vocab_list', 'vocab_practice', 'vocab_practice_detail']} label="珍宝与足迹 / Vocab & Practice" icon="💎" />
           <NavItem view="history" label="收藏馆 / History" icon="🏛️" />
-          <NavItem view="profile" label="个人中心 / Profile" icon="👤" />
+          {/* 已移除冗余的个人中心 NavItem */}
         </nav>
 
-        <div className="mt-auto space-y-4">
-          <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-2xl border border-slate-100">
-            <img src={user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.displayName}`} alt="User Avatar" className="w-9 h-9 rounded-full" />
-            <div className="flex-1 text-sm font-semibold text-slate-700 truncate">{user.displayName}</div>
-            <button onClick={onLogout} className="text-slate-400 hover:text-rose-500 transition-colors" title="登出">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
-              </svg>
-            </button>
-          </div>
+        <div className="mt-auto space-y-4 pt-4 border-t border-slate-50">
+          <button 
+            onClick={() => onViewChange('profile')}
+            className={`w-full flex items-center space-x-3 p-3 rounded-2xl border transition-all text-left group/usercard ${
+              activeView === 'profile' 
+                ? 'bg-indigo-50 border-indigo-200' 
+                : 'bg-slate-50 border-slate-100 hover:border-indigo-200 hover:bg-white'
+            }`}
+          >
+            <img 
+              src={user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.displayName}`} 
+              alt="User Avatar" 
+              className="w-10 h-10 rounded-xl shadow-sm border border-white" 
+            />
+            <div className="flex-1 min-w-0">
+              <div className={`text-sm font-bold truncate transition-colors ${activeView === 'profile' ? 'text-indigo-600' : 'text-slate-700 group-hover/usercard:text-indigo-600'}`}>
+                {user.displayName}
+              </div>
+              <div className="text-[9px] text-slate-400 font-black uppercase tracking-tighter">首席馆长 / Curator</div>
+            </div>
+            <div className={`text-slate-300 transition-transform ${activeView === 'profile' ? 'translate-x-0 text-indigo-400' : 'group-hover/usercard:translate-x-1 group-hover/usercard:text-indigo-400'}`}>
+              →
+            </div>
+          </button>
+          
           <div className="text-[10px] text-slate-400 uppercase tracking-widest text-center pt-2">
             © {new Date().getFullYear()} Linguist Diary
           </div>
@@ -90,7 +105,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
           {children}
         </div>
 
-        {/* Mobile Bottom Navigation Bar - Optimized for 5 slots */}
+        {/* Mobile Bottom Navigation Bar */}
         <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-2 py-1 flex items-center justify-around z-40 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
           <MobileTab views="dashboard" label="主页" icon="🏠" activeIcon="🏠" />
           <MobileTab views="history" label="馆藏" icon="🏛️" activeIcon="🏛️" />

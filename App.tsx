@@ -30,6 +30,28 @@ const firebaseConfig = {
   appId: process.env.FIREBASE_APP_ID || ""
 };
 
+let app: FirebaseApp | null = null;
+let db: Firestore | null = null;
+let auth: any = null;
+let isFirebaseValid = false;
+
+console.group("🏛️ 馆藏馆系统初始化诊断");
+if (firebaseConfig.apiKey && firebaseConfig.apiKey.length > 10) {
+  try {
+    const existingApps = getApps();
+    app = existingApps.length === 0 ? initializeApp(firebaseConfig) : existingApps[0];
+    auth = getAuth(app);
+    db = getFirestore(app);
+    isFirebaseValid = true;
+    console.info("✅ Firebase 配置识别成功。真实登录功能已激活。");
+  } catch (e) {
+    console.error("❌ Firebase 初始化失败:", e);
+  }
+} else {
+  console.warn("⚠️ 未检测到有效的 Firebase API Key。");
+}
+console.groupEnd();
+
 const AVATAR_SEEDS = [
   { seed: 'Felix', label: '沉稳博学者' },
   { seed: 'Aneka', label: '先锋艺术家' },
@@ -40,23 +62,6 @@ const AVATAR_SEEDS = [
   { seed: 'Sasha', label: '深邃哲人' },
   { seed: 'Buster', label: '极简主义者' },
 ];
-
-let app: FirebaseApp | null = null;
-let db: Firestore | null = null;
-let isFirebaseValid = false;
-let auth;
-
-try {
-  if (firebaseConfig.apiKey && firebaseConfig.apiKey.length > 10) {
-    const existingApps = getApps();
-    app = existingApps.length === 0 ? initializeApp(firebaseConfig) : existingApps[0];
-    auth = getAuth(app);
-    db = getFirestore(app);
-    isFirebaseValid = true;
-  }
-} catch (e) {
-  console.warn("Firebase config is present but invalid, falling back to local mode.");
-}
 
 const App: React.FC = () => {
   const [user, setUser] = useState<{ uid: string, displayName: string, photoURL: string, isMock: boolean } | null>(null);
@@ -76,6 +81,7 @@ const App: React.FC = () => {
   // 个人资料编辑状态
   const [editName, setEditName] = useState('');
   const [editPhoto, setEditPhoto] = useState('');
+  const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
 
   useEffect(() => {
     if (!auth) return;
@@ -94,7 +100,7 @@ const App: React.FC = () => {
       }
     });
     return () => unsubscribe();
-  }, [isFirebaseValid]);
+  }, []);
 
   const loadUserData = useCallback(async (userId: string, isMock: boolean) => {
     setIsLoading(true);
@@ -106,7 +112,6 @@ const App: React.FC = () => {
         const localVocab = localStorage.getItem(`linguist_vocab_${userId}`);
         if (localVocab) setAllAdvancedVocab(JSON.parse(localVocab));
         
-        // 加载自定义资料
         const localProfile = localStorage.getItem(`linguist_profile_${userId}`);
         if (localProfile) {
           const { displayName, photoURL } = JSON.parse(localProfile);
@@ -130,7 +135,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [db]);
+  }, []);
 
   const saveUserData = useCallback(async (userId: string, isMock: boolean, currentEntries: DiaryEntry[], currentVocab: (AdvancedVocab & { language: string })[]) => {
     try {
@@ -144,19 +149,19 @@ const App: React.FC = () => {
     } catch (e) {
       console.error("Error saving user data:", e);
     }
-  }, [db]);
+  }, []);
 
   useEffect(() => {
     if (user) {
       loadUserData(user.uid, user.isMock);
     }
-  }, [user?.uid, user?.isMock]); // 仅在核心身份变化时加载
+  }, [user?.uid, user?.isMock, loadUserData]);
 
   useEffect(() => {
     if (user) {
       saveUserData(user.uid, user.isMock, entries, allAdvancedVocab);
     }
-  }, [entries, allAdvancedVocab, user?.uid]);
+  }, [entries, allAdvancedVocab, user?.uid, saveUserData]);
 
   const handleLogin = (userData: { uid: string, displayName: string, photoURL: string }, isMock: boolean) => {
     setUser({ ...userData, isMock });
@@ -183,15 +188,16 @@ const App: React.FC = () => {
       setPrefilledEditorText('');
       setChatLanguage('');
     }
-    // 进入 Profile 时初始化编辑状态
     if (newView === 'profile' && user) {
       setEditName(user.displayName);
       setEditPhoto(user.photoURL);
+      setIsAvatarPickerOpen(false);
     }
   };
 
   const handleSaveProfile = async () => {
     if (!user) return;
+    setIsLoading(true);
     const updatedUser = { ...user, displayName: editName, photoURL: editPhoto };
     setUser(updatedUser);
     
@@ -202,9 +208,12 @@ const App: React.FC = () => {
         const docRef = doc(db, 'users', user.uid);
         await setDoc(docRef, { profile: { displayName: editName, photoURL: editPhoto } }, { merge: true });
       }
-      alert("馆长档案已更新！");
+      alert("馆长档案已云端同步！");
     } catch (e) {
       console.error("Error saving profile:", e);
+      setError("保存个人配置失败。");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -484,66 +493,92 @@ const App: React.FC = () => {
       )}
       {view === 'profile' && (
         <div className="flex flex-col animate-in fade-in duration-700 py-6 max-w-4xl mx-auto space-y-10 px-4">
-          <header className="flex flex-col md:flex-row items-center md:items-end justify-between gap-6 border-b border-slate-100 pb-8">
-            <div className="text-center md:text-left">
-              <h2 className="text-3xl md:text-5xl font-black text-slate-900 serif-font">馆长办公室 Curator's Office</h2>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">在这里定义您的馆藏意志</p>
-            </div>
-            <div className="flex space-x-3">
-              <button onClick={handleSaveProfile} className="bg-indigo-600 text-white px-8 py-3.5 rounded-2xl font-black shadow-xl hover:bg-indigo-700 transition-all active:scale-95 text-sm uppercase tracking-widest">
-                保存馆长配置 SAVE
-              </button>
-            </div>
+          <header className="flex flex-col items-center text-center space-y-2 border-b border-slate-100 pb-8">
+            <h2 className="text-3xl md:text-5xl font-black text-slate-900 serif-font">馆长办公室 Curator's Office</h2>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-[0.3em]">定义您的馆藏意志与馆长身份</p>
           </header>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-            {/* 左侧：形象管理 */}
+            {/* 左侧：核心名片与寄语 */}
             <div className="lg:col-span-8 space-y-8">
-              <section className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-8">
-                <div className="flex items-center space-x-3">
-                  <div className="w-1.5 h-6 bg-indigo-600 rounded-full"></div>
-                  <h4 className="text-[11px] font-black text-slate-800 tracking-[0.2em] uppercase">形象馆藏 Avatar Gallery</h4>
-                </div>
-
-                <div className="flex flex-col md:flex-row items-center space-x-0 md:space-x-10 space-y-8 md:space-y-0">
-                  <div className="relative shrink-0">
-                    <img src={editPhoto} className="w-32 h-32 md:w-48 md:h-48 rounded-[3rem] border-8 border-slate-50 shadow-2xl transition-all duration-500" alt="Selected Curator" />
-                    <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase shadow-lg">Current</div>
-                  </div>
-                  <div className="flex-1 space-y-6">
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">馆长名号 Curator Title</label>
-                       <input 
-                         type="text" 
-                         value={editName}
-                         onChange={(e) => setEditName(e.target.value)}
-                         className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-400 focus:bg-white p-5 rounded-2xl text-xl font-black serif-font outline-none transition-all shadow-inner"
-                       />
+              <section className="bg-white rounded-[3.5rem] border border-slate-200 shadow-xl overflow-hidden">
+                <div className="p-10 md:p-14 space-y-10">
+                  {/* 身份区 */}
+                  <div className="flex flex-col md:flex-row items-center gap-10">
+                    <div className="relative group cursor-pointer" onClick={() => setIsAvatarPickerOpen(!isAvatarPickerOpen)}>
+                      <img src={editPhoto} className="w-40 h-40 md:w-52 md:h-52 rounded-[3.5rem] border-8 border-slate-50 shadow-2xl transition-all duration-500 group-hover:scale-105" alt="Curator" />
+                      <div className="absolute -bottom-2 -right-2 w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg border-4 border-white group-hover:rotate-12 transition-transform">
+                        <span className="text-xl">✨</span>
+                      </div>
+                      <div className="absolute inset-0 bg-black/20 rounded-[3.5rem] opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                         <span className="text-white text-[10px] font-black uppercase tracking-widest">更换形象</span>
+                      </div>
                     </div>
-                    <p className="text-xs text-slate-400 italic leading-relaxed">
-                      该名号将显示在所有馆藏报告、侧边栏及启发对话中。
-                    </p>
-                  </div>
-                </div>
 
-                <div className="pt-4 space-y-4">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">形象预览预览 Persona Selection</label>
-                  <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
-                    {AVATAR_SEEDS.map((item) => {
-                      const url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.seed}`;
-                      const isSelected = editPhoto === url;
-                      return (
-                        <button 
-                          key={item.seed}
-                          onClick={() => setEditPhoto(url)}
-                          title={item.label}
-                          className={`relative group transition-all duration-500 ${isSelected ? 'scale-110' : 'hover:scale-105'}`}
-                        >
-                          <img src={url} className={`w-full aspect-square rounded-2xl border-4 transition-all ${isSelected ? 'border-indigo-600 shadow-xl shadow-indigo-100' : 'border-transparent grayscale opacity-50 hover:grayscale-0 hover:opacity-100'}`} />
-                          {isSelected && <div className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[8px]">✓</div>}
-                        </button>
-                      );
-                    })}
+                    <div className="flex-1 space-y-6 text-center md:text-left">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">当前名号 CURATOR TITLE</label>
+                        <input 
+                          type="text" 
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-400 focus:bg-white p-6 rounded-3xl text-3xl font-black serif-font outline-none transition-all shadow-inner"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 寄语区 (从下方挪到这里) */}
+                  <div className="bg-indigo-600 p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-10 opacity-10 text-9xl font-serif -mr-10 -mt-10 transition-transform group-hover:scale-110">“</div>
+                    <div className="relative z-10 space-y-4">
+                      <div className="text-[10px] font-black uppercase tracking-widest opacity-60">馆长寄语 Curator's Wisdom</div>
+                      <p className="text-indigo-50 italic leading-[1.8] text-lg md:text-xl serif-font pr-10">
+                        “语言不是一种工具，它是你灵魂的居所，每一篇记录都是你在那里种下的花。”
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 头像选择入口 (由确认键触发，逻辑独立) */}
+                  {isAvatarPickerOpen && (
+                    <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100 animate-in slide-in-from-top-4 duration-500 space-y-6">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-[11px] font-black text-slate-800 tracking-[0.2em] uppercase">形象画廊 Avatar Gallery</h4>
+                        <button onClick={() => setIsAvatarPickerOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors">✕</button>
+                      </div>
+                      <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
+                        {AVATAR_SEEDS.map((item) => {
+                          const url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.seed}`;
+                          const isSelected = editPhoto === url;
+                          return (
+                            <button 
+                              key={item.seed}
+                              onClick={() => { setEditPhoto(url); setIsAvatarPickerOpen(false); }}
+                              className={`relative transition-all duration-300 ${isSelected ? 'scale-110' : 'hover:scale-105 opacity-60 hover:opacity-100'}`}
+                            >
+                              <img src={url} className={`w-full aspect-square rounded-2xl border-4 transition-all ${isSelected ? 'border-indigo-600 shadow-xl' : 'border-white shadow-sm'}`} alt={item.label} />
+                              {isSelected && <div className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[8px]">✓</div>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* 保存按钮 (挪到页面底部) */}
+                  <div className="pt-4">
+                    <button 
+                      onClick={handleSaveProfile} 
+                      className="w-full bg-slate-900 text-white py-6 rounded-3xl font-black shadow-2xl hover:bg-indigo-600 transition-all active:scale-95 text-base uppercase tracking-[0.2em] flex items-center justify-center space-x-3"
+                    >
+                      {isLoading ? (
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <span>🏛️ 同步馆长档案 SYNC</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               </section>
@@ -559,50 +594,42 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* 右侧：统计概览 */}
+            {/* 右侧：概览 */}
             <div className="lg:col-span-4 space-y-8">
-              <section className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-6">
+              <section className="bg-white p-8 rounded-[3.5rem] border border-slate-200 shadow-xl space-y-8">
                 <div className="flex items-center space-x-3">
                   <div className="w-1.5 h-6 bg-indigo-600 rounded-full"></div>
-                  <h4 className="text-[11px] font-black text-slate-800 tracking-[0.2em] uppercase">馆藏概览 Archives Overview</h4>
+                  <h4 className="text-[11px] font-black text-slate-800 tracking-[0.2em] uppercase">馆藏概览 Archives</h4>
                 </div>
 
                 <div className="space-y-4">
-                  <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">馆藏总数 Items</span>
-                    <p className="text-3xl font-black text-slate-900 serif-font mt-1">{entries.length}</p>
+                  <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 transition-colors hover:border-indigo-200 group">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">馆藏总数 ITEMS</span>
+                    <p className="text-4xl font-black text-slate-900 serif-font mt-1 group-hover:text-indigo-600">{entries.length}</p>
                   </div>
-                  <div className="bg-indigo-50/50 p-6 rounded-[2rem] border border-indigo-100">
-                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">已点亮珍宝 Lit Gems</span>
-                    <p className="text-3xl font-black text-indigo-600 serif-font mt-1">{allAdvancedVocab.filter(v => (v.mastery || 0) >= 3).length}</p>
+                  <div className="bg-indigo-50/50 p-6 rounded-[2rem] border border-indigo-100 transition-colors hover:border-indigo-400 group">
+                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">已点亮珍宝 LIT GEMS</span>
+                    <p className="text-4xl font-black text-indigo-600 serif-font mt-1">{allAdvancedVocab.filter(v => (v.mastery || 0) >= 3).length}</p>
                   </div>
                 </div>
 
-                <div className="pt-4 space-y-3">
+                <div className="pt-2 space-y-3">
                    <button 
                     onClick={() => handleViewChange('history')}
-                    className="w-full flex items-center justify-between p-5 bg-white rounded-2xl border border-slate-100 hover:border-indigo-200 transition-all group"
+                    className="w-full flex items-center justify-between p-5 bg-white rounded-2xl border border-slate-100 hover:border-indigo-200 hover:shadow-lg transition-all group"
                   >
                     <span className="text-xs font-bold text-slate-700">进入展厅 Browse Exhibits</span>
                     <span className="text-slate-300 group-hover:translate-x-1 transition-transform">→</span>
                   </button>
                   <button 
                     onClick={() => handleViewChange('vocab_list')}
-                    className="w-full flex items-center justify-between p-5 bg-white rounded-2xl border border-slate-100 hover:border-indigo-200 transition-all group"
+                    className="w-full flex items-center justify-between p-5 bg-white rounded-2xl border border-slate-100 hover:border-indigo-200 hover:shadow-lg transition-all group"
                   >
                     <span className="text-xs font-bold text-slate-700">清点珍宝 Audit Gems</span>
                     <span className="text-slate-300 group-hover:translate-x-1 transition-transform">→</span>
                   </button>
                 </div>
               </section>
-              
-              <div className="bg-indigo-600 p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group">
-                <div className="absolute top-0 right-0 p-10 opacity-10 text-9xl font-serif -mr-10 -mt-10 transition-transform group-hover:scale-110">“</div>
-                <p className="text-indigo-100 italic leading-[1.8] text-sm serif-font relative z-10">
-                  “语言不是一种工具，它是你灵魂的居所，每一篇记录都是你在那里种下的花。”
-                </p>
-                <div className="mt-6 text-[10px] font-black uppercase tracking-widest opacity-60">Curator's Wisdom</div>
-              </div>
             </div>
           </div>
         </div>

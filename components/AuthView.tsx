@@ -13,9 +13,8 @@ const AuthView: React.FC<AuthViewProps> = ({ auth, isFirebaseValid, onLogin }) =
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleGoogleLogin = async () => {
-    // 如果没有配置 Firebase 密钥，提示用户去配置
     if (!isFirebaseValid || !auth) {
-      setErrorMsg("检测到 GitHub Secrets 中未配置 Firebase 密钥。无法执行真实登录。如果你是开发者，请在 GitHub Settings -> Secrets 中添加 FIREBASE_API_KEY 等。");
+      setErrorMsg("未检测到 GitHub Secrets 配置。如果你是在本地预览模式，请使用下方的'访客直接进入'。如果已部署到 GitHub Pages，请确保 Actions 构建已完成。");
       return;
     }
     
@@ -74,34 +73,48 @@ const AuthView: React.FC<AuthViewProps> = ({ auth, isFirebaseValid, onLogin }) =
           )}
 
           <div className="space-y-4">
-            <button 
-              onClick={handleGoogleLogin}
-              disabled={isLoggingIn}
-              className={`w-full flex items-center justify-center space-x-3 bg-white border-2 border-slate-100 hover:border-indigo-600 hover:bg-indigo-50 transition-all p-4 rounded-2xl font-semibold text-slate-700 shadow-sm ${isLoggingIn ? 'opacity-50' : ''}`}
-            >
-              {isLoggingIn ? (
-                <div className="w-5 h-5 border-2 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin"></div>
-              ) : (
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
+            <div className="space-y-2">
+              <button 
+                onClick={handleGoogleLogin}
+                disabled={isLoggingIn}
+                className={`w-full flex items-center justify-center space-x-3 bg-white border-2 border-slate-100 transition-all p-4 rounded-2xl font-semibold text-slate-700 shadow-sm ${
+                  isFirebaseValid 
+                    ? 'hover:border-indigo-600 hover:bg-indigo-50' 
+                    : 'opacity-50 cursor-not-allowed grayscale'
+                }`}
+              >
+                {isLoggingIn ? (
+                  <div className="w-5 h-5 border-2 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin"></div>
+                ) : (
+                  <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
+                )}
+                <span>{isLoggingIn ? '正在连接安全验证...' : '使用 Google 账号登录 (同步)'}</span>
+              </button>
+              {!isFirebaseValid && (
+                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">仅在正式部署域名下可用 Available on production only</p>
               )}
-              <span>{isLoggingIn ? '正在连接安全验证...' : '使用 Google 账号登录 (同步)'}</span>
-            </button>
+            </div>
             
             <div className="relative">
               <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
               <div className="relative flex justify-center text-[10px] uppercase font-bold text-slate-300"><span className="bg-white px-2">或者 OR</span></div>
             </div>
 
-            <button 
-              onClick={handleDemoLogin}
-              className="w-full bg-slate-900 text-white p-4 rounded-2xl font-bold shadow-lg hover:bg-indigo-600 transition-all active:scale-95"
-            >
-              ✨ 访客直接进入 (本地存储)
-            </button>
-            
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-relaxed">
-              如果没有配置 Firebase，建议使用访客模式<br/>数据将仅保存在当前浏览器
-            </p>
+            <div className="space-y-2">
+              <button 
+                onClick={handleDemoLogin}
+                className={`w-full p-4 rounded-2xl font-bold shadow-lg transition-all active:scale-95 ${
+                  !isFirebaseValid 
+                    ? 'bg-indigo-600 text-white hover:bg-indigo-700 ring-4 ring-indigo-500/10' 
+                    : 'bg-slate-900 text-white hover:bg-indigo-600'
+                }`}
+              >
+                ✨ 访客直接进入 (本地存储)
+              </button>
+              {!isFirebaseValid && (
+                 <p className="text-[10px] text-indigo-500 font-black uppercase tracking-widest animate-pulse">当前预览环境推荐使用此选项</p>
+              )}
+            </div>
           </div>
 
           <div className="pt-6 border-t border-slate-50">
