@@ -84,6 +84,7 @@ const AVATAR_SEEDS = [
 
 const App: React.FC = () => {
   const [user, setUser] = useState<{ uid: string, displayName: string, photoURL: string, isMock: boolean } | null>(null);
+  const [isAuthInitializing, setIsAuthInitializing] = useState(true); // 新增：初始化身份验证状态
   const [view, setView] = useState<ViewState>('dashboard');
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [currentEntry, setCurrentEntry] = useState<DiaryEntry | null>(null); 
@@ -103,7 +104,10 @@ const App: React.FC = () => {
   const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
 
   useEffect(() => {
-    if (!auth) return;
+    if (!auth) {
+      setIsAuthInitializing(false);
+      return;
+    }
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseAuthUser | null) => {
       if (firebaseUser) {
         const userPhotoURL = firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`;
@@ -120,6 +124,7 @@ const App: React.FC = () => {
         setCurrentEntry(null);
         setCurrentEntryIterations([]);
       }
+      setIsAuthInitializing(false); // 身份验证检查完成
     });
     return () => unsubscribe();
   }, []);
@@ -368,6 +373,27 @@ const App: React.FC = () => {
         setEntries(prev => [{ ...dataSkeleton, id: docRef.id } as DiaryEntry, ...prev]);
     }
   };
+
+  // --- 全屏初始化加载组件 ---
+  if (isAuthInitializing) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 animate-in fade-in duration-500">
+        <div className="w-24 h-24 bg-white rounded-[2rem] shadow-xl flex items-center justify-center mb-8 border border-slate-100 relative">
+          <div className="absolute inset-0 bg-indigo-600/10 rounded-[2rem] animate-ping opacity-25"></div>
+          <span className="text-4xl">🖋️</span>
+        </div>
+        <div className="space-y-4 text-center">
+          <h1 className="text-2xl font-black text-slate-900 serif-font tracking-tight">馆藏系统同步中</h1>
+          <div className="flex items-center justify-center space-x-1.5">
+            <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-audio-bar-1"></div>
+            <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-audio-bar-2"></div>
+            <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-audio-bar-3"></div>
+          </div>
+          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em]">Connecting to Curator's Cloud</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) return <AuthView auth={auth} isFirebaseValid={isFirebaseValid} onLogin={handleLogin} />;
 

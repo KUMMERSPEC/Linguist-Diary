@@ -19,18 +19,24 @@
         .serif-font {
             font-family: 'Playfair Display', serif;
         }
-        /* Ruby 假名标注优化 */
+        /* Ruby 假名标注优化 - 关键：不占用行高 */
         ruby {
             ruby-align: center;
         }
         rt {
             ruby-position: over;
             font-size: 0.45em;
-            font-weight: 700;
-            color: inherit;
-            opacity: 0.6;
+            font-weight: 500;
+            color: #94a3b8;
             letter-spacing: 0.05em;
-            padding-bottom: 0.2em;
+            /* 向上偏移，防止撑高背景色块 */
+            transform: translateY(-0.1em); 
+        }
+        /* 稿纸背景样式 - 严格对齐 leading-[3rem] */
+        .manuscript-grid {
+            background-image: linear-gradient(#e2e8f0 1px, transparent 1px);
+            background-size: 100% 3rem; 
+            background-attachment: local;
         }
         /* 隐藏滚动条但保留滚动功能 */
         .no-scrollbar::-webkit-scrollbar {
