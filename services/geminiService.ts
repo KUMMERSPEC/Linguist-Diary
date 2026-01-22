@@ -35,7 +35,8 @@ const getAiErrorMessage = (error: any) => {
     if (error.message.includes("Failed to fetch") ||
         error.message.includes("Network request failed") ||
         error.message.includes("network error") ||
-        error.message.includes("timed out")) {
+        error.message.includes("timed out") ||
+        error.message.includes("xhr error")) { // Added check for "xhr error"
       errorMessage = "网络连接不稳定或处理超时，请检查网络后重试。";
     } else if (error.message.includes("JSON.parse")) {
       errorMessage = "AI 返回的数据格式不正确，请稍后重试。";
@@ -47,7 +48,15 @@ const getAiErrorMessage = (error: any) => {
     } else {
       errorMessage = `AI 处理失败：${error.message}`;
     }
+  } else if (typeof error === 'object' && error !== null && error.error && typeof error.error.message === 'string') {
+    // Check for nested error messages like the "Rpc failed due to xhr error"
+    if (error.error.message.includes("xhr error")) {
+      errorMessage = "网络连接不稳定或处理超时，请检查网络后重试。";
+    } else {
+      errorMessage = `AI 处理失败：${error.error.message}`;
+    }
   }
+
 
   // Truncate message if it's too long
   if (errorMessage.length > 200) {
@@ -73,18 +82,20 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
       ${historyContext}
       
       STRICT DIFF RULES (CRITICAL):
-      1. 'diffedText' MUST use MINIMAL CHARACTER-LEVEL DIFFS. 
-      2. ONLY wrap the EXACT wrong character, particle, or word in <add> and <rem> tags. 
+      1. 'diffedText' MUST use MINIMAL WORD-LEVEL DIFFS OR small character chunks. 
+      2. Wrap the EXACT word, particle, or small phrase in <add> and <rem> tags. 
       3. PUNCTUATION: If only a comma is added, ONLY use <add>、</add>. DO NOT include adjacent words.
       4. EXAMPLE: "その時<add>、</add>大きくて" is correct. "<rem>その時</rem><add>その时、</add>" is INCORRECT.
-      5. NEVER wrap an entire phrase if only one word or punctuation inside it changes. If a word needs to be entirely replaced, wrap only that word: <rem>oldword</rem><add>newword</add>.
+      5. If a word needs to be entirely replaced, wrap only that word: <rem>oldword</rem><add>newword</add>.
       
       ANNOTATIONS RULE:
       1. For the 'corrections' array: DO NOT use the '[Kanji](furigana)' format. Use PLAIN TEXT ONLY (No brackets, no furigana).
+      2. Keep 'explanation' for corrections concise.
       
       FORMATTING RULES:
       1. For 'overallFeedback' (written in Chinese): Use plain text ONLY.
-      2. For 'modifiedText' and 'diffedText': ${getJapaneseInstruction(language)}`,
+      2. For 'modifiedText' and 'diffedText': ${getJapaneseInstruction(language)}
+      3. Keep 'meaning', 'usage', and 'example' fields for advancedVocab and transitionSuggestions concise.`,
       config: {
         thinkingConfig: { thinkingBudget: 4000 },
         responseMimeType: "application/json",
