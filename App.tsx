@@ -41,7 +41,6 @@ import { analyzeDiaryEntry } from './services/geminiService';
 import { stripRuby } from './utils/textHelpers';
 
 const firebaseConfig = {
-  // 这里使用的 process.env.FIREBASE_... 必须由 vite.config.ts 的 define 注入
   apiKey: process.env.FIREBASE_API_KEY || "",
   authDomain: process.env.FIREBASE_AUTH_DOMAIN || "",
   projectId: process.env.FIREBASE_PROJECT_ID || "",
@@ -231,38 +230,81 @@ const App: React.FC = () => {
       const historyContext = entries.filter(e => e.language === language && e.analysis).slice(0, 5);
       const analysis = await analyzeDiaryEntry(text, language, historyContext);
       const clientTimestamp = Date.now();
-      const serverTS = serverTimestamp();
+      
+      const newEntrySkeleton: Omit<DiaryEntry, 'id'> = {
+        timestamp: clientTimestamp,
+        date: new Date(clientTimestamp).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
+        originalText: text,
+        language,
+        type: 'diary',
+        analysis,
+        iterationCount: 0
+      };
 
-      if (rewriteBaseEntryId && currentEntry && db) {
-        const baseDoc = doc(db, 'users', user.uid, 'diaryEntries', rewriteBaseEntryId);
-        await addDoc(collection(baseDoc, 'iterations'), { text, timestamp: serverTS, analysis });
-        await updateDoc(baseDoc, { 
-          originalText: text, analysis, timestamp: serverTS, 
-          iterationCount: (currentEntry.iterationCount || 0) + 1 
-        });
-        const updated = { ...currentEntry, originalText: text, analysis, timestamp: clientTimestamp, iterationCount: (currentEntry.iterationCount || 0) + 1 } as DiaryEntry;
-        setEntries(prev => prev.map(e => e.id === rewriteBaseEntryId ? updated : e));
-        setCurrentEntry(updated);
-      } else if (db) {
-        const newEntryData = {
-          timestamp: serverTS, date: new Date(clientTimestamp).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
-          originalText: text, language, type: 'diary', analysis, iterationCount: 0
-        };
-        const docRef = await addDoc(collection(db, 'users', user.uid, 'diaryEntries'), newEntryData);
-        const finalEntry = { ...newEntryData, id: docRef.id, timestamp: clientTimestamp } as DiaryEntry;
-        setEntries(prev => [finalEntry, ...prev]);
-        setCurrentEntry(finalEntry);
+      if (!db || user.isMock) {
+        // --- 本地访客模式处理 ---
+        if (rewriteBaseEntryId && currentEntry) {
+          const updated = { 
+            ...currentEntry, 
+            originalText: text, 
+            analysis, 
+            iterationCount: (currentEntry.iterationCount || 0) + 1 
+          } as DiaryEntry;
+          const updatedEntries = entries.map(e => e.id === rewriteBaseEntryId ? updated : e);
+          setEntries(updatedEntries);
+          setCurrentEntry(updated);
+          localStorage.setItem(`linguist_entries_${user.uid}`, JSON.stringify(updatedEntries));
+        } else {
+          const finalEntry = { ...newEntrySkeleton, id: uuidv4() } as DiaryEntry;
+          const updatedEntries = [finalEntry, ...entries];
+          setEntries(updatedEntries);
+          setCurrentEntry(finalEntry);
+          localStorage.setItem(`linguist_entries_${user.uid}`, JSON.stringify(updatedEntries));
+        }
+      } else {
+        // --- Firebase 模式处理 ---
+        const serverTS = serverTimestamp();
+        if (rewriteBaseEntryId && currentEntry) {
+          const baseDoc = doc(db, 'users', user.uid, 'diaryEntries', rewriteBaseEntryId);
+          await addDoc(collection(baseDoc, 'iterations'), { text, timestamp: serverTS, analysis });
+          await updateDoc(baseDoc, { 
+            originalText: text, analysis, timestamp: serverTS, 
+            iterationCount: (currentEntry.iterationCount || 0) + 1 
+          });
+          const updated = { ...currentEntry, originalText: text, analysis, timestamp: clientTimestamp, iterationCount: (currentEntry.iterationCount || 0) + 1 } as DiaryEntry;
+          setEntries(prev => prev.map(e => e.id === rewriteBaseEntryId ? updated : e));
+          setCurrentEntry(updated);
+        } else {
+          const docRef = await addDoc(collection(db, 'users', user.uid, 'diaryEntries'), {
+            ...newEntrySkeleton,
+            timestamp: serverTS
+          });
+          const finalEntry = { ...newEntrySkeleton, id: docRef.id } as DiaryEntry;
+          setEntries(prev => [finalEntry, ...prev]);
+          setCurrentEntry(finalEntry);
+        }
       }
+      
+      // 分析完成后，立即进入审阅视图，此时 currentEntry 已经包含了最新的 analysis
       setView('review');
     } catch (error: any) {
-      setError("AI 分析失败。");
+      console.error("Analysis Error:", error);
+      setError("AI 分析失败，请重试。");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleUpdateMastery = async (vocabId: string, word: string, newMastery: number, record?: PracticeRecord) => {
-    if (!user || !db) return;
+    if (!user) return;
+    if (!db || user.isMock) {
+        setAllAdvancedVocab(prev => {
+            const updated = prev.map(v => v.id === vocabId ? { ...v, mastery: newMastery } : v);
+            localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
+            return updated;
+        });
+        return;
+    }
     try {
       const vDoc = doc(db, 'users', user.uid, 'advancedVocab', vocabId);
       await updateDoc(vDoc, { mastery: newMastery });
@@ -272,16 +314,27 @@ const App: React.FC = () => {
   };
 
   const handleSaveToMuseum = async (language: string, rehearsal: RehearsalEvaluation) => {
-    if (!user || !db) return;
+    if (!user) return;
     const clientTS = Date.now();
-    const data = {
-      timestamp: serverTimestamp(),
+    const dataSkeleton: Omit<DiaryEntry, 'id'> = {
+      timestamp: clientTS,
       date: new Date(clientTS).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
       originalText: rehearsal.userRetelling || "",
       language, type: 'rehearsal', rehearsal, iterationCount: 0
     };
-    const docRef = await addDoc(collection(db, 'users', user.uid, 'diaryEntries'), data);
-    setEntries(prev => [{ ...data, id: docRef.id, timestamp: clientTS } as DiaryEntry, ...prev]);
+
+    if (!db || user.isMock) {
+        const final = { ...dataSkeleton, id: uuidv4() } as DiaryEntry;
+        const updated = [final, ...entries];
+        setEntries(updated);
+        localStorage.setItem(`linguist_entries_${user.uid}`, JSON.stringify(updated));
+    } else {
+        const docRef = await addDoc(collection(db, 'users', user.uid, 'diaryEntries'), {
+            ...dataSkeleton,
+            timestamp: serverTimestamp()
+        });
+        setEntries(prev => [{ ...dataSkeleton, id: docRef.id } as DiaryEntry, ...prev]);
+    }
   };
 
   if (!user) return <AuthView auth={auth} isFirebaseValid={isFirebaseValid} onLogin={handleLogin} />;
@@ -291,7 +344,12 @@ const App: React.FC = () => {
       {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={() => setView('vocab_list')} entries={entries} />}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} />}
       {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} />}
-      {view === 'history' && <History entries={entries} onSelect={(e) => { setCurrentEntry(e); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { if (db && user) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); setEntries(prev => prev.filter(e => e.id !== id)); }} onRewrite={(e) => { setRewriteBaseEntryId(e.id); setPrefilledEditorText(e.originalText); setView('editor'); }} />}
+      {view === 'history' && <History entries={entries} onSelect={(e) => { setCurrentEntry(e); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { 
+        if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); 
+        const updated = entries.filter(e => e.id !== id);
+        setEntries(updated);
+        if (user.isMock) localStorage.setItem(`linguist_entries_${user.uid}`, JSON.stringify(updated));
+      }} onRewrite={(e) => { setRewriteBaseEntryId(e.id); setPrefilledEditorText(e.originalText); setView('editor'); }} />}
       {view === 'chat' && <ChatEditor onFinish={(msgs, lang) => { setChatLanguage(lang); setPrefilledEditorText(msgs.map(m => m.content).join('\n\n')); setView('editor'); }} allGems={allAdvancedVocab.map(v => ({ ...v, language: v.language || 'English' }))} />}
       {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} />}
       {view === 'vocab_practice' && selectedVocabForPracticeId && <VocabPractice selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onUpdateMastery={handleUpdateMastery} onBackToVocabList={() => setView('vocab_list')} onViewChange={handleViewChange} isPracticeActive={isPracticeActive} />}
