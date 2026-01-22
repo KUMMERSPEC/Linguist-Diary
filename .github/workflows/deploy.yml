@@ -30,7 +30,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          # 核心修正：确保所有密钥都在构建时注入，Firebase 密钥使用 VITE_ 前缀
+          # 核心修正：映射 GitHub 中已有的 VITE_ 前缀 Secret 名称
           API_KEY: ${{ secrets.API_KEY }}
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}

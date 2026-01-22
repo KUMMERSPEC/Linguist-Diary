@@ -231,7 +231,8 @@ export const getChatFollowUp = async (history: ChatMessage[], language: string):
 // Generates audio for a given text using TTS.
 export const generateDiaryAudio = async (text: string): Promise<string | undefined> => {
   const ai = getAiInstance();
-  const model = 'gemini-2.5-flash-native-audio-preview-12-2025'; // Changed to latest recommended TTS model
+  // Fixed: Use 'gemini-2.5-flash-preview-tts' for text-to-speech tasks.
+  const model = 'gemini-2.5-flash-preview-tts'; 
   try {
     // Stripping potential ruby markers for TTS processing
     const cleanText = stripRuby(text); // Use imported stripRuby
