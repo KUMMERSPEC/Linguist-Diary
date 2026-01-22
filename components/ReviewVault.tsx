@@ -502,7 +502,6 @@ const ReviewVault: React.FC<ReviewVaultProps> = ({ entries, onReviewEntry, onUpd
                   </div>
                 </div>
               )}
-            </div>
             
             {/* Sticky Footer for Practice Input and Controls */}
             <div className="max-w-3xl mx-auto w-full sticky bottom-0 z-10 bg-slate-50 pt-6"> {/* Use pt-6 to push content up */}
