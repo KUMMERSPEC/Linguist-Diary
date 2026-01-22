@@ -246,4 +246,3 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, onViewC
 };
 
 export default VocabListView;
-    

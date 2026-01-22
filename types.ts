@@ -7,22 +7,26 @@ export interface Correction {
 }
 
 export interface PracticeRecord {
+  id: string; // Added for Firestore subcollection document ID
   sentence: string; 
   originalAttempt?: string; 
   feedback: string;
   betterVersion?: string;
   timestamp: number;
   status: 'Perfect' | 'Polished'; 
+  vocabId: string; // Reference to the parent vocab document ID
 }
 
 export interface AdvancedVocab {
-  id?: string; // Added for Firestore document ID
+  id: string; // Firestore document ID
   word: string;
   meaning: string;
   usage: string;
   level: 'Intermediate' | 'Advanced' | 'Native';
   mastery?: number; 
-  practices?: PracticeRecord[]; 
+  language: string; // Ensure language is always present for top-level vocab
+  practiceCount?: number; // Denormalized count for UI display
+  practices?: PracticeRecord[]; // Temporary local storage for practice records during display
 }
 
 // 新增 ExtendedVocab 类型，包含词汇所在的日记信息
@@ -38,7 +42,7 @@ export interface DiaryAnalysis {
   modifiedText: string;
   diffedText: string;
   corrections: Correction[];
-  advancedVocab: AdvancedVocab[];
+  advancedVocab: AdvancedVocab[]; // This will store the *new* vocab identified in this analysis, not the full list from DB.
   transitionSuggestions: TransitionSuggestion[];
   overallFeedback: string;
 }
@@ -55,21 +59,22 @@ export interface RehearsalEvaluation {
 }
 
 export interface DiaryIteration {
+  id: string; // Firestore document ID for the iteration
   text: string;
   timestamp: number;
   analysis: DiaryAnalysis;
 }
 
 export interface DiaryEntry {
-  id: string;
+  id: string; // Firestore document ID
   timestamp: number; 
   date: string; 
-  originalText: string;
+  originalText: string; // The text of the very first entry or the latest iteration for quick display
   language: string;
   type: 'diary' | 'rehearsal';
-  analysis?: DiaryAnalysis;
-  rehearsal?: RehearsalEvaluation;
-  iterations?: DiaryIteration[]; 
+  analysis?: DiaryAnalysis; // The analysis of the latest iteration for quick display
+  rehearsal?: RehearsalEvaluation; // Only for type 'rehearsal'
+  iterationCount?: number; // Denormalized count for UI display
 }
 
 export interface ChatMessage {

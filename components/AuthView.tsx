@@ -10,11 +10,17 @@ interface AuthViewProps {
 
 const AuthView: React.FC<AuthViewProps> = ({ auth, isFirebaseValid, onLogin }) => {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(
+    !isFirebaseValid
+      ? "🚨 警告：未检测到有效的 Firebase 配置（FIREBASE_API_KEY）。云端同步功能将受限。如果你在本地运行，请设置 FIREBASE_API_KEY 环境变量，或使用『访客直接进入』进行本地体验。如果已部署到 GitHub Pages，请确保 Actions Secrets 已正确配置。"
+      : null
+  );
 
   const handleGoogleLogin = async () => {
     if (!isFirebaseValid || !auth) {
-      setErrorMsg("未检测到 GitHub Secrets 配置。如果你是在本地预览模式，请使用下方的'访客直接进入'。如果已部署到 GitHub Pages，请确保 Actions 构建已完成。");
+      // This case should ideally be covered by the initial errorMsg state,
+      // but keeping this for explicit check before API call.
+      setErrorMsg("未检测到 Firebase 配置，无法进行 Google 登录。请确保已设置 FIREBASE_API_KEY 或使用访客模式。");
       return;
     }
     
@@ -76,7 +82,7 @@ const AuthView: React.FC<AuthViewProps> = ({ auth, isFirebaseValid, onLogin }) =
             <div className="space-y-2">
               <button 
                 onClick={handleGoogleLogin}
-                disabled={isLoggingIn}
+                disabled={isLoggingIn || !isFirebaseValid} // Disable if Firebase is not valid
                 className={`w-full flex items-center justify-center space-x-3 bg-white border-2 border-slate-100 transition-all p-4 rounded-2xl font-semibold text-slate-700 shadow-sm ${
                   isFirebaseValid 
                     ? 'hover:border-indigo-600 hover:bg-indigo-50' 
@@ -91,7 +97,7 @@ const AuthView: React.FC<AuthViewProps> = ({ auth, isFirebaseValid, onLogin }) =
                 <span>{isLoggingIn ? '正在连接安全验证...' : '使用 Google 账号登录 (同步)'}</span>
               </button>
               {!isFirebaseValid && (
-                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">仅在正式部署域名下可用 Available on production only</p>
+                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">仅在正确配置 Firebase 后可用</p>
               )}
             </div>
             
@@ -104,7 +110,7 @@ const AuthView: React.FC<AuthViewProps> = ({ auth, isFirebaseValid, onLogin }) =
               <button 
                 onClick={handleDemoLogin}
                 className={`w-full p-4 rounded-2xl font-bold shadow-lg transition-all active:scale-95 ${
-                  !isFirebaseValid 
+                  !isFirebaseValid // Promote if Firebase is NOT valid
                     ? 'bg-indigo-600 text-white hover:bg-indigo-700 ring-4 ring-indigo-500/10' 
                     : 'bg-slate-900 text-white hover:bg-indigo-600'
                 }`}
@@ -112,7 +118,7 @@ const AuthView: React.FC<AuthViewProps> = ({ auth, isFirebaseValid, onLogin }) =
                 ✨ 访客直接进入 (本地存储)
               </button>
               {!isFirebaseValid && (
-                 <p className="text-[10px] text-indigo-500 font-black uppercase tracking-widest animate-pulse">当前预览环境推荐使用此选项</p>
+                 <p className="text-[10px] text-indigo-500 font-black uppercase tracking-widest animate-pulse">当前环境推荐使用此选项</p>
               )}
             </div>
           </div>

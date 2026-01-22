@@ -61,46 +61,34 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, isLoading, initialText = '',
       </header>
 
       <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
-        {/* 输入框容器：通过 overflow-hidden 确保内部元素不溢出大圆角 */}
-        <div className="flex-1 bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col transition-all focus-within:ring-4 focus-within:ring-indigo-500/5 focus-within:border-indigo-200 min-h-[200px] mb-4">
+        {/* 输入框容器 */}
+        <div className="flex-1 bg-white border border-slate-200 rounded-[2.5rem] shadow-xl overflow-hidden focus-within:ring-4 focus-within:ring-indigo-500/5 focus-within:border-indigo-200 transition-all flex flex-col">
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={initialText ? "打磨当前的语言藏品，追求表达之美..." : "记录您的语言点滴，开启馆藏之旅..."}
-            className="w-full flex-1 resize-none border-none focus:ring-0 p-6 md:p-10 text-slate-700 text-base md:text-xl leading-relaxed serif-font placeholder:text-slate-300 bg-transparent"
+            placeholder="今天您想用语言记录些什么？"
+            className="flex-1 w-full border-none focus:ring-0 p-8 md:p-14 text-lg md:text-2xl leading-relaxed serif-font resize-none bg-transparent placeholder:text-slate-300"
             disabled={isLoading}
           />
-          
-          <div className="px-6 py-3 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between shrink-0">
-            <div className="flex items-center space-x-2">
-               <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></div>
-               <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">{language} — {initialText ? 'REFINE MODE' : 'COLLECTION DRAFT'}</span>
-            </div>
-            <span className={`text-[9px] font-black tracking-tighter ${text.length < 10 ? 'text-slate-300' : 'text-indigo-600'}`}>
-              {text.length} <span className="opacity-30">/ MIN 10</span>
-            </span>
+          <div className="px-8 py-4 bg-slate-50/50 border-t border-slate-50 flex items-center justify-between shrink-0">
+            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Editor's Canvas</span>
+            <span className="text-[10px] font-black text-slate-300">{text.length} chars</span>
           </div>
         </div>
-
-        <div className="shrink-0">
+        
+        <footer className="mt-6 flex justify-end shrink-0">
           <button 
-            type="submit" 
-            disabled={isLoading || text.length < 10} 
-            className={`w-full py-4 md:py-5 rounded-[1.5rem] font-bold flex items-center justify-center space-x-3 transition-all active:scale-[0.98] ${
-              isLoading 
-                ? 'bg-slate-100 text-slate-300' 
-                : 'bg-indigo-600 text-white shadow-xl shadow-indigo-100 hover:bg-indigo-700'
-            }`}
+            type="submit"
+            disabled={text.trim().length < 10 || isLoading}
+            className="bg-indigo-600 text-white px-8 py-4 rounded-3xl text-lg font-black shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-[0.98] flex items-center justify-center space-x-3"
           >
             {isLoading ? (
-              <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-300 border-t-indigo-500" />
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
             ) : (
-              <span className="text-sm md:text-lg">
-                {initialText ? '✨ 提交并分析迭代版本' : '✨ 提交并开启 AI 审阅'}
-              </span>
+              '✨ AI 智能校对 ANALYZE'
             )}
           </button>
-        </div>
+        </footer>
       </form>
     </div>
   );

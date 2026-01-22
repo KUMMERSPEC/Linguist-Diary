@@ -1,6 +1,7 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { DiaryAnalysis, ChatMessage, RehearsalEvaluation, DiaryEntry } from "../types";
+import { stripRuby } from "../utils/textHelpers"; // Import stripRuby
 
 // Helper to initialize the GenAI client using the environment's API key.
 const getAiInstance = () => {
@@ -23,7 +24,7 @@ const getJapaneseInstruction = (language: string) => {
  * Helper function to generate more specific and user-friendly AI error messages.
  */
 const getAiErrorMessage = (error: any) => {
-  console.error("AI API Error:", error);
+  console.error("AI API Raw Error Object:", error); // Log the raw error object
   let errorMessage = "AI 处理失败，请稍后重试。";
 
   if (error instanceof Error) {
@@ -43,6 +44,7 @@ const getAiErrorMessage = (error: any) => {
 
 // Analyzes a diary entry. Optimized for MONOLINGUAL VOCAB EXPLANATION.
 export const analyzeDiaryEntry = async (text: string, language: string, history: DiaryEntry[] = []): Promise<DiaryAnalysis> => {
+  console.log(`[geminiService] analyzeDiaryEntry: Starting analysis for language: ${language}`);
   const ai = getAiInstance();
   const model = 'gemini-3-flash-preview';
   const historyContext = history.length > 0 
@@ -50,6 +52,7 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
     : "";
 
   try {
+    console.log(`[geminiService] analyzeDiaryEntry: Calling ai.models.generateContent...`);
     const response = await ai.models.generateContent({
       model,
       contents: `Role: Language Expert. Analyze this ${language} text: "${text}".
@@ -111,8 +114,14 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
         }
       }
     });
-    return JSON.parse(response.text) as DiaryAnalysis;
-  } catch (error: any) { throw new Error(getAiErrorMessage(error)); }
+    console.log(`[geminiService] analyzeDiaryEntry: Received response from AI. Text length: ${response.text?.length}`);
+    const parsedResponse = JSON.parse(response.text) as DiaryAnalysis;
+    console.log(`[geminiService] analyzeDiaryEntry: Successfully parsed AI response.`);
+    return parsedResponse;
+  } catch (error: any) { 
+    console.error(`[geminiService] analyzeDiaryEntry: Error during AI call:`, error);
+    throw new Error(getAiErrorMessage(error)); 
+  }
 };
 
 // Evaluates a retelling.
@@ -222,10 +231,10 @@ export const getChatFollowUp = async (history: ChatMessage[], language: string):
 // Generates audio for a given text using TTS.
 export const generateDiaryAudio = async (text: string): Promise<string | undefined> => {
   const ai = getAiInstance();
-  const model = 'gemini-2.5-flash-preview-tts';
+  const model = 'gemini-2.5-flash-native-audio-preview-12-2025'; // Changed to latest recommended TTS model
   try {
     // Stripping potential ruby markers for TTS processing
-    const cleanText = text.replace(/\[(.*?)\]\(.*?\)/g, '$1');
+    const cleanText = stripRuby(text); // Use imported stripRuby
     const response = await ai.models.generateContent({
       model,
       contents: [{ parts: [{ text: cleanText }] }],

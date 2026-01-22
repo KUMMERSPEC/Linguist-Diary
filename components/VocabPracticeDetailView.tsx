@@ -221,4 +221,3 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
 };
 
 export default VocabPracticeDetailView;
-    

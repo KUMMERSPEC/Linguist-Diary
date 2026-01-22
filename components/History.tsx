@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { DiaryEntry } from '../types';
+import { renderRuby } from '../utils/textHelpers'; // Import renderRuby
 
 interface HistoryProps {
   entries: DiaryEntry[];
@@ -13,18 +14,15 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('All');
 
-  const renderRuby = (text?: string) => {
-    if (!text || typeof text !== 'string') return '';
-    const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
-    return <span dangerouslySetInnerHTML={{ __html: html }} />;
-  };
-
   const getLatestText = (entry: DiaryEntry) => {
-    if (entry.iterations && entry.iterations.length > 0) {
-      return entry.iterations[entry.iterations.length - 1].text;
-    }
+    // With denormalization, entry.originalText already holds the latest iteration's text
     return entry.originalText;
   };
+
+  const getIterationCountDisplay = (entry: DiaryEntry) => {
+    // Use the denormalized iterationCount for display
+    return entry.iterationCount || 0;
+  }
 
   const filteredEntries = useMemo(() => {
     return entries.filter(e => {
@@ -100,7 +98,7 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
               {monthEntries.map((entry) => {
-                const iterCount = entry.iterations?.length || 0;
+                const iterCount = getIterationCountDisplay(entry);
                 const isRehearsal = entry.type === 'rehearsal';
                 const displayText = getLatestText(entry);
                 
@@ -114,7 +112,7 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
                        <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-bl-[4rem] opacity-30 -mr-10 -mt-10 group-hover:scale-110 transition-transform"></div>
                        
                        <div className="absolute top-6 left-8 flex items-center space-x-2">
-                         <div className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse"></div>
+                         <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-pulse"></div>
                          <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider">{new Date(entry.timestamp).getDate()}nd Exhibit</span>
                        </div>
 

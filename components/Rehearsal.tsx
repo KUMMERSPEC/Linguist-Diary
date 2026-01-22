@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { RehearsalEvaluation } from '../types';
 import { generatePracticeArtifact, evaluateRetelling, generateDiaryAudio } from '../services/geminiService';

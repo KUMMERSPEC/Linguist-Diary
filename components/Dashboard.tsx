@@ -238,4 +238,3 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, onStartReview, entrie
 };
 
 export default Dashboard;
-    
