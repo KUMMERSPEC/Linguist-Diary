@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, User as FirebaseAuthUser } from 'firebase/auth'; // Import FirebaseAuthUser
+import { getAuth, onAuthStateChanged, User as FirebaseAuthUser } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, Firestore } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -14,14 +14,12 @@ import History from './components/History';
 import ChatEditor from './components/ChatEditor';
 import VocabListView from './components/VocabListView';
 import VocabPractice from './components/VocabPractice';
-// import PracticeHistoryView from './components/PracticeHistoryView'; // REMOVED
-// import ReviewVault from './components/ReviewVault'; // REMOVED
 import VocabPracticeDetailView from './components/VocabPracticeDetailView';
 import Rehearsal from './components/Rehearsal';
 import RehearsalReport from './components/RehearsalReport';
 
 import { ViewState, DiaryEntry, ChatMessage, RehearsalEvaluation, DiaryIteration, AdvancedVocab, PracticeRecord } from './types';
-import { analyzeDiaryEntry, synthesizeDiary } from './services/geminiService';
+import { analyzeDiaryEntry } from './services/geminiService';
 
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY || "",
@@ -31,6 +29,17 @@ const firebaseConfig = {
   messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "",
   appId: process.env.FIREBASE_APP_ID || ""
 };
+
+const AVATAR_SEEDS = [
+  { seed: 'Felix', label: '沉稳博学者' },
+  { seed: 'Aneka', label: '先锋艺术家' },
+  { seed: 'Oliver', label: '好奇探险家' },
+  { seed: 'Willow', label: '灵感诗人' },
+  { seed: 'Toby', label: '严谨学者' },
+  { seed: 'Milo', label: '活力博主' },
+  { seed: 'Sasha', label: '深邃哲人' },
+  { seed: 'Buster', label: '极简主义者' },
+];
 
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
@@ -57,15 +66,17 @@ const App: React.FC = () => {
   const [rewriteBaseId, setRewriteBaseId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [chatTranscript, setChatTranscript] = useState<ChatMessage[]>([]);
   const [chatLanguage, setChatLanguage] = useState('');
+  const [prefilledEditorText, setPrefilledEditorText] = useState('');
 
-  // New state for Advanced Vocabulary management
   const [allAdvancedVocab, setAllAdvancedVocab] = useState<(AdvancedVocab & { language: string })[]>([]);
   const [selectedVocabForPracticeId, setSelectedVocabForPracticeId] = useState<string | null>(null);
   const [isPracticeActive, setIsPracticeActive] = useState(false);
 
-  // Auth State Listener
+  // 个人资料编辑状态
+  const [editName, setEditName] = useState('');
+  const [editPhoto, setEditPhoto] = useState('');
+
   useEffect(() => {
     if (!auth) return;
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseAuthUser | null) => {
@@ -85,27 +96,32 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, [isFirebaseValid]);
 
-  // Load / Save Data from Firebase or Local Storage
   const loadUserData = useCallback(async (userId: string, isMock: boolean) => {
     setIsLoading(true);
     setError(null);
     try {
       if (!db || isMock) {
-        // Local storage for mock user
         const localEntries = localStorage.getItem(`linguist_entries_${userId}`);
         if (localEntries) setEntries(JSON.parse(localEntries));
-
         const localVocab = localStorage.getItem(`linguist_vocab_${userId}`);
         if (localVocab) setAllAdvancedVocab(JSON.parse(localVocab));
-
+        
+        // 加载自定义资料
+        const localProfile = localStorage.getItem(`linguist_profile_${userId}`);
+        if (localProfile) {
+          const { displayName, photoURL } = JSON.parse(localProfile);
+          setUser(prev => prev ? { ...prev, displayName, photoURL } : null);
+        }
       } else {
-        // Firebase for authenticated user
         const docRef = doc(db, 'users', userId);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
           if (data.entries) setEntries(data.entries);
           if (data.advancedVocab) setAllAdvancedVocab(data.advancedVocab);
+          if (data.profile) {
+             setUser(prev => prev ? { ...prev, ...data.profile } : null);
+          }
         }
       }
     } catch (e) {
@@ -119,35 +135,28 @@ const App: React.FC = () => {
   const saveUserData = useCallback(async (userId: string, isMock: boolean, currentEntries: DiaryEntry[], currentVocab: (AdvancedVocab & { language: string })[]) => {
     try {
       if (!db || isMock) {
-        // Local storage for mock user
         localStorage.setItem(`linguist_entries_${userId}`, JSON.stringify(currentEntries));
         localStorage.setItem(`linguist_vocab_${userId}`, JSON.stringify(currentVocab));
       } else {
-        // Firebase for authenticated user
         const docRef = doc(db, 'users', userId);
         await setDoc(docRef, { entries: currentEntries, advancedVocab: currentVocab }, { merge: true });
       }
     } catch (e) {
       console.error("Error saving user data:", e);
-      setError("无法保存数据。");
     }
   }, [db]);
 
-  // Effect to load data on user change
   useEffect(() => {
     if (user) {
       loadUserData(user.uid, user.isMock);
     }
-  }, [user, loadUserData]);
+  }, [user?.uid, user?.isMock]); // 仅在核心身份变化时加载
 
-  // Effect to save entries when they change
   useEffect(() => {
-    if (user && entries.length > 0) { // Only save if there are entries and user is logged in
+    if (user) {
       saveUserData(user.uid, user.isMock, entries, allAdvancedVocab);
     }
-  }, [entries, allAdvancedVocab, user, saveUserData]);
-
-  // Handlers for App functionality
+  }, [entries, allAdvancedVocab, user?.uid]);
 
   const handleLogin = (userData: { uid: string, displayName: string, photoURL: string }, isMock: boolean) => {
     setUser({ ...userData, isMock });
@@ -168,16 +177,34 @@ const App: React.FC = () => {
   const handleViewChange = (newView: ViewState, vocabId?: string, isPracticeActive?: boolean) => {
     setView(newView);
     setError(null);
-    setCurrentEntry(null);
-    setRewriteBaseId(null);
-    setSelectedVocabForPracticeId(vocabId || null); // Set selected vocab ID for practice view
-    setIsPracticeActive(!!isPracticeActive); // Set the practice mode flag
-    if (newView === 'editor') {
-      setCurrentEntry(null);
-    }
-    if (newView === 'chat') {
-      setChatTranscript([]);
+    setSelectedVocabForPracticeId(vocabId || null);
+    setIsPracticeActive(!!isPracticeActive);
+    if (newView !== 'editor') {
+      setPrefilledEditorText('');
       setChatLanguage('');
+    }
+    // 进入 Profile 时初始化编辑状态
+    if (newView === 'profile' && user) {
+      setEditName(user.displayName);
+      setEditPhoto(user.photoURL);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    const updatedUser = { ...user, displayName: editName, photoURL: editPhoto };
+    setUser(updatedUser);
+    
+    try {
+      if (!db || user.isMock) {
+        localStorage.setItem(`linguist_profile_${user.uid}`, JSON.stringify({ displayName: editName, photoURL: editPhoto }));
+      } else {
+        const docRef = doc(db, 'users', user.uid);
+        await setDoc(docRef, { profile: { displayName: editName, photoURL: editPhoto } }, { merge: true });
+      }
+      alert("馆长档案已更新！");
+    } catch (e) {
+      console.error("Error saving profile:", e);
     }
   };
 
@@ -186,24 +213,18 @@ const App: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const historyContext = entries.filter(e => e.language === language && e.analysis).slice(-5); // Use last 5 relevant entries
+      const historyContext = entries.filter(e => e.language === language && e.analysis).slice(-5);
       const analysis = await analyzeDiaryEntry(text, language, historyContext);
 
-      const newEntryId = uuidv4();
       const timestamp = Date.now();
       const date = new Date(timestamp).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
 
-      let newEntry: DiaryEntry;
-
       if (rewriteBaseId && currentEntry) {
-        // This is an iteration on an existing entry
         const baseEntryIndex = entries.findIndex(e => e.id === rewriteBaseId);
         if (baseEntryIndex !== -1) {
           const updatedEntries = [...entries];
           const baseEntry = { ...updatedEntries[baseEntryIndex] };
           if (!baseEntry.iterations) baseEntry.iterations = [];
-          
-          // Add the original entry's initial analysis as the first iteration if not already present
           if (baseEntry.analysis && baseEntry.iterations.length === 0) {
               baseEntry.iterations.push({
                   text: baseEntry.originalText,
@@ -211,7 +232,6 @@ const App: React.FC = () => {
                   analysis: baseEntry.analysis
               });
           }
-          
           baseEntry.iterations.push({
             text: text,
             timestamp: timestamp,
@@ -219,13 +239,12 @@ const App: React.FC = () => {
           });
           updatedEntries[baseEntryIndex] = baseEntry;
           setEntries(updatedEntries);
-          setCurrentEntry(baseEntry); // Set current entry to the base entry being iterated on
+          setCurrentEntry(baseEntry);
           setRewriteBaseId(null);
         }
       } else {
-        // This is a brand new entry
-        newEntry = {
-          id: newEntryId,
+        const newEntry: DiaryEntry = {
+          id: uuidv4(),
           timestamp: timestamp,
           date: date,
           originalText: text,
@@ -234,104 +253,50 @@ const App: React.FC = () => {
           analysis: analysis,
           iterations: []
         };
-        setEntries(prev => [newEntry!, ...prev]); // Add new entry to the beginning
+        setEntries(prev => [newEntry, ...prev]);
         setCurrentEntry(newEntry);
       }
 
-      // Update allAdvancedVocab after successful analysis
       setAllAdvancedVocab(prevVocab => {
-        const updatedVocab = new Map<string, AdvancedVocab & { language: string }>(
-          prevVocab.map(v => [`${v.word}-${v.language}`, v])
-        );
-
+        const vocabMap = new Map<string, AdvancedVocab & { language: string }>();
+        prevVocab.forEach(v => vocabMap.set(`${v.word.toLowerCase()}-${v.language.toLowerCase()}`, v));
         analysis.advancedVocab.forEach(newV => {
-          const key = `${newV.word}-${language}`; // Ensure language is considered for uniqueness
-          const existing = updatedVocab.get(key);
+          const key = `${newV.word.toLowerCase()}-${language.toLowerCase()}`;
+          const existing = vocabMap.get(key);
           if (existing) {
-            // Merge or update if exists
-            updatedVocab.set(key, { ...existing, ...newV, // keep existing mastery/practices
-              mastery: existing.mastery || newV.mastery,
-              practices: existing.practices || newV.practices
+            vocabMap.set(key, { 
+              ...existing, 
+              meaning: newV.meaning,
+              usage: newV.usage,
+              level: newV.level
             });
           } else {
-            updatedVocab.set(key, { ...newV, language: language });
+            vocabMap.set(key, { ...newV, language, mastery: 0, practices: [] });
           }
         });
-        return Array.from(updatedVocab.values());
+        return Array.from(vocabMap.values());
       });
 
+      setPrefilledEditorText('');
       setView('review');
-
     } catch (e: any) {
-      setError(e.message || "AI 分析失败，请稍后重试。");
+      setError(e.message || "AI 分析失败。");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleChatFinish = async (transcript: ChatMessage[], language: string) => {
-    if (!user) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const synthesizedText = await synthesizeDiary(transcript, language);
-      const analysis = await analyzeDiaryEntry(synthesizedText, language);
-
-      const newEntryId = uuidv4();
-      const timestamp = Date.now();
-      const date = new Date(timestamp).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
-
-      const newEntry: DiaryEntry = {
-        id: newEntryId,
-        timestamp: timestamp,
-        date: date,
-        originalText: synthesizedText,
-        language: language,
-        type: 'diary',
-        analysis: analysis,
-        iterations: []
-      };
-      setEntries(prev => [newEntry, ...prev]);
-      setCurrentEntry(newEntry);
-      setChatTranscript(transcript); // Save transcript to state
-      setChatLanguage(language);
-
-      // Update allAdvancedVocab after successful analysis from chat
-      setAllAdvancedVocab(prevVocab => {
-        const updatedVocab = new Map<string, AdvancedVocab & { language: string }>(
-          prevVocab.map(v => [`${v.word}-${v.language}`, v])
-        );
-
-        analysis.advancedVocab.forEach(newV => {
-          const key = `${newV.word}-${language}`;
-          const existing = updatedVocab.get(key);
-          if (existing) {
-            updatedVocab.set(key, { ...existing, ...newV,
-              mastery: existing.mastery || newV.mastery,
-              practices: existing.practices || newV.practices
-            });
-          } else {
-            updatedVocab.set(key, { ...newV, language: language });
-          }
-        });
-        return Array.from(updatedVocab.values());
-      });
-
-      setView('review');
-
-    } catch (e: any) {
-      setError(e.message || "AI 合成与分析失败，请稍后重试。");
-    } finally {
-      setIsLoading(false);
-    }
+  const handleChatFinish = (transcript: ChatMessage[], language: string) => {
+    const draft = transcript
+      .filter(m => m.role === 'user')
+      .map(m => m.content.trim())
+      .join('\n\n');
+    setPrefilledEditorText(draft);
+    setChatLanguage(language);
+    setView('editor');
   };
 
   const handleSaveEntry = () => {
-    // This function is typically called after reviewing an entry and deciding to "exhibit" it.
-    // The entry (or its latest iteration) should already be in the `entries` state.
-    // If it was a new entry, it's already added by handleAnalyze. If it was an iteration, it's updated.
-    // The advanced vocabulary is also already updated.
-    // Just navigate back to the dashboard or history.
     setView('history');
     setCurrentEntry(null);
     setRewriteBaseId(null);
@@ -353,45 +318,33 @@ const App: React.FC = () => {
   };
 
   const handleDeleteEntry = (id: string) => {
-    if (window.confirm("确定要删除这篇馆藏吗？此操作不可撤销。")) {
-      setEntries(prev => prev.filter(entry => entry.id === id));
-      // Optionally, clean up associated vocab if it's no longer referenced elsewhere.
-      // This can be complex, so for now, vocab remains in allAdvancedVocab.
-      alert("馆藏已删除。");
+    if (window.confirm("确定要删除这篇馆藏吗？")) {
+      setEntries(prev => prev.filter(entry => entry.id !== id));
     }
   };
 
   const handleSaveRehearsalToMuseum = (language: string, evaluation: RehearsalEvaluation) => {
-    if (!user) return;
-
-    const newEntryId = uuidv4();
-    const timestamp = Date.now();
-    const date = new Date(timestamp).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
-
     const newEntry: DiaryEntry = {
-      id: newEntryId,
-      timestamp: timestamp,
-      date: date,
-      originalText: evaluation.userRetelling || evaluation.sourceText || '', // Use user retelling if available, otherwise source
+      id: uuidv4(),
+      timestamp: Date.now(),
+      date: new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
+      originalText: evaluation.userRetelling || evaluation.sourceText || '',
       language: language,
       type: 'rehearsal',
       rehearsal: evaluation,
-      iterations: [] // Rehearsals don't have iterations in the same way diaries do
+      iterations: []
     };
     setEntries(prev => [newEntry, ...prev]);
-    // For now, rehearsal evaluations don't generate advanced vocab directly to the vault.
-    // This could be a future enhancement if desired.
-    alert("演练报告已存入收藏馆！");
+    alert("演练报告已存入！");
     setView('history');
   };
 
   const handleUpdateMastery = useCallback((entryId: string, word: string, newMastery: number, record?: PracticeRecord) => {
     setAllAdvancedVocab(prev => {
       return prev.map(vocab => {
-        // The key for vocab should include language for true uniqueness
         if (vocab.word === word) {
           const updatedVocab = { ...vocab, mastery: newMastery };
-          if (record) {
+          if (record && record.status === 'Perfect') {
             if (!updatedVocab.practices) updatedVocab.practices = [];
             updatedVocab.practices = [...updatedVocab.practices, record];
           }
@@ -403,43 +356,22 @@ const App: React.FC = () => {
   }, []);
 
   const getCombinedAllGems = useCallback(() => {
-    const combinedGems = new Map<string, AdvancedVocab & { language: string }>(); // key: `${word}-${language}`
-
-    entries.forEach(entry => {
-      if (entry.analysis?.advancedVocab) {
-        entry.analysis.advancedVocab.forEach(vocab => {
-          const key = `${vocab.word}-${entry.language}`;
-          if (!combinedGems.has(key)) {
-            combinedGems.set(key, { ...vocab, language: entry.language, mastery: 0, practices: [] });
-          }
-        });
-      }
-      // If the vocab is already in allAdvancedVocab, it means it's deduplicated and has actual mastery/practices
-    });
-
-    // Merge with allAdvancedVocab (which contains consolidated mastery/practices)
-    allAdvancedVocab.forEach(vocab => {
-      const key = `${vocab.word}-${vocab.language}`;
-      combinedGems.set(key, vocab); // Overwrite with consolidated version
-    });
-
-    return Array.from(combinedGems.values());
-  }, [entries, allAdvancedVocab]);
+    const vocabMap = new Map<string, AdvancedVocab & { language: string }>();
+    allAdvancedVocab.forEach(v => vocabMap.set(`${v.word.toLowerCase()}-${v.language.toLowerCase()}`, v));
+    return Array.from(vocabMap.values());
+  }, [allAdvancedVocab]);
 
   const handleStartReviewFromDashboard = () => {
     if (allAdvancedVocab.length > 0) {
-      // Randomly select a vocab to start practicing
       const randomIndex = Math.floor(Math.random() * allAdvancedVocab.length);
       const selectedVocab = allAdvancedVocab[randomIndex];
       const vocabId = `${selectedVocab.word}-${selectedVocab.language}`;
-      // Navigate directly to vocab_practice and set it to active mode
       handleViewChange('vocab_practice', vocabId, true);
     } else {
-      alert("珍宝库中没有词汇可供练习。请先撰写日记以发现新的词汇珍宝。");
-      handleViewChange('vocab_list'); // Still go to vocab list view to show empty state
+      alert("珍宝库中没有词汇可供练习。");
+      handleViewChange('vocab_list');
     }
   };
-
 
   if (!user) {
     return (
@@ -458,7 +390,6 @@ const App: React.FC = () => {
           <div className="flex flex-col items-center space-y-4 p-8 bg-white rounded-3xl shadow-2xl border border-slate-100 text-slate-700">
             <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
             <p className="text-lg font-semibold">AI 馆长正在处理中...</p>
-            <p className="text-sm text-slate-400 italic">请耐心等待片刻，珍宝即将呈现。</p>
           </div>
         </div>
       )}
@@ -487,8 +418,8 @@ const App: React.FC = () => {
         <Editor
           onAnalyze={handleAnalyze}
           isLoading={isLoading}
-          initialText={rewriteBaseId && currentEntry ? currentEntry.originalText : (currentEntry?.type === 'diary' && currentEntry.iterations && currentEntry.iterations.length > 0 ? currentEntry.iterations[currentEntry.iterations.length - 1].text : '')}
-          initialLanguage={currentEntry?.language || 'English'}
+          initialText={prefilledEditorText || (rewriteBaseId && currentEntry ? (currentEntry.iterations && currentEntry.iterations.length > 0 ? currentEntry.iterations[currentEntry.iterations.length-1].text : currentEntry.originalText) : '')}
+          initialLanguage={chatLanguage || currentEntry?.language || 'English'}
         />
       )}
       {view === 'review' && currentEntry && currentEntry.analysis && (
@@ -551,9 +482,133 @@ const App: React.FC = () => {
           onBack={() => handleViewChange('history')}
         />
       )}
+      {view === 'profile' && (
+        <div className="flex flex-col animate-in fade-in duration-700 py-6 max-w-4xl mx-auto space-y-10 px-4">
+          <header className="flex flex-col md:flex-row items-center md:items-end justify-between gap-6 border-b border-slate-100 pb-8">
+            <div className="text-center md:text-left">
+              <h2 className="text-3xl md:text-5xl font-black text-slate-900 serif-font">馆长办公室 Curator's Office</h2>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">在这里定义您的馆藏意志</p>
+            </div>
+            <div className="flex space-x-3">
+              <button onClick={handleSaveProfile} className="bg-indigo-600 text-white px-8 py-3.5 rounded-2xl font-black shadow-xl hover:bg-indigo-700 transition-all active:scale-95 text-sm uppercase tracking-widest">
+                保存馆长配置 SAVE
+              </button>
+            </div>
+          </header>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+            {/* 左侧：形象管理 */}
+            <div className="lg:col-span-8 space-y-8">
+              <section className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-8">
+                <div className="flex items-center space-x-3">
+                  <div className="w-1.5 h-6 bg-indigo-600 rounded-full"></div>
+                  <h4 className="text-[11px] font-black text-slate-800 tracking-[0.2em] uppercase">形象馆藏 Avatar Gallery</h4>
+                </div>
+
+                <div className="flex flex-col md:flex-row items-center space-x-0 md:space-x-10 space-y-8 md:space-y-0">
+                  <div className="relative shrink-0">
+                    <img src={editPhoto} className="w-32 h-32 md:w-48 md:h-48 rounded-[3rem] border-8 border-slate-50 shadow-2xl transition-all duration-500" alt="Selected Curator" />
+                    <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase shadow-lg">Current</div>
+                  </div>
+                  <div className="flex-1 space-y-6">
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">馆长名号 Curator Title</label>
+                       <input 
+                         type="text" 
+                         value={editName}
+                         onChange={(e) => setEditName(e.target.value)}
+                         className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-400 focus:bg-white p-5 rounded-2xl text-xl font-black serif-font outline-none transition-all shadow-inner"
+                       />
+                    </div>
+                    <p className="text-xs text-slate-400 italic leading-relaxed">
+                      该名号将显示在所有馆藏报告、侧边栏及启发对话中。
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-4 space-y-4">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">形象预览预览 Persona Selection</label>
+                  <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
+                    {AVATAR_SEEDS.map((item) => {
+                      const url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.seed}`;
+                      const isSelected = editPhoto === url;
+                      return (
+                        <button 
+                          key={item.seed}
+                          onClick={() => setEditPhoto(url)}
+                          title={item.label}
+                          className={`relative group transition-all duration-500 ${isSelected ? 'scale-110' : 'hover:scale-105'}`}
+                        >
+                          <img src={url} className={`w-full aspect-square rounded-2xl border-4 transition-all ${isSelected ? 'border-indigo-600 shadow-xl shadow-indigo-100' : 'border-transparent grayscale opacity-50 hover:grayscale-0 hover:opacity-100'}`} />
+                          {isSelected && <div className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[8px]">✓</div>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </section>
+
+              <div className="bg-rose-50 p-8 rounded-[3rem] border border-rose-100 flex flex-col md:flex-row items-center justify-between gap-6">
+                 <div className="text-center md:text-left">
+                   <h4 className="text-rose-900 font-bold">撤离收藏馆 Security</h4>
+                   <p className="text-rose-400 text-xs mt-1">退出当前登录，所有本地缓存将安全保留。</p>
+                 </div>
+                 <button onClick={handleLogout} className="bg-rose-600 text-white px-8 py-3 rounded-2xl font-bold text-sm hover:bg-rose-700 transition-all shadow-lg active:scale-95 uppercase tracking-widest">
+                    登出 LOGOUT
+                 </button>
+              </div>
+            </div>
+
+            {/* 右侧：统计概览 */}
+            <div className="lg:col-span-4 space-y-8">
+              <section className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-6">
+                <div className="flex items-center space-x-3">
+                  <div className="w-1.5 h-6 bg-indigo-600 rounded-full"></div>
+                  <h4 className="text-[11px] font-black text-slate-800 tracking-[0.2em] uppercase">馆藏概览 Archives Overview</h4>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">馆藏总数 Items</span>
+                    <p className="text-3xl font-black text-slate-900 serif-font mt-1">{entries.length}</p>
+                  </div>
+                  <div className="bg-indigo-50/50 p-6 rounded-[2rem] border border-indigo-100">
+                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">已点亮珍宝 Lit Gems</span>
+                    <p className="text-3xl font-black text-indigo-600 serif-font mt-1">{allAdvancedVocab.filter(v => (v.mastery || 0) >= 3).length}</p>
+                  </div>
+                </div>
+
+                <div className="pt-4 space-y-3">
+                   <button 
+                    onClick={() => handleViewChange('history')}
+                    className="w-full flex items-center justify-between p-5 bg-white rounded-2xl border border-slate-100 hover:border-indigo-200 transition-all group"
+                  >
+                    <span className="text-xs font-bold text-slate-700">进入展厅 Browse Exhibits</span>
+                    <span className="text-slate-300 group-hover:translate-x-1 transition-transform">→</span>
+                  </button>
+                  <button 
+                    onClick={() => handleViewChange('vocab_list')}
+                    className="w-full flex items-center justify-between p-5 bg-white rounded-2xl border border-slate-100 hover:border-indigo-200 transition-all group"
+                  >
+                    <span className="text-xs font-bold text-slate-700">清点珍宝 Audit Gems</span>
+                    <span className="text-slate-300 group-hover:translate-x-1 transition-transform">→</span>
+                  </button>
+                </div>
+              </section>
+              
+              <div className="bg-indigo-600 p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-10 opacity-10 text-9xl font-serif -mr-10 -mt-10 transition-transform group-hover:scale-110">“</div>
+                <p className="text-indigo-100 italic leading-[1.8] text-sm serif-font relative z-10">
+                  “语言不是一种工具，它是你灵魂的居所，每一篇记录都是你在那里种下的花。”
+                </p>
+                <div className="mt-6 text-[10px] font-black uppercase tracking-widest opacity-60">Curator's Wisdom</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 };
 
 export default App;
-    

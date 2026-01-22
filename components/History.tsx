@@ -19,9 +19,17 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
     return <span dangerouslySetInnerHTML={{ __html: html }} />;
   };
 
+  const getLatestText = (entry: DiaryEntry) => {
+    if (entry.iterations && entry.iterations.length > 0) {
+      return entry.iterations[entry.iterations.length - 1].text;
+    }
+    return entry.originalText;
+  };
+
   const filteredEntries = useMemo(() => {
     return entries.filter(e => {
-      const matchesSearch = (e.originalText && e.originalText.toLowerCase().includes(searchQuery.toLowerCase())) || (e.date && e.date.includes(searchQuery));
+      const latestText = getLatestText(e);
+      const matchesSearch = (latestText && latestText.toLowerCase().includes(searchQuery.toLowerCase())) || (e.date && e.date.includes(searchQuery));
       const matchesLanguage = selectedLanguage === 'All' || e.language === selectedLanguage;
       return matchesSearch && matchesLanguage;
     }).sort((a, b) => b.timestamp - a.timestamp);
@@ -94,19 +102,17 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
               {monthEntries.map((entry) => {
                 const iterCount = entry.iterations?.length || 0;
                 const isRehearsal = entry.type === 'rehearsal';
+                const displayText = getLatestText(entry);
                 
                 return (
                   <div key={entry.id} className="relative group perspective-1000">
-                    {/* 堆叠背景效果 */}
                     {iterCount > 0 && (
                       <div className="absolute inset-0 bg-indigo-50/50 border border-indigo-100/50 rounded-[3rem] translate-x-3 translate-y-3 -z-10 transition-transform group-hover:translate-x-4 group-hover:translate-y-4"></div>
                     )}
                     
                     <div className="bg-white p-8 pt-12 rounded-[3rem] border border-slate-200 shadow-sm hover:shadow-2xl transition-all duration-500 relative flex flex-col h-full overflow-hidden group-hover:-translate-y-2">
-                       {/* 装饰性背景 */}
                        <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-bl-[4rem] opacity-30 -mr-10 -mt-10 group-hover:scale-110 transition-transform"></div>
                        
-                       {/* 顶部标签 */}
                        <div className="absolute top-6 left-8 flex items-center space-x-2">
                          <div className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse"></div>
                          <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider">{new Date(entry.timestamp).getDate()}nd Exhibit</span>
@@ -126,7 +132,7 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
 
                        <div className="flex-1 cursor-pointer" onClick={() => onSelect(entry)}>
                          <p className="text-slate-600 line-clamp-5 serif-font mb-8 italic text-base md:text-lg leading-[2.2] group-hover:text-slate-900 transition-colors">
-                           “ {renderRuby(entry.originalText)} ”
+                           “ {renderRuby(displayText)} ”
                          </p>
                        </div>
 

@@ -11,7 +11,7 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, user, onLogout }) => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isPracticeMenuOpen, setIsPracticeMenuOpen] = useState(false);
 
   const getNavLinkClass = (viewName: ViewState | ViewState[]) => {
     const isActive = Array.isArray(viewName)
@@ -26,113 +26,107 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
 
   const NavItem = ({ view, label, icon }: { view: ViewState | ViewState[]; label: string; icon: string }) => (
     <button onClick={() => {
-      onViewChange(Array.isArray(view) ? view[0] : view); // Navigate to the primary view of the group
-      setIsMobileMenuOpen(false); // Close mobile menu on click
+      onViewChange(Array.isArray(view) ? view[0] : view);
+      setIsPracticeMenuOpen(false);
     }} className={getNavLinkClass(view)}>
       <span className="text-xl group-hover:scale-110 transition-transform">{icon}</span>
       <span>{label}</span>
     </button>
   );
 
+  const MobileTab = ({ views, label, icon, activeIcon }: { views: ViewState | ViewState[]; label: string; icon: string; activeIcon: string }) => {
+    const isActive = Array.isArray(views) ? views.includes(activeView) : activeView === views;
+    return (
+      <button 
+        onClick={() => {
+          onViewChange(Array.isArray(views) ? views[0] : views);
+          setIsPracticeMenuOpen(false);
+        }}
+        className={`flex flex-col items-center justify-center flex-1 py-2 space-y-1 transition-all ${isActive ? 'text-indigo-600' : 'text-slate-400'}`}
+      >
+        <span className="text-2xl">{isActive ? activeIcon : icon}</span>
+        <span className="text-[10px] font-bold uppercase tracking-widest">{label}</span>
+      </button>
+    );
+  };
+
   return (
     <div className="flex min-h-screen bg-slate-50">
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-slate-100 p-6 space-y-6 shrink-0">
-        <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-xl">🖋️</div>
-            <h1 className="text-lg font-bold text-slate-900 serif-font">Linguist Diary</h1>
-          </div>
+      <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-slate-100 p-6 space-y-6 shrink-0 fixed h-full z-30">
+        <div className="flex items-center space-x-3 pb-4 border-b border-slate-100">
+          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-xl">🖋️</div>
+          <h1 className="text-lg font-bold text-slate-900 serif-font">Linguist Diary</h1>
         </div>
 
-        {/* User Profile */}
-        <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-2xl border border-slate-100">
-          <img src={user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.displayName}`} alt="User Avatar" className="w-9 h-9 rounded-full" />
-          <div className="flex-1 text-sm font-semibold text-slate-700 truncate">{user.displayName}</div>
-          <button onClick={onLogout} className="text-slate-400 hover:text-rose-500 transition-colors" title="登出">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 space-y-2">
+        <nav className="flex-1 space-y-2 overflow-y-auto no-scrollbar">
           <NavItem view="dashboard" label="主页 / Dashboard" icon="🏠" />
           <NavItem view="editor" label="撰写 / Editor" icon="✍️" />
           <NavItem view="chat" label="启发对话 / Guided Chat" icon="💬" />
           <NavItem view={['rehearsal', 'rehearsal_report']} label="展厅演练 / Rehearsal" icon="🎤" />
           <NavItem view={['vocab_list', 'vocab_practice', 'vocab_practice_detail']} label="珍宝与足迹 / Vocab & Practice" icon="💎" />
           <NavItem view="history" label="收藏馆 / History" icon="🏛️" />
+          <NavItem view="profile" label="个人中心 / Profile" icon="👤" />
         </nav>
 
-        {/* Footer */}
-        <div className="text-[10px] text-slate-400 uppercase tracking-widest text-center border-t border-slate-100 pt-4">
-          © {new Date().getFullYear()} Linguist Diary
+        <div className="mt-auto space-y-4">
+          <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-2xl border border-slate-100">
+            <img src={user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.displayName}`} alt="User Avatar" className="w-9 h-9 rounded-full" />
+            <div className="flex-1 text-sm font-semibold text-slate-700 truncate">{user.displayName}</div>
+            <button onClick={onLogout} className="text-slate-400 hover:text-rose-500 transition-colors" title="登出">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+              </svg>
+            </button>
+          </div>
+          <div className="text-[10px] text-slate-400 uppercase tracking-widest text-center pt-2">
+            © {new Date().getFullYear()} Linguist Diary
+          </div>
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Mobile Header (visible on smaller screens) */}
-        <header className="lg:hidden flex items-center justify-between p-4 bg-white border-b border-slate-100 shrink-0">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-xl">🖋️</div>
-            <h1 className="text-lg font-bold text-slate-900 serif-font">Linguist Diary</h1>
-          </div>
-          <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 rounded-xl bg-slate-50 text-slate-500 hover:text-indigo-600">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-            </svg>
-          </button>
-        </header>
-
-        {/* Mobile Menu Overlay */}
-        {isMobileMenuOpen && (
-          <div className="fixed inset-0 bg-white z-50 flex flex-col p-6 animate-in slide-in-from-left-full duration-300">
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-xl">🖋️</div>
-                <h1 className="text-lg font-bold text-slate-900 serif-font">Linguist Diary</h1>
-              </div>
-              <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 rounded-xl bg-slate-50 text-slate-500 hover:text-rose-500">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* User Profile in Mobile Menu */}
-            <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-2xl border border-slate-100 mb-6">
-              <img src={user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.displayName}`} alt="User Avatar" className="w-9 h-9 rounded-full" />
-              <div className="flex-1 text-sm font-semibold text-slate-700 truncate">{user.displayName}</div>
-              <button onClick={onLogout} className="text-slate-400 hover:text-rose-500 transition-colors" title="登出">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Mobile Navigation */}
-            <nav className="flex-1 space-y-2">
-              <NavItem view="dashboard" label="主页 / Dashboard" icon="🏠" />
-              <NavItem view="editor" label="撰写 / Editor" icon="✍️" />
-              <NavItem view="chat" label="启发对话 / Guided Chat" icon="💬" />
-              <NavItem view={['rehearsal', 'rehearsal_report']} label="展厅演练 / Rehearsal" icon="🎤" />
-              <NavItem view={['vocab_list', 'vocab_practice', 'vocab_practice_detail']} label="珍宝与足迹 / Vocab & Practice" icon="💎" />
-              <NavItem view="history" label="收藏馆 / History" icon="🏛️" />
-            </nav>
-
-            {/* Mobile Footer */}
-            <div className="text-[10px] text-slate-400 uppercase tracking-widest text-center border-t border-slate-100 pt-4 mt-auto">
-              © {new Date().getFullYear()} Linguist Diary
-            </div>
-          </div>
-        )}
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto no-scrollbar pt-6 md:pt-10 pb-16 px-4 md:px-8">
+      <main className="flex-1 flex flex-col min-h-screen overflow-hidden lg:pl-64 pb-20 lg:pb-0">
+        <div className="flex-1 overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8">
           {children}
+        </div>
+
+        {/* Mobile Bottom Navigation Bar - Optimized for 5 slots */}
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-2 py-1 flex items-center justify-around z-40 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
+          <MobileTab views="dashboard" label="主页" icon="🏠" activeIcon="🏠" />
+          <MobileTab views="history" label="馆藏" icon="🏛️" activeIcon="🏛️" />
+          
+          <div className="relative flex flex-col items-center justify-center flex-1">
+            <button 
+              onClick={() => setIsPracticeMenuOpen(!isPracticeMenuOpen)}
+              className={`w-14 h-14 -mt-8 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${isPracticeMenuOpen ? 'bg-indigo-600 text-white rotate-45' : 'bg-indigo-600 text-white'}`}
+            >
+              <span className="text-2xl">＋</span>
+            </button>
+            <span className="text-[10px] font-black uppercase tracking-widest mt-1 text-indigo-600">练习</span>
+            
+            {isPracticeMenuOpen && (
+              <>
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[-1]" onClick={() => setIsPracticeMenuOpen(false)}></div>
+                <div className="absolute bottom-20 left-1/2 -translate-x-1/2 w-48 bg-white rounded-3xl shadow-2xl border border-slate-100 p-2 flex flex-col space-y-1 animate-in slide-in-from-bottom-4 zoom-in-95">
+                  <button onClick={() => { onViewChange('editor'); setIsPracticeMenuOpen(false); }} className="flex items-center space-x-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors text-slate-700">
+                    <span className="text-lg">✍️</span>
+                    <span className="text-xs font-bold">自由撰写</span>
+                  </button>
+                  <button onClick={() => { onViewChange('chat'); setIsPracticeMenuOpen(false); }} className="flex items-center space-x-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors text-slate-700">
+                    <span className="text-lg">💬</span>
+                    <span className="text-xs font-bold">启发对话</span>
+                  </button>
+                  <button onClick={() => { onViewChange('rehearsal'); setIsPracticeMenuOpen(false); }} className="flex items-center space-x-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors text-slate-700">
+                    <span className="text-lg">🎤</span>
+                    <span className="text-xs font-bold">展厅演练</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          <MobileTab views={['vocab_list', 'vocab_practice', 'vocab_practice_detail']} label="珍宝" icon="💎" activeIcon="💎" />
+          <MobileTab views="profile" label="馆长" icon="👤" activeIcon="👤" />
         </div>
       </main>
     </div>
@@ -140,4 +134,3 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
 };
 
 export default Layout;
-    

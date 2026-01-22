@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ChatMessage, AdvancedVocab } from '../types';
-import { getChatFollowUp, synthesizeDiary } from '../services/geminiService';
+import { getChatFollowUp } from '../services/geminiService';
 
 interface ChatEditorProps {
   onFinish: (transcript: ChatMessage[], language: string) => void;
@@ -167,7 +167,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
     }
   };
 
-  const handleFinish = async () => {
+  const handleFinish = () => {
     if (messages.filter(m => m.role === 'user').length === 0) {
       alert("请先开始对话。");
       return;
@@ -177,7 +177,6 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
 
   return (
     <div className="flex h-full animate-in fade-in duration-500 overflow-hidden w-full bg-slate-50 relative">
-      {/* 桌面端左侧：待点亮珍宝库面板 */}
       <aside className="hidden lg:flex w-72 flex-col bg-white border-r border-slate-100 p-6 space-y-6 shrink-0 z-10">
         <div className="flex items-center space-x-2">
            <span className="text-xl">💎</span>
@@ -219,7 +218,6 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
         </div>
       </aside>
 
-      {/* 主对话区 */}
       <div className="flex-1 flex flex-col h-full min-w-0 bg-white md:bg-slate-50">
         <header className="flex flex-col shrink-0 border-b border-slate-100 bg-white/90 backdrop-blur-md z-20">
           <div className="flex items-center justify-between px-4 md:px-8 py-3">
@@ -231,9 +229,9 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
             </div>
             <button 
               onClick={handleFinish}
-              className="bg-slate-900 text-white px-4 py-1.5 rounded-xl text-[10px] font-bold hover:bg-indigo-600 transition-all active:scale-95 shadow-md shrink-0"
+              className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-bold hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shrink-0"
             >
-              🏛️ 合成
+              试试总结记录吧 ✨
             </button>
           </div>
 
@@ -254,7 +252,6 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
                ))}
              </div>
              
-             {/* 移动端横向珍宝滚动条 (仅在移动端显示) */}
              <div className="lg:hidden flex items-center space-x-2 overflow-x-auto no-scrollbar py-0.5">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest shrink-0">待点亮:</span>
                 {targetGems.map((gem, i) => {
@@ -315,7 +312,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
               );
             })}
             {isTyping && (
-              <div className="flex justify-start animate-pulse">
+              <div className="flex justify-start">
                 <div className="bg-white p-4 rounded-2xl border border-slate-100 flex space-x-1 items-center">
                   <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-audio-bar-1"></div>
                   <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-audio-bar-2"></div>

@@ -76,5 +76,5 @@ export interface ChatMessage {
   content: string;
 }
 
-// 更新 ViewState 类型，新增三种与词汇复习相关的视图
-export type ViewState = 'dashboard' | 'editor' | 'review' | 'history' | 'chat' | 'vocab_list' | 'vocab_practice' | 'practice_history' | 'rehearsal' | 'rehearsal_report' | 'vocab_practice_detail';
+// 更新 ViewState 类型，新增 profile 视图
+export type ViewState = 'dashboard' | 'editor' | 'review' | 'history' | 'chat' | 'vocab_list' | 'vocab_practice' | 'practice_history' | 'rehearsal' | 'rehearsal_report' | 'vocab_practice_detail' | 'profile';
