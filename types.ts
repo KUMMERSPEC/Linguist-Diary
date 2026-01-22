@@ -1,4 +1,5 @@
 
+
 export interface Correction {
   original: string;
   improved: string;
@@ -23,6 +24,9 @@ export interface AdvancedVocab {
   mastery?: number; 
   practices?: PracticeRecord[]; 
 }
+
+// 新增 ExtendedVocab 类型，包含词汇所在的日记信息
+export type ExtendedVocab = AdvancedVocab & { date: string, entryId: string, language: string };
 
 export interface TransitionSuggestion {
   word: string;
@@ -73,4 +77,5 @@ export interface ChatMessage {
   content: string;
 }
 
-export type ViewState = 'dashboard' | 'editor' | 'review' | 'history' | 'chat' | 'review_vault' | 'rehearsal' | 'rehearsal_report';
+// 更新 ViewState 类型，新增三种与词汇复习相关的视图
+export type ViewState = 'dashboard' | 'editor' | 'review' | 'history' | 'chat' | 'vocab_list' | 'vocab_practice' | 'practice_history' | 'rehearsal' | 'rehearsal_report';
