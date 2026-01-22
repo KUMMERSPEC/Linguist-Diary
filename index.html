@@ -9,20 +9,28 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f8fafc;
+            color: #1e293b;
         }
         .serif-font {
             font-family: 'Playfair Display', serif;
         }
         /* Ruby 假名标注优化 */
+        ruby {
+            ruby-align: center;
+        }
         rt {
             ruby-position: over;
-            margin-bottom: 0.1em;
+            font-size: 0.45em;
+            font-weight: 700;
+            color: inherit;
+            opacity: 0.6;
             letter-spacing: 0.05em;
+            padding-bottom: 0.2em;
         }
         /* 隐藏滚动条但保留滚动功能 */
         .no-scrollbar::-webkit-scrollbar {
@@ -33,27 +41,32 @@
             scrollbar-width: none;
         }
         ::-webkit-scrollbar {
-            width: 6px;
+            width: 8px;
         }
         ::-webkit-scrollbar-track {
-            background: #f1f1f1;
+            background: transparent;
         }
         ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 10px;
+            background: #e2e8f0;
+            border-radius: 20px;
+            border: 2px solid #f8fafc;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
+            background: #cbd5e1;
         }
 
         /* 音频波纹动画 */
         @keyframes audio-bar {
             0%, 100% { height: 4px; }
-            50% { height: 12px; }
+            50% { height: 16px; }
         }
         .animate-audio-bar-1 { animation: audio-bar 0.6s infinite ease-in-out; }
         .animate-audio-bar-2 { animation: audio-bar 0.8s infinite ease-in-out; animation-delay: 0.1s; }
         .animate-audio-bar-3 { animation: audio-bar 0.7s infinite ease-in-out; animation-delay: 0.2s; }
+        
+        .perspective-1000 {
+            perspective: 1000px;
+        }
     </style>
 <script type="importmap">
 {

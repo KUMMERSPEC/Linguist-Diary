@@ -241,8 +241,42 @@ const App: React.FC = () => {
         iterationCount: 0
       };
 
+      // --- 处理词汇持久化 ---
+      const persistVocab = async (vocabItems: Omit<AdvancedVocab, 'id'>[]) => {
+        const uniqueItems = vocabItems.filter(v => 
+          !allAdvancedVocab.some(existing => existing.word === v.word && (existing.language || language) === language)
+        );
+
+        if (uniqueItems.length === 0) return;
+
+        const itemsToSave = uniqueItems.map(v => ({
+          ...v,
+          id: uuidv4(),
+          mastery: 0,
+          language: language,
+          practices: []
+        }));
+
+        if (!db || user.isMock) {
+          const updatedVocab = [...itemsToSave, ...allAdvancedVocab];
+          setAllAdvancedVocab(updatedVocab);
+          localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updatedVocab));
+        } else {
+          const vocabCol = collection(db, 'users', user.uid, 'advancedVocab');
+          const savedItems: AdvancedVocab[] = [];
+          for (const item of itemsToSave) {
+            const { id, ...data } = item;
+            const docRef = await addDoc(vocabCol, data);
+            savedItems.push({ ...item, id: docRef.id });
+          }
+          setAllAdvancedVocab(prev => [...savedItems, ...prev]);
+        }
+      };
+
+      await persistVocab(analysis.advancedVocab);
+
+      // --- 处理日记条目持久化 ---
       if (!db || user.isMock) {
-        // --- 本地访客模式处理 ---
         if (rewriteBaseEntryId && currentEntry) {
           const updated = { 
             ...currentEntry, 
@@ -262,7 +296,6 @@ const App: React.FC = () => {
           localStorage.setItem(`linguist_entries_${user.uid}`, JSON.stringify(updatedEntries));
         }
       } else {
-        // --- Firebase 模式处理 ---
         const serverTS = serverTimestamp();
         if (rewriteBaseEntryId && currentEntry) {
           const baseDoc = doc(db, 'users', user.uid, 'diaryEntries', rewriteBaseEntryId);
@@ -285,7 +318,6 @@ const App: React.FC = () => {
         }
       }
       
-      // 分析完成后，立即进入审阅视图，此时 currentEntry 已经包含了最新的 analysis
       setView('review');
     } catch (error: any) {
       console.error("Analysis Error:", error);
