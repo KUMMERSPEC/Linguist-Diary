@@ -5,7 +5,8 @@ import { DiaryEntry } from '../types';
 
 interface DashboardProps {
   onNewEntry: () => void;
-  onStartReview: () => void;
+  // FIX: Update onStartReview to be a simple function call
+  onStartReview: () => void; 
   entries: DiaryEntry[];
 }
 
@@ -118,7 +119,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, onStartReview, entrie
           </button>
           
           <button 
-            onClick={onStartReview}
+            onClick={onStartReview} // FIX: Directly call onStartReview
             className="group relative bg-slate-900 p-8 rounded-[2.5rem] text-white flex items-center justify-between shadow-2xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-[0.98] overflow-hidden"
           >
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
@@ -237,3 +238,4 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, onStartReview, entrie
 };
 
 export default Dashboard;
+    

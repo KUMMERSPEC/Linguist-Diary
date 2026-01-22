@@ -1,5 +1,4 @@
 
-
 export interface Correction {
   original: string;
   improved: string;
@@ -78,4 +77,4 @@ export interface ChatMessage {
 }
 
 // 更新 ViewState 类型，新增三种与词汇复习相关的视图
-export type ViewState = 'dashboard' | 'editor' | 'review' | 'history' | 'chat' | 'vocab_list' | 'vocab_practice' | 'practice_history' | 'rehearsal' | 'rehearsal_report';
+export type ViewState = 'dashboard' | 'editor' | 'review' | 'history' | 'chat' | 'vocab_list' | 'vocab_practice' | 'practice_history' | 'rehearsal' | 'rehearsal_report' | 'vocab_practice_detail';
