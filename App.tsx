@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-// ... existing imports ...
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, User as FirebaseAuthUser, updateProfile } from 'firebase/auth';
 import { 
@@ -55,7 +54,6 @@ let db: Firestore | null = null;
 let auth: any = null;
 let isFirebaseValid = false;
 
-console.group("🏛️ 馆藏馆系统初始化诊断");
 if (firebaseConfig.apiKey && firebaseConfig.apiKey.length > 10) {
   try {
     const existingApps = getApps();
@@ -63,14 +61,10 @@ if (firebaseConfig.apiKey && firebaseConfig.apiKey.length > 10) {
     auth = getAuth(app);
     db = getFirestore(app);
     isFirebaseValid = true;
-    console.info("✅ Firebase 配置识别成功。真实登录功能已激活。");
   } catch (e) {
-    console.error("❌ Firebase 初始化失败:", e);
+    console.error("Firebase Auth initialization failed:", e);
   }
-} else {
-  console.warn("⚠️ 未检测到有效的 Firebase 配置。请检查 GitHub Secrets 名称是否匹配。");
 }
-console.groupEnd();
 
 const AVATAR_SEEDS = [
   { seed: 'Felix', label: '沉稳博学者' },
@@ -100,7 +94,6 @@ const App: React.FC = () => {
   const [selectedVocabForPracticeId, setSelectedVocabForPracticeId] = useState<string | null>(null);
   const [isPracticeActive, setIsPracticeActive] = useState(false);
 
-  // --- 练习序列相关状态 ---
   const [practiceQueue, setPracticeQueue] = useState<string[]>([]);
   const [queueIndex, setQueueIndex] = useState(-1);
 
@@ -126,8 +119,6 @@ const App: React.FC = () => {
         setUser(null);
         setEntries([]);
         setAllAdvancedVocab([]);
-        setCurrentEntry(null);
-        setCurrentEntryIterations([]);
       }
       setIsAuthInitializing(false);
     });
@@ -144,6 +135,7 @@ const App: React.FC = () => {
         const localVocab = localStorage.getItem(`linguist_vocab_${userId}`);
         if (localVocab) setAllAdvancedVocab(JSON.parse(localVocab));
       } else {
+        // Load Profile
         const userDocRef = doc(db, 'users', userId);
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
@@ -153,23 +145,32 @@ const App: React.FC = () => {
           }
         }
 
+        // Load Entries
         const diaryEntriesColRef = collection(db, 'users', userId, 'diaryEntries');
         const diaryEntriesQuery = query(diaryEntriesColRef, orderBy('timestamp', 'desc'));
         const diaryEntriesSnapshot = await getDocs(diaryEntriesQuery);
-        const loadedEntries = diaryEntriesSnapshot.docs.map(d => ({ 
+        setEntries(diaryEntriesSnapshot.docs.map(d => ({ 
             ...d.data(), 
             id: d.id, 
             timestamp: (d.data().timestamp as Timestamp).toMillis() 
-        })) as DiaryEntry[];
-        setEntries(loadedEntries);
+        })) as DiaryEntry[]);
 
+        // Load Vocab with Practices
         const advancedVocabColRef = collection(db, 'users', userId, 'advancedVocab');
-        const advancedVocabSnapshot = await getDocs(advancedVocabColRef);
-        const loadedVocab = advancedVocabSnapshot.docs.map(d => ({ ...d.data(), id: d.id })) as AdvancedVocab[];
-        setAllAdvancedVocab(loadedVocab);
+        const vocabSnapshot = await getDocs(advancedVocabColRef);
+        
+        const vocabWithPractices = await Promise.all(vocabSnapshot.docs.map(async (vDoc) => {
+          const vocabData = vDoc.data() as AdvancedVocab;
+          const practicesColRef = collection(vDoc.ref, 'practices');
+          const practicesSnapshot = await getDocs(query(practicesColRef, orderBy('timestamp', 'desc')));
+          const practices = practicesSnapshot.docs.map(pDoc => ({ ...pDoc.data(), id: pDoc.id })) as PracticeRecord[];
+          return { ...vocabData, id: vDoc.id, practices };
+        }));
+        
+        setAllAdvancedVocab(vocabWithPractices);
       }
     } catch (e) {
-      console.error("[DEBUG] Error loading user data:", e);
+      console.error("Error loading user data:", e);
       setError("无法加载数据。");
     } finally {
       setIsLoading(false);
@@ -183,13 +184,9 @@ const App: React.FC = () => {
       } else {
         const docRef = doc(db, 'users', userId);
         await setDoc(docRef, { profile: updatedProfile }, { merge: true });
-        if (auth.currentUser) {
-          await updateProfile(auth.currentUser, updatedProfile);
-        }
+        if (auth.currentUser) await updateProfile(auth.currentUser, updatedProfile);
       }
-    } catch (e) {
-      console.error("[DEBUG] Error saving profile data:", e);
-    }
+    } catch (e) { console.error(e); }
   }, [db]);
 
   useEffect(() => {
@@ -211,60 +208,45 @@ const App: React.FC = () => {
     setView(newView);
     setSelectedVocabForPracticeId(vocabId || null);
     setIsPracticeActive(!!isPracticeActive);
-    setPracticeQueue([]);
-    setQueueIndex(-1);
-    
-    // 初始化 Profile 的编辑状态
     if (newView === 'profile' && user) {
       setEditName(user.displayName);
       setEditPhoto(user.photoURL);
     }
-
-    if (newView !== 'editor') {
-      setPrefilledEditorText('');
-      setRewriteBaseEntryId(null); 
-    }
   };
 
-  // ... rest of App.tsx logic ...
-  const handleStartReviewSession = () => {
-    if (allAdvancedVocab.length === 0) {
-      alert("收藏馆暂无词汇珍宝，请先撰写日记。");
+  const handleUpdateMastery = async (vocabId: string, word: string, newMastery: number, record?: PracticeRecord) => {
+    if (!user) return;
+    
+    // Update local state immediately for snappy UI
+    setAllAdvancedVocab(prev => prev.map(v => {
+      if (v.id === vocabId) {
+        const updatedPractices = record ? [record, ...(v.practices || [])] : (v.practices || []);
+        return { ...v, mastery: newMastery, practices: updatedPractices };
+      }
+      return v;
+    }));
+
+    if (!db || user.isMock) {
+      const currentVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
+      const updatedVocab = currentVocab.map((v: any) => {
+        if (v.id === vocabId) {
+          const updatedPractices = record ? [record, ...(v.practices || [])] : (v.practices || []);
+          return { ...v, mastery: newMastery, practices: updatedPractices };
+        }
+        return v;
+      });
+      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updatedVocab));
       return;
     }
-    const shuffled = [...allAdvancedVocab].sort(() => 0.5 - Math.random());
-    const selected = shuffled.slice(0, 5).map(v => v.id);
-    setPracticeQueue(selected);
-    setQueueIndex(0);
-    setSelectedVocabForPracticeId(selected[0]);
-    setIsPracticeActive(true);
-    setView('vocab_practice');
-  };
 
-  const handleNextInQueue = () => {
-    if (queueIndex < practiceQueue.length - 1) {
-      const nextIdx = queueIndex + 1;
-      setQueueIndex(nextIdx);
-      setSelectedVocabForPracticeId(practiceQueue[nextIdx]);
-    } else {
-      alert("今日珍宝打磨任务已全部完成！");
-      handleViewChange('vocab_list');
-    }
-  };
-
-  const handleSaveProfile = async () => {
-    if (!user) return;
-    setIsLoading(true);
-    const updatedProfile = { displayName: editName, photoURL: editPhoto };
     try {
-      await saveProfileData(user.uid, user.isMock, updatedProfile);
-      setUser(prev => prev ? { ...prev, ...updatedProfile } : null);
-      alert("馆长档案已云端同步！");
-    } catch (e) {
-      setError("保存个人配置失败。");
-    } finally {
-      setIsLoading(false);
-    }
+      const vDoc = doc(db, 'users', user.uid, 'advancedVocab', vocabId);
+      await updateDoc(vDoc, { mastery: newMastery });
+      if (record) {
+        const { id, ...recordData } = record;
+        await addDoc(collection(vDoc, 'practices'), recordData);
+      }
+    } catch (e) { console.error("Update mastery error:", e); }
   };
 
   const handleAnalyze = async (text: string, language: string) => {
@@ -286,179 +268,104 @@ const App: React.FC = () => {
         iterationCount: 0
       };
 
-      const persistVocab = async (vocabItems: Omit<AdvancedVocab, 'id'>[]) => {
-        const uniqueItems = vocabItems.filter(v => 
-          !allAdvancedVocab.some(existing => existing.word === v.word && (existing.language || language) === language)
-        );
-        if (uniqueItems.length === 0) return;
-        const itemsToSave = uniqueItems.map(v => ({
-          ...v,
-          id: uuidv4(),
-          mastery: 0,
-          language: language,
-          practices: []
-        }));
+      const vocabItemsToSave = analysis.advancedVocab.filter(v => 
+        !allAdvancedVocab.some(existing => existing.word === v.word && existing.language === language)
+      ).map(v => ({ ...v, id: uuidv4(), mastery: 0, language, practices: [] }));
 
+      if (vocabItemsToSave.length > 0) {
         if (!db || user.isMock) {
-          const updatedVocab = [...itemsToSave, ...allAdvancedVocab];
-          setAllAdvancedVocab(updatedVocab);
-          localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updatedVocab));
+          const updated = [...vocabItemsToSave, ...allAdvancedVocab];
+          setAllAdvancedVocab(updated);
+          localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
         } else {
           const vocabCol = collection(db, 'users', user.uid, 'advancedVocab');
-          const savedItems: AdvancedVocab[] = [];
-          for (const item of itemsToSave) {
-            const { id, ...data } = item;
-            const docRef = await addDoc(vocabCol, data);
-            savedItems.push({ ...item, id: docRef.id });
+          for (const item of vocabItemsToSave) {
+            const { id, practices, ...data } = item;
+            await addDoc(vocabCol, data);
           }
-          setAllAdvancedVocab(prev => [...savedItems, ...prev]);
-        }
-      };
-
-      await persistVocab(analysis.advancedVocab);
-
-      if (!db || user.isMock) {
-        if (rewriteBaseEntryId && currentEntry) {
-          const updated = { 
-            ...currentEntry, 
-            originalText: text, 
-            analysis, 
-            iterationCount: (currentEntry.iterationCount || 0) + 1 
-          } as DiaryEntry;
-          const updatedEntries = entries.map(e => e.id === rewriteBaseEntryId ? updated : e);
-          setEntries(updatedEntries);
-          setCurrentEntry(updated);
-          localStorage.setItem(`linguist_entries_${user.uid}`, JSON.stringify(updatedEntries));
-        } else {
-          const finalEntry = { ...newEntrySkeleton, id: uuidv4() } as DiaryEntry;
-          const updatedEntries = [finalEntry, ...entries];
-          setEntries(updatedEntries);
-          setCurrentEntry(finalEntry);
-          localStorage.setItem(`linguist_entries_${user.uid}`, JSON.stringify(updatedEntries));
-        }
-      } else {
-        const serverTS = serverTimestamp();
-        if (rewriteBaseEntryId && currentEntry) {
-          const baseDoc = doc(db, 'users', user.uid, 'diaryEntries', rewriteBaseEntryId);
-          await addDoc(collection(baseDoc, 'iterations'), { text, timestamp: serverTS, analysis });
-          await updateDoc(baseDoc, { 
-            originalText: text, analysis, timestamp: serverTS, 
-            iterationCount: (currentEntry.iterationCount || 0) + 1 
-          });
-          const updated = { ...currentEntry, originalText: text, analysis, timestamp: clientTimestamp, iterationCount: (currentEntry.iterationCount || 0) + 1 } as DiaryEntry;
-          setEntries(prev => prev.map(e => e.id === rewriteBaseEntryId ? updated : e));
-          setCurrentEntry(updated);
-        } else {
-          const docRef = await addDoc(collection(db, 'users', user.uid, 'diaryEntries'), {
-            ...newEntrySkeleton,
-            timestamp: serverTS
-          });
-          const finalEntry = { ...newEntrySkeleton, id: docRef.id } as DiaryEntry;
-          setEntries(prev => [finalEntry, ...prev]);
-          setCurrentEntry(finalEntry);
+          // Reload to get fresh IDs and structure
+          loadUserData(user.uid, user.isMock);
         }
       }
-      
+
+      if (!db || user.isMock) {
+        const finalEntry = { ...newEntrySkeleton, id: uuidv4() } as DiaryEntry;
+        const updatedEntries = [finalEntry, ...entries];
+        setEntries(updatedEntries);
+        setCurrentEntry(finalEntry);
+        localStorage.setItem(`linguist_entries_${user.uid}`, JSON.stringify(updatedEntries));
+      } else {
+        const docRef = await addDoc(collection(db, 'users', user.uid, 'diaryEntries'), { ...newEntrySkeleton, timestamp: serverTimestamp() });
+        const finalEntry = { ...newEntrySkeleton, id: docRef.id } as DiaryEntry;
+        setEntries(prev => [finalEntry, ...prev]);
+        setCurrentEntry(finalEntry);
+      }
       setView('review');
     } catch (error: any) {
-      console.error("Analysis Error:", error);
-      setError("AI 分析失败，请重试。");
+      setError("AI 分析失败。");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleUpdateMastery = async (vocabId: string, word: string, newMastery: number, record?: PracticeRecord) => {
+  const handleSaveProfile = async () => {
     if (!user) return;
-    if (!db || user.isMock) {
-        setAllAdvancedVocab(prev => {
-            const updated = prev.map(v => v.id === vocabId ? { ...v, mastery: newMastery } : v);
-            localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
-            return updated;
-        });
-        return;
-    }
+    setIsLoading(true);
+    const updatedProfile = { displayName: editName, photoURL: editPhoto };
     try {
-      const vDoc = doc(db, 'users', user.uid, 'advancedVocab', vocabId);
-      await updateDoc(vDoc, { mastery: newMastery });
-      if (record) await addDoc(collection(vDoc, 'practices'), record);
-      setAllAdvancedVocab(prev => prev.map(v => v.id === vocabId ? { ...v, mastery: newMastery } : v));
-    } catch (e) { console.error(e); }
+      await saveProfileData(user.uid, user.isMock, updatedProfile);
+      setUser(prev => prev ? { ...prev, ...updatedProfile } : null);
+    } catch (e) { setError("保存失败。"); } finally { setIsLoading(false); }
   };
 
-  const handleSaveToMuseum = async (language: string, rehearsal: RehearsalEvaluation) => {
-    if (!user) return;
-    const clientTS = Date.now();
-    const dataSkeleton: Omit<DiaryEntry, 'id'> = {
-      timestamp: clientTS,
-      date: new Date(clientTS).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
-      originalText: rehearsal.userRetelling || "",
-      language, type: 'rehearsal', rehearsal, iterationCount: 0
-    };
-
-    if (!db || user.isMock) {
-        const final = { ...dataSkeleton, id: uuidv4() } as DiaryEntry;
-        const updated = [final, ...entries];
-        setEntries(updated);
-        localStorage.setItem(`linguist_entries_${user.uid}`, JSON.stringify(updated));
-    } else {
-        const docRef = await addDoc(collection(db, 'users', user.uid, 'diaryEntries'), {
-            ...dataSkeleton,
-            timestamp: serverTimestamp()
-        });
-        setEntries(prev => [{ ...dataSkeleton, id: docRef.id } as DiaryEntry, ...prev]);
-    }
-  };
-
-  if (isAuthInitializing) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 animate-in fade-in duration-500">
-        <div className="w-24 h-24 bg-white rounded-[2rem] shadow-xl flex items-center justify-center mb-8 border border-slate-100 relative">
-          <div className="absolute inset-0 bg-indigo-600/10 rounded-[2rem] animate-ping opacity-25"></div>
-          <span className="text-4xl">🖋️</span>
-        </div>
-        <div className="space-y-4 text-center">
-          <h1 className="text-2xl font-black text-slate-900 serif-font tracking-tight">馆藏系统同步中</h1>
-          <div className="flex items-center justify-center space-x-1.5">
-            <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-audio-bar-1"></div>
-            <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-audio-bar-2"></div>
-            <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-audio-bar-3"></div>
-          </div>
-          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em]">Connecting to Curator's Cloud</p>
-        </div>
-      </div>
-    );
-  }
+  if (isAuthInitializing) return <div className="min-h-screen bg-slate-50 flex items-center justify-center">🏛️</div>;
 
   if (!user) return <AuthView auth={auth} isFirebaseValid={isFirebaseValid} onLogin={handleLogin} />;
 
   return (
     <Layout activeView={view} onViewChange={handleViewChange} user={user} onLogout={handleLogout}>
-      {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartReviewSession} entries={entries} />}
+      {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={() => {
+        const shuffled = [...allAdvancedVocab].sort(() => 0.5 - Math.random());
+        const selected = shuffled.slice(0, 5).map(v => v.id);
+        setPracticeQueue(selected);
+        setQueueIndex(0);
+        setSelectedVocabForPracticeId(selected[0]);
+        setIsPracticeActive(true);
+        setView('vocab_practice');
+      }} entries={entries} />}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} />}
       {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} />}
       {view === 'history' && <History entries={entries} onSelect={(e) => { setCurrentEntry(e); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { 
         if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); 
-        const updated = entries.filter(e => e.id !== id);
-        setEntries(updated);
-        if (user.isMock) localStorage.setItem(`linguist_entries_${user.uid}`, JSON.stringify(updated));
-      }} onRewrite={(e) => { setRewriteBaseEntryId(e.id); setPrefilledEditorText(e.originalText); setView('editor'); }} />}
-      {view === 'chat' && <ChatEditor onFinish={(msgs, lang) => { setChatLanguage(lang); setPrefilledEditorText(msgs.map(m => m.content).join('\n\n')); setView('editor'); }} allGems={allAdvancedVocab.map(v => ({ ...v, language: v.language || 'English' }))} />}
+        setEntries(prev => prev.filter(e => e.id !== id));
+      }} onRewrite={(e) => { setPrefilledEditorText(e.originalText); setView('editor'); }} />}
+      {view === 'chat' && <ChatEditor onFinish={(msgs, lang) => { setChatLanguage(lang); setPrefilledEditorText(msgs.map(m => m.content).join('\n\n')); setView('editor'); }} allGems={allAdvancedVocab} />}
       {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} />}
       {view === 'vocab_practice' && selectedVocabForPracticeId && (
         <VocabPractice 
           selectedVocabId={selectedVocabForPracticeId} 
           allAdvancedVocab={allAdvancedVocab} 
           onUpdateMastery={handleUpdateMastery} 
-          onBackToVocabList={() => handleViewChange('vocab_list')} 
+          onBackToVocabList={() => setView('vocab_list')} 
           onViewChange={handleViewChange} 
           isPracticeActive={isPracticeActive}
           queueProgress={practiceQueue.length > 0 ? { current: queueIndex + 1, total: practiceQueue.length } : undefined}
-          onNextInQueue={handleNextInQueue}
+          onNextInQueue={() => {
+            if (queueIndex < practiceQueue.length - 1) {
+              setQueueIndex(queueIndex + 1);
+              setSelectedVocabForPracticeId(practiceQueue[queueIndex + 1]);
+            } else {
+              setView('vocab_list');
+            }
+          }}
         />
       )}
       {view === 'vocab_practice_detail' && selectedVocabForPracticeId && <VocabPracticeDetailView selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onBackToPracticeHistory={() => setView('vocab_list')} />}
-      {view === 'rehearsal' && <Rehearsal onSaveToMuseum={handleSaveToMuseum} />}
+      {view === 'rehearsal' && <Rehearsal onSaveToMuseum={(lang, reh) => {
+         const dataSkeleton: Omit<DiaryEntry, 'id'> = { timestamp: Date.now(), date: new Date().toLocaleDateString('zh-CN'), originalText: reh.userRetelling || "", language: lang, type: 'rehearsal', rehearsal: reh, iterationCount: 0 };
+         if (!db || user.isMock) setEntries(prev => [{ ...dataSkeleton, id: uuidv4() } as DiaryEntry, ...prev]);
+         else addDoc(collection(db, 'users', user.uid, 'diaryEntries'), { ...dataSkeleton, timestamp: serverTimestamp() }).then(d => setEntries(prev => [{ ...dataSkeleton, id: d.id } as DiaryEntry, ...prev]));
+      }} />}
       {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} />}
       {view === 'profile' && <ProfileView user={user} editName={editName} setEditName={setEditName} editPhoto={editPhoto} setEditPhoto={setEditPhoto} isAvatarPickerOpen={isAvatarPickerOpen} setIsAvatarPickerOpen={setIsAvatarPickerOpen} avatarSeeds={AVATAR_SEEDS} onSaveProfile={handleSaveProfile} isLoading={isLoading} />}
     </Layout>

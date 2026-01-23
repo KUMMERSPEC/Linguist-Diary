@@ -164,7 +164,7 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
 
   return (
     <div className="flex flex-col h-full animate-in fade-in duration-500 overflow-hidden w-full relative p-4 md:p-8">
-      <header className="flex flex-col md:flex-row md:items-center justify-between mb-8 shrink-0">
+      <header className="flex flex-col md:flex-row md:items-center justify-between mb-6 lg:mb-8 shrink-0">
         <div className="flex flex-col">
           {queueProgress ? (
             <div className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1 flex items-center">
@@ -178,20 +178,20 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
               <span className="mr-1 group-hover:-translate-x-1 transition-transform">←</span> 返回珍宝列表 BACK TO VOCAB LIST
             </button>
           )}
-          <h2 className="text-2xl md:text-4xl font-bold text-slate-900 serif-font">
+          <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-slate-900 serif-font">
             {queueProgress ? '今日珍宝打磨' : '词汇精炼室'} <span className="text-indigo-600">Refinement</span>
           </h2>
         </div>
-        <div className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center space-x-2 ${getMasteryColor(currentVocab.mastery)}`}>
+        <div className={`mt-3 md:mt-0 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center space-x-2 w-fit ${getMasteryColor(currentVocab.mastery)}`}>
             <span>{getMasteryIcon(currentVocab.mastery)} Mastery {currentVocab.mastery || 0}</span>
             <span>|</span>
             <span>{currentVocab.language}</span>
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col lg:flex-row gap-8 overflow-y-auto no-scrollbar pb-8">
+      <div className="flex-1 flex flex-col lg:flex-row lg:items-stretch gap-6 lg:gap-8 overflow-y-auto no-scrollbar pb-8">
         {/* Left Column: Dynamic Panel (Vocab Info vs. AI Evaluation) */}
-        <div className="lg:w-1/2 shrink-0 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl space-y-6 relative group h-fit min-h-[400px]">
+        <div className="flex-1 lg:max-w-[50%] bg-white p-6 md:p-8 lg:p-10 rounded-[2.5rem] border border-slate-200 shadow-xl space-y-6 relative group transition-all duration-500 overflow-hidden">
           {showSuccessAnimation && (
             <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/80 rounded-[2.5rem] z-20 animate-in fade-in zoom-in duration-500">
               <span className="text-7xl">✨</span>
@@ -200,7 +200,7 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
           
           {/* Header always visible */}
           <div className="flex items-center justify-between pb-4 border-b border-slate-50">
-            <h3 className="text-3xl font-black text-slate-900 serif-font">
+            <h3 className="text-2xl md:text-3xl font-black text-slate-900 serif-font">
               {renderRuby(currentVocab.word)}
             </h3>
             <button
@@ -217,12 +217,12 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
             <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-500">
               <div>
                 <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest block mb-2">词汇解析 DEFINITION</span>
-                <p className="text-slate-600 text-base italic leading-relaxed" dangerouslySetInnerHTML={{ __html: rubyUtil(currentVocab.meaning) }} />
+                <p className="text-slate-600 text-sm md:text-base italic leading-relaxed" dangerouslySetInnerHTML={{ __html: rubyUtil(currentVocab.meaning) }} />
               </div>
               
               <div>
                 <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest block mb-2">参考范例 EXAMPLE</span>
-                <div className="bg-indigo-50/40 p-5 rounded-2xl italic text-xs text-indigo-800 border-l-4 border-indigo-400 flex items-start space-x-2">
+                <div className="bg-indigo-50/40 p-4 md:p-5 rounded-2xl italic text-xs text-indigo-800 border-l-4 border-indigo-400 flex items-start space-x-2">
                   <button
                     onClick={() => handlePlayAudio(currentVocab.usage, `vocab-usage-${currentVocab.word}`)}
                     className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all ${playingAudioId === `vocab-usage-${currentVocab.word}` ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-100 text-indigo-500 hover:bg-indigo-600 hover:text-white'}`}
@@ -230,11 +230,11 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
                   >
                     {playingAudioId === `vocab-usage-${currentVocab.word}` ? '⏹' : '🎧'}
                   </button>
-                  <p className="flex-1">“ {renderRuby(currentVocab.usage)} ”</p>
+                  <p className="flex-1 text-sm md:text-base leading-relaxed">“ {renderRuby(currentVocab.usage)} ”</p>
                 </div>
               </div>
 
-              <div className="pt-4 flex items-center justify-between">
+              <div className="pt-4 flex items-center justify-between border-t border-slate-50">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                   Level: {currentVocab.level}
                 </span>
@@ -267,7 +267,7 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
               {/* Feedback Text */}
               <div>
                 <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest block mb-2">馆长鉴定结果 FEEDBACK</span>
-                <p className="text-sm text-slate-700 leading-relaxed italic">
+                <p className="text-sm md:text-base text-slate-700 leading-relaxed italic">
                   “ {lastFeedback.feedback} ”
                 </p>
               </div>
@@ -276,14 +276,14 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
               {lastFeedback.betterVersion && (
                 <div className="space-y-2">
                   <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest block">AI 修复建议 SUGGESTION</span>
-                  <div className="bg-slate-900 text-white p-6 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden group/feedback">
+                  <div className="bg-slate-900 text-white p-5 md:p-7 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden group/feedback">
                     <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-bl-[3rem] -mr-8 -mt-8"></div>
-                    <p className="relative z-10 text-lg serif-font leading-relaxed italic">
+                    <p className="relative z-10 text-base md:text-xl serif-font leading-relaxed italic">
                        {renderRuby(lastFeedback.betterVersion)}
                     </p>
                     <button
                       onClick={() => handlePlayAudio(lastFeedback.betterVersion!, `feedback-better-${currentVocab.word}`)}
-                      className={`absolute bottom-4 right-4 w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-lg ${playingAudioId === `feedback-better-${currentVocab.word}` ? 'bg-indigo-500 text-white' : 'bg-white/10 text-indigo-400 hover:bg-indigo-600 hover:text-white'}`}
+                      className={`absolute bottom-3 right-3 w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-lg ${playingAudioId === `feedback-better-${currentVocab.word}` ? 'bg-indigo-500 text-white' : 'bg-white/10 text-indigo-400 hover:bg-indigo-600 hover:text-white'}`}
                     >
                       {playingAudioId === `feedback-better-${currentVocab.word}` ? '⏹' : '🎧'}
                     </button>
@@ -295,13 +295,13 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
         </div>
 
         {/* Right Column: Practice Input Area */}
-        <div className="lg:w-1/2 flex flex-col space-y-6">
+        <div className="flex-1 lg:max-w-[50%] flex flex-col space-y-6">
           <div className={`flex-1 bg-white border border-slate-200 rounded-[2.5rem] shadow-xl overflow-hidden flex flex-col focus-within:ring-4 focus-within:ring-indigo-500/5 focus-within:border-indigo-200 transition-all ${lastFeedback ? 'opacity-50 pointer-events-none grayscale-[0.5]' : ''}`}>
             <textarea
               value={practiceInput}
               onChange={(e) => setPracticeInput(e.target.value)}
               placeholder={`用 ${currentVocab.language} 造句，运用词汇 "${stripRuby(currentVocab.word)}"...`}
-              className="flex-1 w-full border-none focus:ring-0 p-8 md:p-14 text-lg md:text-2xl leading-relaxed serif-font resize-none bg-transparent placeholder:text-slate-300"
+              className="flex-1 w-full border-none focus:ring-0 p-8 md:p-10 lg:p-12 text-lg md:text-2xl leading-relaxed serif-font resize-none bg-transparent placeholder:text-slate-300"
               disabled={isValidating || !!lastFeedback}
             />
             <div className="px-8 py-4 bg-slate-50/50 border-t border-slate-50 flex items-center justify-between shrink-0">
@@ -310,7 +310,7 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
             </div>
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex gap-4 shrink-0">
             {!lastFeedback ? (
               <button
                 onClick={handleValidate}
