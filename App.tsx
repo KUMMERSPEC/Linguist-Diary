@@ -356,7 +356,33 @@ const App: React.FC = () => {
     } catch (e) { setError("保存失败。"); } finally { setIsLoading(false); }
   };
 
-  if (isAuthInitializing) return <div className="min-h-screen bg-slate-50 flex items-center justify-center">🏛️</div>;
+  if (isAuthInitializing) return (
+    <div className="h-screen w-full bg-slate-50 flex flex-col items-center justify-center relative overflow-hidden">
+      {/* Decorative background elements */}
+      <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-100 rounded-full blur-3xl opacity-50 -mr-20 -mt-20"></div>
+      <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-50 -ml-20 -mb-20"></div>
+      
+      <div className="relative z-10 flex flex-col items-center animate-in zoom-in duration-1000">
+        <div className="w-24 h-24 bg-white rounded-[2.5rem] shadow-2xl flex items-center justify-center text-4xl mb-8 border border-slate-100 animate-bounce transition-all duration-1000">
+          🖋️
+        </div>
+        <div className="text-center space-y-2">
+          <h1 className="text-3xl font-black text-slate-900 serif-font tracking-tight">语言日记收藏馆</h1>
+          <div className="flex items-center justify-center space-x-3">
+             <div className="h-[1px] w-8 bg-slate-200"></div>
+             <p className="text-[11px] text-slate-400 font-black uppercase tracking-[0.4em]">Linguist Diary Museum</p>
+             <div className="h-[1px] w-8 bg-slate-200"></div>
+          </div>
+        </div>
+        
+        <div className="mt-12 flex space-x-2">
+          <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-ping"></div>
+          <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-ping [animation-delay:150ms]"></div>
+          <div className="w-1.5 h-1.5 bg-indigo-200 rounded-full animate-ping [animation-delay:300ms]"></div>
+        </div>
+      </div>
+    </div>
+  );
 
   if (!user) return <AuthView auth={auth} isFirebaseValid={isFirebaseValid} onLogin={handleLogin} />;
 

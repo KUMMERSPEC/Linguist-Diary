@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { RehearsalEvaluation } from '../types';
 import { generateDiaryAudio } from '../services/geminiService';
-import { decode, decodeAudioData } from '../utils/audioHelpers'; // Import new helpers
+import { decode, decodeAudioData } from '../utils/audioHelpers';
 
 interface RehearsalReportProps {
   evaluation: RehearsalEvaluation;
@@ -37,7 +37,7 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
     if (audioSourceRef.current) {
       audioSourceRef.current.stop();
       audioSourceRef.current = null;
-      if (isPlaying === id) { // Toggling off the current audio
+      if (isPlaying === id) {
         setIsPlaying(null);
         return;
       }
@@ -83,8 +83,8 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
   if (!evaluation) return null;
 
   return (
-    <div className="flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-700 pb-24">
-      <header className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4 px-2">
+    <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <header className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
         <div>
           <button onClick={onBack} className="text-slate-400 hover:text-indigo-600 text-[10px] font-black uppercase tracking-widest mb-1 flex items-center group">
             <span className="mr-1 group-hover:-translate-x-1 transition-transform">←</span> 返回收藏馆 BACK TO EXHIBITS
@@ -98,7 +98,7 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
         </div>
       </header>
 
-      <div className="bg-slate-900 rounded-[2.5rem] md:rounded-[4rem] p-8 md:p-14 text-white shadow-2xl relative overflow-hidden">
+      <div className="bg-slate-900 rounded-[2.5rem] md:rounded-[4rem] p-8 md:p-14 text-white shadow-2xl relative overflow-hidden mb-12">
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl -mr-48 -mt-48 pointer-events-none"></div>
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 relative z-10">
@@ -118,11 +118,11 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
 
             <div className="space-y-4">
               <div className="bg-white/5 p-6 rounded-3xl border border-white/5">
-                <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">内容评价 Content</h4>
+                <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">内容评价 CONTENT</h4>
                 <p className="text-sm text-slate-300 leading-relaxed italic">{evaluation.contentFeedback || "暂无反馈"}</p>
               </div>
               <div className="bg-white/5 p-6 rounded-3xl border border-white/5">
-                <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-3">语言评析 Language</h4>
+                <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-3">语言评析 LANGUAGE</h4>
                 <p className="text-sm text-slate-300 leading-relaxed italic">{evaluation.languageFeedback || "暂无评析"}</p>
               </div>
             </div>
@@ -131,7 +131,7 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
           <div className="lg:col-span-8 space-y-8">
             <div className="bg-white/5 p-8 md:p-12 rounded-[2.5rem] border border-white/5 relative group">
               <div className="flex items-center justify-between mb-6">
-                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">源文物 Archive Source</h4>
+                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">源文物 ARCHIVE SOURCE</h4>
                 <button 
                   onClick={() => handlePlayAudio(evaluation.sourceText || "", 'source')}
                   className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isPlaying === 'source' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-slate-400 hover:text-white'}`}
@@ -146,7 +146,7 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
 
             <div className="bg-white/10 p-8 md:p-12 rounded-[3rem] border border-white/10 shadow-inner relative group">
               <div className="flex items-center justify-between mb-6">
-                <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">修复后的复述 Restored Version</h4>
+                <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">修复后的复述 RESTORED VERSION</h4>
                 <div className="flex items-center space-x-4">
                   <div className="flex bg-white/5 p-1 rounded-xl">
                     <button onClick={() => setViewMode('diff')} className={`px-4 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${viewMode === 'diff' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>对比</button>
