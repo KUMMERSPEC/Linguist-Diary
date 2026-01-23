@@ -42,16 +42,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
           onViewChange(Array.isArray(views) ? views[0] : views);
           setIsPracticeMenuOpen(false);
         }}
-        className={`flex flex-col items-center justify-center flex-1 py-2 space-y-1 transition-all ${isActive ? 'text-indigo-600' : 'text-slate-400'}`}
+        className={`flex flex-col items-center justify-center flex-1 py-1 space-y-0.5 transition-all ${isActive ? 'text-indigo-600' : 'text-slate-400'}`}
       >
         <span className="text-2xl">{isActive ? activeIcon : icon}</span>
-        <span className="text-[10px] font-bold uppercase tracking-widest">{label}</span>
+        <span className="text-[9px] font-bold uppercase tracking-widest leading-none">{label}</span>
       </button>
     );
   };
 
   return (
-    <div className="flex h-screen w-full bg-slate-50 overflow-hidden">
+    <div className="flex h-[100dvh] w-full bg-slate-50 overflow-hidden">
       {/* Desktop & Tablet Sidebar */}
       <aside className="hidden md:flex flex-col md:w-60 lg:w-64 bg-white border-r border-slate-100 p-6 space-y-6 shrink-0 h-full z-30">
         <div className="flex items-center space-x-3 pb-4 border-b border-slate-100">
@@ -99,25 +99,25 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
         </div>
       </aside>
 
-      {/* Main content area - NO GLOBAL SCROLL */}
+      {/* Main content area */}
       <main className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
-        <div className="flex-1 h-full relative">
+        <div className="flex-1 h-full relative overflow-hidden">
           {children}
         </div>
 
-        {/* Mobile Bottom Navigation Bar */}
-        <div className="md:hidden shrink-0 bg-white border-t border-slate-100 px-2 py-1 flex items-center justify-around z-40 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
+        {/* Mobile Bottom Navigation Bar - Optimized for Mobile Screen Bottoms */}
+        <div className="md:hidden shrink-0 bg-white border-t border-slate-100 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+8px)] flex items-center justify-around z-40 shadow-[0_-8px_30px_-10px_rgba(0,0,0,0.12)] overflow-visible min-h-[72px]">
           <MobileTab views="dashboard" label="主页" icon="🏠" activeIcon="🏠" />
           <MobileTab views="history" label="馆藏" icon="🏛️" activeIcon="🏛️" />
           
-          <div className="relative flex flex-col items-center justify-center flex-1">
+          <div className="relative flex flex-col items-center justify-center flex-1 h-full overflow-visible min-w-[72px]">
             <button 
               onClick={() => setIsPracticeMenuOpen(!isPracticeMenuOpen)}
-              className={`w-14 h-14 -mt-8 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${isPracticeMenuOpen ? 'bg-indigo-600 text-white rotate-45' : 'bg-indigo-600 text-white'}`}
+              className={`w-14 h-14 absolute -top-8 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 z-50 ${isPracticeMenuOpen ? 'bg-indigo-700 text-white rotate-45' : 'bg-indigo-600 text-white'}`}
             >
-              <span className="text-2xl">＋</span>
+              <span className="text-3xl leading-none">＋</span>
             </button>
-            <span className="text-[10px] font-black uppercase tracking-widest mt-1 text-indigo-600">练习</span>
+            <span className="text-[9px] font-black uppercase tracking-widest mt-6 text-indigo-600">练习</span>
             
             {isPracticeMenuOpen && (
               <>

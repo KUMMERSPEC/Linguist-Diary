@@ -247,7 +247,14 @@ export const generatePracticeArtifact = async (language: string, keywords: strin
   return withRetry(async () => {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Write short text in ${language}. Topic: ${topic}. Difficulty: ${difficulty}. Keywords: ${keywords}.`,
+      contents: `Task: Write a cohesive short text (3-5 sentences) in ${language}. 
+      Topic: ${topic}. 
+      Difficulty level: ${difficulty}. 
+      Keywords to include: ${keywords}.
+      
+      STRICT RULE: The response MUST be entirely and purely in ${language}. 
+      Do NOT mix other languages (like English) in the content. 
+      For Japanese: Use natural phrasing and avoid mixing English unless it's a loanword commonly written in Katakana.`,
     });
     return response.text || "";
   }).catch(error => { throw new Error("生成失败。"); });
