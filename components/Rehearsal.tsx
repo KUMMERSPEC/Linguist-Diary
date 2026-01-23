@@ -57,9 +57,17 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
     if (!diff) return null;
     let processed = diff.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
     processed = processed
-      .replace(/<add>(.*?)<\/add>/g, '<span class="bg-emerald-500/20 text-emerald-200 px-1 rounded-md border-b-2 border-emerald-400/30 font-bold mx-0.5">$1</span>')
-      .replace(/<rem>(.*?)<\/rem>/g, '<span class="text-slate-500 line-through px-1 opacity-60">$1</span>');
-    return <div className="leading-[2.2] text-lg md:text-2xl text-slate-100 serif-font" dangerouslySetInnerHTML={{ __html: processed }} />;
+      .replace(/<add>(.*?)<\/add>/g, '<span class="text-emerald-400 font-bold bg-emerald-500/10 px-1 rounded mx-0.5">$1</span>')
+      .replace(/<rem>(.*?)<\/rem>/g, '<span class="text-rose-400 line-through opacity-60 mx-0.5">$1</span>');
+    return <div className="leading-[2.5] text-lg md:text-xl text-slate-100 serif-font italic" dangerouslySetInnerHTML={{ __html: processed }} />;
+  };
+
+  const getGrade = (score: number) => {
+    const s = Math.round(score || 0);
+    if (s >= 90) return { label: 'S', color: 'text-indigo-400', bg: 'bg-indigo-500/10' };
+    if (s >= 80) return { label: 'A', color: 'text-emerald-400', bg: 'bg-emerald-500/10' };
+    if (s >= 70) return { label: 'B', color: 'text-orange-400', bg: 'bg-orange-500/10' };
+    return { label: 'C', color: 'text-slate-400', bg: 'bg-slate-500/10' };
   };
 
   const handleGenerate = async () => {
@@ -117,7 +125,7 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
 
   return (
     <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 animate-in fade-in duration-500">
-      <header className="mb-6 max-w-6xl mx-auto">
+      <header className="mb-6 max-w-6xl mx-auto text-center md:text-left">
         <h2 className="text-3xl md:text-4xl font-black text-slate-900 serif-font tracking-tight">展厅演练 Rehearsal</h2>
         <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mt-1 opacity-70">Refine Your Presentation Skills</p>
       </header>
@@ -126,42 +134,23 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
         <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-4 duration-700">
           <div className="bg-white p-6 md:p-10 rounded-[2.5rem] border border-slate-200 shadow-2xl shadow-slate-100/50">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
-              
-              {/* Column 1: Language & Difficulty */}
               <div className="lg:col-span-3 space-y-8">
                 <section>
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">选择语言 LANGUAGE</label>
                   <div className="grid grid-cols-2 gap-2">
                     {LANGUAGES.map(l => (
-                      <button 
-                        key={l.code} 
-                        onClick={() => setLanguage(l)} 
-                        className={`flex items-center space-x-2 px-3 py-2 rounded-xl border-2 transition-all text-xs font-bold ${
-                          language.code === l.code 
-                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' 
-                          : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200'
-                        }`}
-                      >
+                      <button key={l.code} onClick={() => setLanguage(l)} className={`flex items-center space-x-2 px-3 py-2 rounded-xl border-2 transition-all text-xs font-bold ${language.code === l.code ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200'}`}>
                         <span>{l.flag}</span>
                         <span className="truncate">{l.label}</span>
                       </button>
                     ))}
                   </div>
                 </section>
-
                 <section>
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">难度等级 DIFFICULTY</label>
                   <div className="flex gap-2">
                     {DIFFICULTIES.map(d => (
-                      <button 
-                        key={d.id} 
-                        onClick={() => setDifficulty(d)} 
-                        className={`flex-1 py-2 rounded-xl border-2 transition-all flex flex-col items-center justify-center space-y-1 ${
-                          difficulty.id === d.id 
-                          ? 'bg-amber-500 border-amber-500 text-white shadow-lg shadow-amber-100' 
-                          : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200'
-                        }`}
-                      >
+                      <button key={d.id} onClick={() => setDifficulty(d)} className={`flex-1 py-2 rounded-xl border-2 transition-all flex flex-col items-center justify-center space-y-1 ${difficulty.id === d.id ? 'bg-amber-500 border-amber-500 text-white shadow-lg shadow-amber-100' : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200'}`}>
                         <span className="text-base">{d.icon}</span>
                         <span className="text-[10px] font-black uppercase tracking-tighter">{d.label}</span>
                       </button>
@@ -169,22 +158,12 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
                   </div>
                 </section>
               </div>
-
-              {/* Column 2: Topic Grid */}
               <div className="lg:col-span-5">
                 <section>
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">场景主题 TOPIC</label>
                   <div className="grid grid-cols-3 gap-3">
                     {TOPICS.map(t => (
-                      <button 
-                        key={t.id} 
-                        onClick={() => setTopic(t)} 
-                        className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all ${
-                          topic.id === t.id 
-                          ? 'bg-indigo-50 border-indigo-600 shadow-inner' 
-                          : 'bg-slate-50 border-transparent text-slate-500 hover:bg-white hover:border-slate-200'
-                        }`}
-                      >
+                      <button key={t.id} onClick={() => setTopic(t)} className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all ${topic.id === t.id ? 'bg-indigo-50 border-indigo-600 shadow-inner' : 'bg-slate-50 border-transparent text-slate-500 hover:bg-white hover:border-slate-200'}`}>
                         <span className="text-2xl mb-2">{t.icon}</span>
                         <span className={`text-[10px] font-black uppercase tracking-widest ${topic.id === t.id ? 'text-indigo-600' : 'text-slate-500'}`}>{t.label}</span>
                       </button>
@@ -192,34 +171,15 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
                   </div>
                 </section>
               </div>
-
-              {/* Column 3: Keywords & Start Action */}
               <div className="lg:col-span-4 flex flex-col justify-between">
                 <section className="mb-6 lg:mb-0">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">指定关键词 KEYWORDS (可选)</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">指定关键词 KEYWORDS</label>
                   <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
-                    <textarea 
-                      value={keywords}
-                      onChange={(e) => setKeywords(e.target.value)}
-                      placeholder="例如: coffee, morning, city..."
-                      className="w-full bg-transparent border-none focus:ring-0 text-sm italic serif-font text-slate-700 resize-none h-20"
-                    />
+                    <textarea value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="例如: coffee, morning, city..." className="w-full bg-transparent border-none focus:ring-0 text-sm italic serif-font text-slate-700 resize-none h-20" />
                   </div>
                 </section>
-
-                <button 
-                  onClick={handleGenerate} 
-                  disabled={isGenerating} 
-                  className="w-full bg-indigo-600 text-white py-6 rounded-3xl font-black text-lg shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center space-x-3 active:scale-95 group"
-                >
-                  {isGenerating ? (
-                    <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  ) : (
-                    <>
-                      <span className="text-xl">✨</span>
-                      <span>开启演练 START</span>
-                    </>
-                  )}
+                <button onClick={handleGenerate} disabled={isGenerating} className="w-full bg-indigo-600 text-white py-6 rounded-3xl font-black text-lg shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center space-x-3 active:scale-95 group">
+                  {isGenerating ? <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <><span className="text-xl">✨</span><span>开启演练 START</span></>}
                 </button>
               </div>
             </div>
@@ -240,7 +200,7 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
                </div>
              </div>
              <div className={`transition-all duration-700 ${showSource ? 'blur-0 opacity-100' : 'blur-2xl opacity-10 select-none'}`}>
-               <p className="text-2xl md:text-3xl text-slate-800 leading-[2.5] serif-font italic">“ {renderRuby(sourceText)} ”</p>
+               <p className="text-lg md:text-xl text-slate-800 leading-[2.2] serif-font italic">“ {renderRuby(sourceText)} ”</p>
              </div>
            </div>
 
@@ -249,67 +209,86 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
                 <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">您的复述内容 YOUR RETELLING</span>
                 <span className="text-[10px] font-black text-slate-300 tracking-widest">{userRetelling.length} CHARS</span>
              </div>
-             <textarea 
-               value={userRetelling} 
-               onChange={(e) => setUserRetelling(e.target.value)} 
-               placeholder="请尽可能准确地复述刚才看到的内容..." 
-               className="w-full h-80 border-none focus:ring-0 p-10 md:p-14 text-xl md:text-3xl leading-relaxed serif-font resize-none bg-transparent placeholder:text-slate-200 no-scrollbar" 
-             />
+             <textarea value={userRetelling} onChange={(e) => setUserRetelling(e.target.value)} placeholder="请尽可能准确地复述刚才看到的内容..." className="w-full h-80 border-none focus:ring-0 p-10 md:p-14 text-lg md:text-xl leading-relaxed serif-font resize-none bg-transparent placeholder:text-slate-200 no-scrollbar" />
            </div>
 
            <div className="flex flex-col sm:flex-row gap-4">
              <button onClick={() => setSourceText('')} className="flex-1 py-6 border-2 border-slate-200 rounded-3xl text-[12px] font-black uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-colors">放弃这次演练 DISCARD</button>
-             <button onClick={handleEvaluate} disabled={isEvaluating || userRetelling.length < 10} className="flex-[2] bg-indigo-600 text-white py-6 rounded-3xl font-black text-xl shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center space-x-3 active:scale-95 disabled:opacity-50">
+             <button onClick={handleEvaluate} disabled={isEvaluating || userRetelling.length < 10} className="flex-[2] bg-indigo-600 text-white py-6 rounded-3xl font-black text-base shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center space-x-3 active:scale-95 disabled:opacity-50">
                {isEvaluating ? <div className="w-8 h-8 border-4 border-white/30 border-t-white rounded-full animate-spin"></div> : <><span>📊 评估表现 EVALUATE PERFORMANCE</span><span className="text-2xl">→</span></>}
              </button>
            </div>
         </div>
       ) : (
-        <div className="max-w-5xl mx-auto bg-slate-900 rounded-[4rem] p-10 md:p-16 text-white shadow-2xl animate-in zoom-in duration-700 relative overflow-hidden">
+        <div className="max-w-5xl mx-auto bg-slate-900 rounded-[4rem] p-8 md:p-16 text-white shadow-2xl animate-in zoom-in duration-700 relative overflow-hidden">
            <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl -mr-48 -mt-48 pointer-events-none"></div>
            
            <div className="flex items-center justify-between mb-16 relative z-10">
-             <h3 className="text-3xl font-black serif-font">演练评估结果 REVIEW</h3>
-             <button onClick={() => setSourceText('')} className="bg-white/10 px-8 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-white/20 transition-all border border-white/5">重新开始 NEW SESSION</button>
+             <h3 className="text-2xl md:text-3xl font-black serif-font">演练评估结果 REVIEW</h3>
+             <button onClick={() => setSourceText('')} className="bg-white/10 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all border border-white/5">重新开始 NEW SESSION</button>
            </div>
            
-           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 relative z-10">
-              <div className="space-y-12">
-                <div className="bg-white/5 p-10 rounded-[3rem] border border-white/10 flex items-center justify-around shadow-inner">
-                   <div className="text-center">
-                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block">还原度 ACCURACY</span>
-                     <div className="text-6xl font-black text-indigo-400 serif-font tracking-tighter">{evaluation.accuracyScore}</div>
+           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 md:gap-16 relative z-10">
+              {/* Grading Section */}
+              <div className="lg:col-span-5 space-y-12">
+                <div className="bg-white/5 p-8 rounded-[3rem] border border-white/10 flex items-center justify-around shadow-inner">
+                   <div className="text-center group">
+                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4 block">还原度 ACCURACY</span>
+                     <div className={`w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center text-4xl md:text-5xl font-black serif-font shadow-2xl transition-transform group-hover:scale-110 ${getGrade(evaluation.accuracyScore).bg} ${getGrade(evaluation.accuracyScore).color} border border-white/5`}>
+                       {getGrade(evaluation.accuracyScore).label}
+                     </div>
+                     <span className="text-[10px] font-bold text-slate-500 mt-4 block">{Math.round(evaluation.accuracyScore)}/100</span>
                    </div>
-                   <div className="w-[1px] h-16 bg-white/10"></div>
-                   <div className="text-center">
-                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 block">表现力 QUALITY</span>
-                     <div className="text-6xl font-black text-emerald-400 serif-font tracking-tighter">{evaluation.qualityScore}</div>
+                   <div className="w-[1px] h-20 bg-white/10"></div>
+                   <div className="text-center group">
+                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4 block">表现力 QUALITY</span>
+                     <div className={`w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center text-4xl md:text-5xl font-black serif-font shadow-2xl transition-transform group-hover:scale-110 ${getGrade(evaluation.qualityScore).bg} ${getGrade(evaluation.qualityScore).color} border border-white/5`}>
+                       {getGrade(evaluation.qualityScore).label}
+                     </div>
+                     <span className="text-[10px] font-bold text-slate-500 mt-4 block">{Math.round(evaluation.qualityScore)}/100</span>
                    </div>
                 </div>
                 
                 <div className="space-y-6">
                    <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/5 hover:bg-white/10 transition-colors">
                       <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-4">内容反馈 CONTENT FEEDBACK</h4>
-                      <p className="text-base text-slate-300 italic leading-relaxed">{evaluation.contentFeedback}</p>
+                      <p className="text-sm md:text-base text-slate-300 italic leading-relaxed">{evaluation.contentFeedback}</p>
                    </div>
                    <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/5 hover:bg-white/10 transition-colors">
                       <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-4">语言评析 LANGUAGE NOTES</h4>
-                      <p className="text-base text-slate-300 italic leading-relaxed">{evaluation.languageFeedback}</p>
+                      <p className="text-sm md:text-base text-slate-300 italic leading-relaxed">{evaluation.languageFeedback}</p>
                    </div>
                 </div>
               </div>
               
-              <div className="space-y-8">
-                <div className="bg-white/10 p-10 md:p-14 rounded-[3.5rem] border border-white/10 shadow-2xl">
-                   <div className="flex items-center justify-between mb-8">
-                     <h4 className="text-[11px] font-black text-indigo-400 uppercase tracking-[0.2em]">打磨建议 RESTORED VERSION</h4>
-                     <div className="flex bg-white/5 p-1.5 rounded-2xl">
-                        <button onClick={() => setViewMode('diff')} className={`px-5 py-2 rounded-xl text-[10px] font-black transition-all ${viewMode === 'diff' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>对比</button>
-                        <button onClick={() => setViewMode('final')} className={`px-5 py-2 rounded-xl text-[10px] font-black transition-all ${viewMode === 'final' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>最终</button>
+              {/* Content Comparison Section */}
+              <div className="lg:col-span-7 space-y-8">
+                <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/5 mb-4">
+                  <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">源文物对照 SOURCE REF</h4>
+                  <p className="text-base text-slate-400 italic leading-relaxed line-clamp-3">“ {renderRuby(sourceText)} ”</p>
+                </div>
+
+                <div className="bg-white/10 p-8 md:p-12 rounded-[3.5rem] border border-white/10 shadow-2xl min-h-[300px] flex flex-col">
+                   <div className="flex items-center justify-between mb-8 shrink-0">
+                     <h4 className="text-[11px] font-black text-indigo-400 uppercase tracking-[0.2em]">复述打磨建议 RESTORED RETELLING</h4>
+                     <div className="flex bg-white/5 p-1 rounded-2xl">
+                        <button onClick={() => setViewMode('diff')} className={`px-4 py-1.5 rounded-xl text-[9px] font-black transition-all ${viewMode === 'diff' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>对比</button>
+                        <button onClick={() => setViewMode('final')} className={`px-4 py-1.5 rounded-xl text-[9px] font-black transition-all ${viewMode === 'final' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>最终</button>
                      </div>
                    </div>
-                   <div className="min-h-[200px]">
-                     {viewMode === 'diff' ? renderDiffText(evaluation.diffedRetelling) : <p className="text-2xl md:text-3xl leading-[2.5] italic serif-font text-slate-100">{renderRuby(evaluation.suggestedVersion)}</p>}
+                   <div className="flex-1">
+                     {viewMode === 'diff' ? (
+                        renderDiffText(evaluation.diffedRetelling)
+                     ) : (
+                        <p className="text-lg md:text-xl leading-[2.5] italic serif-font text-slate-100">
+                          {renderRuby(evaluation.suggestedVersion)}
+                        </p>
+                     )}
+                   </div>
+                   <div className="mt-8 pt-6 border-t border-white/5 flex justify-end">
+                      <button onClick={() => handlePlayAudio(evaluation.suggestedVersion)} className={`flex items-center space-x-2 px-6 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${isPlaying ? 'bg-indigo-600 text-white' : 'bg-white/5 text-slate-400 hover:text-white'}`}>
+                        <span>{isPlaying ? '⏹ 停止播放' : '🎧 收听打磨版'}</span>
+                      </button>
                    </div>
                 </div>
               </div>

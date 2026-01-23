@@ -110,7 +110,7 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
       STRICT FORMAT RULES:
       1. 'overallFeedback' and 'corrections.explanation' MUST be in Chinese (中文).
       2. ONLY 'modifiedText' and 'diffedText' should use '[Kanji](furigana)' if the language is Japanese.
-      3. Use <add>/<rem> for diffs.`,
+      3. Use <add>/<rem> for diffs. DO NOT use brackets.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -187,7 +187,19 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
   return withRetry(async () => {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Evaluate retelling of "${source}" with "${retelling}" in ${language}. Feedback in Chinese.`,
+      contents: `You are a strict but helpful curator.
+      SOURCE ARTIFACT: "${source}"
+      USER RETELLING: "${retelling}"
+      LANGUAGE: ${language}
+      
+      TASK:
+      1. 'suggestedVersion': A polished version of the USER'S RETELLING (fix grammar, style, and accuracy relative to source). DO NOT just copy the SOURCE ARTIFACT.
+      2. 'diffedRetelling': Compare USER RETELLING with your 'suggestedVersion'. Use <add>polished words</add> and <rem>original user errors</rem>.
+      3. 'accuracyScore': How well they recalled the SOURCE (0-100).
+      4. 'qualityScore': The linguistic quality of their RETELLING (0-100).
+      5. 'contentFeedback' & 'languageFeedback': Concise feedback in Chinese (中文).
+      
+      CRITICAL: For Japanese, use '[Kanji](furigana)' in 'suggestedVersion' and 'diffedRetelling'.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
