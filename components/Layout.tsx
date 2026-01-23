@@ -52,8 +52,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-slate-100 p-6 space-y-6 shrink-0 fixed h-full z-30">
+      {/* Desktop & Tablet Sidebar (Now visible from 'md' 768px) */}
+      <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-100 p-6 space-y-6 shrink-0 fixed h-full z-30">
         <div className="flex items-center space-x-3 pb-4 border-b border-slate-100">
           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-xl">🖋️</div>
           <h1 className="text-lg font-bold text-slate-900 serif-font">Linguist Diary</h1>
@@ -66,7 +66,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
           <NavItem view={['rehearsal', 'rehearsal_report']} label="展厅演练 / Rehearsal" icon="🎤" />
           <NavItem view={['vocab_list', 'vocab_practice', 'vocab_practice_detail']} label="珍宝与足迹 / Vocab & Practice" icon="💎" />
           <NavItem view="history" label="收藏馆 / History" icon="🏛️" />
-          {/* 已移除冗余的个人中心 NavItem */}
         </nav>
 
         <div className="mt-auto space-y-4 pt-4 border-t border-slate-50">
@@ -100,13 +99,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-h-screen overflow-hidden lg:pl-64 pb-20 lg:pb-0">
+      {/* Adjusted padding: Left padding for sidebar from 'md' up, bottom padding for mobile nav only on mobile */}
+      <main className="flex-1 flex flex-col min-h-screen overflow-hidden md:pl-64 pb-20 md:pb-0">
         <div className="flex-1 overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8">
           {children}
         </div>
 
-        {/* Mobile Bottom Navigation Bar */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-2 py-1 flex items-center justify-around z-40 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
+        {/* Mobile Bottom Navigation Bar (Hidden from 'md' 768px up) */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-2 py-1 flex items-center justify-around z-40 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
           <MobileTab views="dashboard" label="主页" icon="🏠" activeIcon="🏠" />
           <MobileTab views="history" label="馆藏" icon="🏛️" activeIcon="🏛️" />
           

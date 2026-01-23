@@ -65,17 +65,18 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const targetGems = useMemo(() => {
-    const uniqueMap = new Map<string, AdvancedVocab>();
-    allGems
-      .filter(g => g.language === language.code && (g.mastery || 0) < 3)
-      .forEach(g => {
-        if (!uniqueMap.has(g.word)) uniqueMap.set(g.word, g);
-      });
-    return Array.from(uniqueMap.values()).slice(0, 5);
-  }, [allGems, language]);
-
+  // 核心改进：改为使用状态存储本次对话的随机词汇，避免词汇量大时撑爆 UI
+  const [sessionGems, setSessionGems] = useState<AdvancedVocab[]>([]);
   const [usedGems, setUsedGems] = useState<Set<string>>(new Set());
+
+  // 刷新本次对话的任务词汇
+  const refreshSessionGems = useCallback(() => {
+    const available = allGems.filter(g => g.language === language.code && (g.mastery || 0) < 3);
+    // 随机洗牌并抽取前 5 个
+    const shuffled = [...available].sort(() => 0.5 - Math.random());
+    setSessionGems(shuffled.slice(0, 5));
+    setUsedGems(new Set());
+  }, [allGems, language]);
 
   const renderRuby = (text: string) => {
     if (!text) return '';
@@ -100,8 +101,8 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
     const start = getStarter();
     setMessages([{ role: 'ai', content: start.text }]);
     setThemeLabel(start.theme);
-    setUsedGems(new Set());
-  }, [language, getStarter]);
+    refreshSessionGems(); // 初始加载或语言切换时刷新
+  }, [language, getStarter, refreshSessionGems]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -132,7 +133,8 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
     if (!inputValue.trim() || isTyping) return;
     const content = inputValue.trim();
     
-    const newlyDetected = targetGems.filter(gem => 
+    // 仅在 sessionGems 范围内检测点亮情况
+    const newlyDetected = sessionGems.filter(gem => 
       !usedGems.has(gem.word) && 
       content.toLowerCase().includes(stripRuby(gem.word).toLowerCase())
     );
@@ -177,17 +179,20 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
 
   return (
     <div className="flex h-full animate-in fade-in duration-500 overflow-hidden w-full bg-slate-50 relative">
-      <aside className="hidden lg:flex w-72 flex-col bg-white border-r border-slate-100 p-6 space-y-6 shrink-0 z-10">
-        <div className="flex items-center space-x-2">
-           <span className="text-xl">💎</span>
-           <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest serif-font">点亮计划</h3>
+      <aside className="hidden md:flex w-72 flex-col bg-white border-r border-slate-100 p-6 space-y-6 shrink-0 z-10">
+        <div className="flex items-center justify-between">
+           <div className="flex items-center space-x-2">
+             <span className="text-xl">💎</span>
+             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest serif-font">点亮计划</h3>
+           </div>
+           <button onClick={refreshSessionGems} className="text-[10px] text-indigo-500 font-bold hover:underline transition-all" title="换一批词汇">换一批</button>
         </div>
         <div className="space-y-4">
           <p className="text-[10px] text-slate-400 font-bold leading-relaxed">
-            在对话中成功调用以下馆藏词汇，即可点亮它们。
+            在对话中运用以下随机挑选的 5 件珍宝，即可点亮它们。
           </p>
           <div className="space-y-3 overflow-y-auto max-h-[calc(100vh-250px)] no-scrollbar">
-             {targetGems.length > 0 ? targetGems.map((gem, idx) => {
+             {sessionGems.length > 0 ? sessionGems.map((gem, idx) => {
                const isLit = usedGems.has(gem.word);
                return (
                  <div 
@@ -252,9 +257,10 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
                ))}
              </div>
              
-             <div className="lg:hidden flex items-center space-x-2 overflow-x-auto no-scrollbar py-0.5">
+             {/* Word list mini-view for Mobile only (Now hidden from 'md' up) */}
+             <div className="md:hidden flex items-center space-x-2 overflow-x-auto no-scrollbar py-0.5">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest shrink-0">待点亮:</span>
-                {targetGems.map((gem, i) => {
+                {sessionGems.map((gem, i) => {
                   const isLit = usedGems.has(gem.word);
                   return (
                     <div 
@@ -280,7 +286,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
         >
           <div className="max-w-4xl mx-auto space-y-6">
             {messages.map((msg, idx) => {
-              const containedGems = targetGems.filter(gem => 
+              const containedGems = sessionGems.filter(gem => 
                 msg.role === 'user' && msg.content.toLowerCase().includes(stripRuby(gem.word).toLowerCase())
               );
               

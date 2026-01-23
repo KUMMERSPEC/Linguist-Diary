@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+// ... existing imports ...
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, User as FirebaseAuthUser, updateProfile } from 'firebase/auth';
 import { 
@@ -84,7 +85,7 @@ const AVATAR_SEEDS = [
 
 const App: React.FC = () => {
   const [user, setUser] = useState<{ uid: string, displayName: string, photoURL: string, isMock: boolean } | null>(null);
-  const [isAuthInitializing, setIsAuthInitializing] = useState(true); // 新增：初始化身份验证状态
+  const [isAuthInitializing, setIsAuthInitializing] = useState(true); 
   const [view, setView] = useState<ViewState>('dashboard');
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [currentEntry, setCurrentEntry] = useState<DiaryEntry | null>(null); 
@@ -98,6 +99,10 @@ const App: React.FC = () => {
   const [allAdvancedVocab, setAllAdvancedVocab] = useState<AdvancedVocab[]>([]); 
   const [selectedVocabForPracticeId, setSelectedVocabForPracticeId] = useState<string | null>(null);
   const [isPracticeActive, setIsPracticeActive] = useState(false);
+
+  // --- 练习序列相关状态 ---
+  const [practiceQueue, setPracticeQueue] = useState<string[]>([]);
+  const [queueIndex, setQueueIndex] = useState(-1);
 
   const [editName, setEditName] = useState('');
   const [editPhoto, setEditPhoto] = useState('');
@@ -124,7 +129,7 @@ const App: React.FC = () => {
         setCurrentEntry(null);
         setCurrentEntryIterations([]);
       }
-      setIsAuthInitializing(false); // 身份验证检查完成
+      setIsAuthInitializing(false);
     });
     return () => unsubscribe();
   }, []);
@@ -206,9 +211,44 @@ const App: React.FC = () => {
     setView(newView);
     setSelectedVocabForPracticeId(vocabId || null);
     setIsPracticeActive(!!isPracticeActive);
+    setPracticeQueue([]);
+    setQueueIndex(-1);
+    
+    // 初始化 Profile 的编辑状态
+    if (newView === 'profile' && user) {
+      setEditName(user.displayName);
+      setEditPhoto(user.photoURL);
+    }
+
     if (newView !== 'editor') {
       setPrefilledEditorText('');
       setRewriteBaseEntryId(null); 
+    }
+  };
+
+  // ... rest of App.tsx logic ...
+  const handleStartReviewSession = () => {
+    if (allAdvancedVocab.length === 0) {
+      alert("收藏馆暂无词汇珍宝，请先撰写日记。");
+      return;
+    }
+    const shuffled = [...allAdvancedVocab].sort(() => 0.5 - Math.random());
+    const selected = shuffled.slice(0, 5).map(v => v.id);
+    setPracticeQueue(selected);
+    setQueueIndex(0);
+    setSelectedVocabForPracticeId(selected[0]);
+    setIsPracticeActive(true);
+    setView('vocab_practice');
+  };
+
+  const handleNextInQueue = () => {
+    if (queueIndex < practiceQueue.length - 1) {
+      const nextIdx = queueIndex + 1;
+      setQueueIndex(nextIdx);
+      setSelectedVocabForPracticeId(practiceQueue[nextIdx]);
+    } else {
+      alert("今日珍宝打磨任务已全部完成！");
+      handleViewChange('vocab_list');
     }
   };
 
@@ -246,14 +286,11 @@ const App: React.FC = () => {
         iterationCount: 0
       };
 
-      // --- 处理词汇持久化 ---
       const persistVocab = async (vocabItems: Omit<AdvancedVocab, 'id'>[]) => {
         const uniqueItems = vocabItems.filter(v => 
           !allAdvancedVocab.some(existing => existing.word === v.word && (existing.language || language) === language)
         );
-
         if (uniqueItems.length === 0) return;
-
         const itemsToSave = uniqueItems.map(v => ({
           ...v,
           id: uuidv4(),
@@ -280,7 +317,6 @@ const App: React.FC = () => {
 
       await persistVocab(analysis.advancedVocab);
 
-      // --- 处理日记条目持久化 ---
       if (!db || user.isMock) {
         if (rewriteBaseEntryId && currentEntry) {
           const updated = { 
@@ -374,7 +410,6 @@ const App: React.FC = () => {
     }
   };
 
-  // --- 全屏初始化加载组件 ---
   if (isAuthInitializing) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 animate-in fade-in duration-500">
@@ -399,7 +434,7 @@ const App: React.FC = () => {
 
   return (
     <Layout activeView={view} onViewChange={handleViewChange} user={user} onLogout={handleLogout}>
-      {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={() => setView('vocab_list')} entries={entries} />}
+      {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartReviewSession} entries={entries} />}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} />}
       {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} />}
       {view === 'history' && <History entries={entries} onSelect={(e) => { setCurrentEntry(e); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { 
@@ -410,7 +445,18 @@ const App: React.FC = () => {
       }} onRewrite={(e) => { setRewriteBaseEntryId(e.id); setPrefilledEditorText(e.originalText); setView('editor'); }} />}
       {view === 'chat' && <ChatEditor onFinish={(msgs, lang) => { setChatLanguage(lang); setPrefilledEditorText(msgs.map(m => m.content).join('\n\n')); setView('editor'); }} allGems={allAdvancedVocab.map(v => ({ ...v, language: v.language || 'English' }))} />}
       {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} />}
-      {view === 'vocab_practice' && selectedVocabForPracticeId && <VocabPractice selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onUpdateMastery={handleUpdateMastery} onBackToVocabList={() => setView('vocab_list')} onViewChange={handleViewChange} isPracticeActive={isPracticeActive} />}
+      {view === 'vocab_practice' && selectedVocabForPracticeId && (
+        <VocabPractice 
+          selectedVocabId={selectedVocabForPracticeId} 
+          allAdvancedVocab={allAdvancedVocab} 
+          onUpdateMastery={handleUpdateMastery} 
+          onBackToVocabList={() => handleViewChange('vocab_list')} 
+          onViewChange={handleViewChange} 
+          isPracticeActive={isPracticeActive}
+          queueProgress={practiceQueue.length > 0 ? { current: queueIndex + 1, total: practiceQueue.length } : undefined}
+          onNextInQueue={handleNextInQueue}
+        />
+      )}
       {view === 'vocab_practice_detail' && selectedVocabForPracticeId && <VocabPracticeDetailView selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onBackToPracticeHistory={() => setView('vocab_list')} />}
       {view === 'rehearsal' && <Rehearsal onSaveToMuseum={handleSaveToMuseum} />}
       {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} />}
