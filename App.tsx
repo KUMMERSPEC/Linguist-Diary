@@ -309,9 +309,16 @@ const App: React.FC = () => {
         analysis,
         iterationCount: 0
       };
-      const vocabItemsToSave = analysis.advancedVocab.filter(v => 
-        !allAdvancedVocab.some(existing => existing.word === v.word && existing.language === language)
-      ).map(v => ({ ...v, id: uuidv4(), mastery: 0, language, practices: [] }));
+
+      // 改良的查重逻辑：不区分大小写，且去除空格
+      const vocabItemsToSave = analysis.advancedVocab.filter(v => {
+        const normalizedNewWord = stripRuby(v.word).trim().toLowerCase();
+        return !allAdvancedVocab.some(existing => {
+          const normalizedExistingWord = stripRuby(existing.word).trim().toLowerCase();
+          return normalizedExistingWord === normalizedNewWord && existing.language === language;
+        });
+      }).map(v => ({ ...v, id: uuidv4(), mastery: 0, language, practices: [] }));
+
       if (vocabItemsToSave.length > 0) {
         if (!db || user.isMock) {
           const updated = [...vocabItemsToSave, ...allAdvancedVocab];
@@ -323,9 +330,11 @@ const App: React.FC = () => {
             const { id, practices, ...data } = item;
             await addDoc(vocabCol, data);
           }
+          // Firebase 模式下重新加载以同步
           loadUserData(user.uid, user.isMock);
         }
       }
+
       if (!db || user.isMock) {
         const finalEntry = { ...newEntrySkeleton, id: uuidv4() } as DiaryEntry;
         const updatedEntries = [finalEntry, ...entries];
