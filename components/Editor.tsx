@@ -6,6 +6,7 @@ interface EditorProps {
   isLoading: boolean;
   initialText?: string;
   initialLanguage?: string;
+  summaryPrompt?: string; // New: Muse from chat
 }
 
 const LANGUAGES = [
@@ -16,7 +17,7 @@ const LANGUAGES = [
   { code: 'German', label: 'Deutsch', flag: '🇩🇪' },
 ];
 
-const Editor: React.FC<EditorProps> = ({ onAnalyze, isLoading, initialText = '', initialLanguage = 'English' }) => {
+const Editor: React.FC<EditorProps> = ({ onAnalyze, isLoading, initialText = '', initialLanguage = 'English', summaryPrompt }) => {
   const [text, setText] = useState(initialText);
   const [language, setLanguage] = useState(initialLanguage);
 
@@ -32,7 +33,7 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, isLoading, initialText = '',
   };
 
   return (
-    <div className="flex flex-col h-full max-h-full animate-in fade-in slide-in-from-bottom-2 duration-500">
+    <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-500">
       <header className="mb-4 space-y-3 shrink-0">
         <div className="flex items-baseline justify-between">
           <h2 className="text-2xl md:text-3xl font-bold text-slate-900 serif-font">
@@ -41,28 +42,39 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, isLoading, initialText = '',
           <span className="text-[10px] font-black text-slate-400 tracking-widest uppercase opacity-60">Curator's Studio</span>
         </div>
         
-        <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar pb-0.5 -mx-3 px-3 md:mx-0 md:px-0">
-          {LANGUAGES.map((lang) => (
-            <button
-              key={lang.code}
-              type="button"
-              onClick={() => setLanguage(lang.code)}
-              className={`flex-shrink-0 flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-[10px] md:text-xs font-bold transition-all border ${
-                language === lang.code 
-                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' 
-                  : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-200'
-              }`}
-            >
-              <span>{lang.flag}</span>
-              <span>{lang.label}</span>
-            </button>
-          ))}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar pb-0.5">
+            {LANGUAGES.map((lang) => (
+              <button
+                key={lang.code}
+                type="button"
+                onClick={() => setLanguage(lang.code)}
+                className={`flex-shrink-0 flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-[10px] md:text-xs font-bold transition-all border ${
+                  language === lang.code 
+                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' 
+                    : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-200'
+                }`}
+              >
+                <span>{lang.flag}</span>
+                <span>{lang.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
-      <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
-        {/* 输入框容器 */}
-        <div className="flex-1 bg-white border border-slate-200 rounded-[2.5rem] shadow-xl overflow-hidden focus-within:ring-4 focus-within:ring-indigo-500/5 focus-within:border-indigo-200 transition-all flex flex-col">
+      <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 space-y-4">
+        {summaryPrompt && (
+          <div className="bg-indigo-50 border border-indigo-100 p-5 rounded-[2rem] animate-in fade-in slide-in-from-top-2 duration-700">
+             <div className="flex items-center space-x-2 mb-2">
+               <span className="text-lg">💡</span>
+               <h4 className="text-[10px] font-black text-indigo-900 uppercase tracking-widest">馆长灵感 Curator's Muse</h4>
+             </div>
+             <p className="text-sm text-indigo-800/80 leading-relaxed italic serif-font">“ {summaryPrompt} ”</p>
+          </div>
+        )}
+
+        <div className="flex-1 bg-white border border-slate-200 rounded-[2.5rem] shadow-xl overflow-hidden focus-within:ring-4 focus-within:ring-indigo-500/5 focus-within:border-indigo-200 transition-all flex flex-col min-h-[300px]">
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -76,7 +88,7 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, isLoading, initialText = '',
           </div>
         </div>
         
-        <footer className="mt-6 flex justify-end shrink-0">
+        <footer className="flex justify-end shrink-0 mt-4">
           <button 
             type="submit"
             disabled={text.trim().length < 10 || isLoading}

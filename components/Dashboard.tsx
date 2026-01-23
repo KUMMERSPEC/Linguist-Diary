@@ -5,7 +5,6 @@ import { DiaryEntry } from '../types';
 
 interface DashboardProps {
   onNewEntry: () => void;
-  // FIX: Update onStartReview to be a simple function call
   onStartReview: () => void; 
   entries: DiaryEntry[];
 }
@@ -48,7 +47,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, onStartReview, entrie
     const startDate = new Date(today);
     startDate.setDate(today.getDate() - 364);
     
-    // 找到对齐的那周的周日
     const startOfGrid = new Date(startDate);
     startOfGrid.setDate(startDate.getDate() - startDate.getDay());
 
@@ -63,11 +61,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, onStartReview, entrie
         currentDate.setDate(startOfGrid.getDate() + (w * 7) + d);
         week.push({ date: currentDate, count: counts[currentDate.toDateString()] || 0 });
         
-        // 逻辑修正：如果这周的第一天是新的一月
         if (d === 0) {
           const currentMonth = currentDate.getMonth();
           if (currentMonth !== lastMonth) {
-            // 核心修复：如果当前周 index 距离末尾太近（少于4周），则不显示标签，防止首尾重复
             if (w < 49) {
               labels.push({ 
                 text: currentDate.toLocaleDateString('zh-CN', { month: 'short' }), 
@@ -97,7 +93,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, onStartReview, entrie
   };
 
   return (
-    <div className="space-y-8 pb-20 animate-in fade-in duration-700">
+    <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-24 md:pb-12 animate-in fade-in duration-700 space-y-8">
       {/* 1. 馆长欢迎区 & 核心动作按钮 */}
       <section className="space-y-6">
         <header className="px-2 space-y-1">
@@ -119,7 +115,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, onStartReview, entrie
           </button>
           
           <button 
-            onClick={onStartReview} // FIX: Directly call onStartReview
+            onClick={onStartReview} 
             className="group relative bg-slate-900 p-8 rounded-[2.5rem] text-white flex items-center justify-between shadow-2xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-[0.98] overflow-hidden"
           >
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
@@ -154,7 +150,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, onStartReview, entrie
         </div>
       </div>
 
-      {/* 3. 年度足迹 (Heatmap with Optimized Labels) */}
+      {/* 3. 年度足迹 */}
       <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between mb-8">
           <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">馆长年度足迹 Annual Footprint</h4>
@@ -166,7 +162,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, onStartReview, entrie
         </div>
         
         <div className="overflow-x-auto no-scrollbar pb-2">
-          {/* 月份横轴：使用绝对定位确保对齐 */}
           <div className="relative h-5 mb-1 ml-8 w-full min-w-max">
             {monthLabels.map((label, i) => (
               <span 
@@ -180,7 +175,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, onStartReview, entrie
           </div>
 
           <div className="flex min-w-max">
-            {/* 星期纵轴 */}
             <div className="flex flex-col gap-[3px] pr-3 justify-between py-[2px] h-[95px] w-8 shrink-0">
               <span className="text-[9px] font-bold text-slate-300"></span>
               <span className="text-[9px] font-bold text-slate-400 uppercase opacity-60">Mon</span>
@@ -191,7 +185,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, onStartReview, entrie
               <span className="text-[9px] font-bold text-slate-300"></span>
             </div>
 
-            {/* 网格网格 */}
             <div className="flex gap-[3px]">
               {columns.map((week, wIdx) => (
                 <div key={wIdx} className="flex flex-col gap-[3px] shrink-0">
@@ -210,7 +203,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, onStartReview, entrie
       </section>
 
       {/* 4. 活跃趋势图 */}
-      <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+      <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm mb-12">
         <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-8">馆藏增长趋势 Growth Trend</h4>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">

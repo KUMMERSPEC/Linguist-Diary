@@ -84,11 +84,11 @@ const App: React.FC = () => {
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [currentEntry, setCurrentEntry] = useState<DiaryEntry | null>(null); 
   const [currentEntryIterations, setCurrentEntryIterations] = useState<DiaryIteration[]>([]); 
-  const [rewriteBaseEntryId, setRewriteBaseEntryId] = useState<string | null>(null); 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chatLanguage, setChatLanguage] = useState('');
   const [prefilledEditorText, setPrefilledEditorText] = useState('');
+  const [summaryPrompt, setSummaryPrompt] = useState<string>('');
 
   const [allAdvancedVocab, setAllAdvancedVocab] = useState<AdvancedVocab[]>([]); 
   const [selectedVocabForPracticeId, setSelectedVocabForPracticeId] = useState<string | null>(null);
@@ -135,7 +135,6 @@ const App: React.FC = () => {
         const localVocab = localStorage.getItem(`linguist_vocab_${userId}`);
         if (localVocab) setAllAdvancedVocab(JSON.parse(localVocab));
       } else {
-        // Load Profile
         const userDocRef = doc(db, 'users', userId);
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
@@ -144,8 +143,6 @@ const App: React.FC = () => {
              setUser(prev => prev ? { ...prev, ...data.profile } : null);
           }
         }
-
-        // Load Entries
         const diaryEntriesColRef = collection(db, 'users', userId, 'diaryEntries');
         const diaryEntriesQuery = query(diaryEntriesColRef, orderBy('timestamp', 'desc'));
         const diaryEntriesSnapshot = await getDocs(diaryEntriesQuery);
@@ -154,11 +151,8 @@ const App: React.FC = () => {
             id: d.id, 
             timestamp: (d.data().timestamp as Timestamp).toMillis() 
         })) as DiaryEntry[]);
-
-        // Load Vocab with Practices
         const advancedVocabColRef = collection(db, 'users', userId, 'advancedVocab');
         const vocabSnapshot = await getDocs(advancedVocabColRef);
-        
         const vocabWithPractices = await Promise.all(vocabSnapshot.docs.map(async (vDoc) => {
           const vocabData = vDoc.data() as AdvancedVocab;
           const practicesColRef = collection(vDoc.ref, 'practices');
@@ -166,7 +160,6 @@ const App: React.FC = () => {
           const practices = practicesSnapshot.docs.map(pDoc => ({ ...pDoc.data(), id: pDoc.id })) as PracticeRecord[];
           return { ...vocabData, id: vDoc.id, practices };
         }));
-        
         setAllAdvancedVocab(vocabWithPractices);
       }
     } catch (e) {
@@ -208,6 +201,7 @@ const App: React.FC = () => {
     setView(newView);
     setSelectedVocabForPracticeId(vocabId || null);
     setIsPracticeActive(!!isPracticeActive);
+    if (newView !== 'editor') setSummaryPrompt(''); // Clear summary when moving away
     if (newView === 'profile' && user) {
       setEditName(user.displayName);
       setEditPhoto(user.photoURL);
@@ -216,8 +210,6 @@ const App: React.FC = () => {
 
   const handleUpdateMastery = async (vocabId: string, word: string, newMastery: number, record?: PracticeRecord) => {
     if (!user) return;
-    
-    // Update local state immediately for snappy UI
     setAllAdvancedVocab(prev => prev.map(v => {
       if (v.id === vocabId) {
         const updatedPractices = record ? [record, ...(v.practices || [])] : (v.practices || []);
@@ -225,7 +217,6 @@ const App: React.FC = () => {
       }
       return v;
     }));
-
     if (!db || user.isMock) {
       const currentVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
       const updatedVocab = currentVocab.map((v: any) => {
@@ -238,7 +229,6 @@ const App: React.FC = () => {
       localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updatedVocab));
       return;
     }
-
     try {
       const vDoc = doc(db, 'users', user.uid, 'advancedVocab', vocabId);
       await updateDoc(vDoc, { mastery: newMastery });
@@ -251,15 +241,12 @@ const App: React.FC = () => {
 
   const handleDeletePractice = async (vocabId: string, practiceId: string) => {
     if (!user) return;
-    
-    // Update local state immediately
     setAllAdvancedVocab(prev => prev.map(v => {
       if (v.id === vocabId) {
         return { ...v, practices: (v.practices || []).filter(p => p.id !== practiceId) };
       }
       return v;
     }));
-
     if (!db || user.isMock) {
       const localVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
       const updated = localVocab.map((v: any) => {
@@ -271,12 +258,38 @@ const App: React.FC = () => {
       localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
       return;
     }
-
     try {
       await deleteDoc(doc(db, 'users', user.uid, 'advancedVocab', vocabId, 'practices', practiceId));
-    } catch (e) {
-      console.error("Delete practice error:", e);
+    } catch (e) { console.error("Delete practice error:", e); }
+  };
+
+  const handleBatchDeletePractices = async (vocabId: string, practiceIds: string[]) => {
+    if (!user || practiceIds.length === 0) return;
+    setAllAdvancedVocab(prev => prev.map(v => {
+      if (v.id === vocabId) {
+        return { ...v, practices: (v.practices || []).filter(p => !practiceIds.includes(p.id)) };
+      }
+      return v;
+    }));
+    if (!db || user.isMock) {
+      const localVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
+      const updated = localVocab.map((v: any) => {
+        if (v.id === vocabId) {
+          return { ...v, practices: (v.practices || []).filter((p: any) => !practiceIds.includes(p.id)) };
+        }
+        return v;
+      });
+      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
+      return;
     }
+    try {
+      const batch = writeBatch(db);
+      practiceIds.forEach(pId => {
+        const pDoc = doc(db, 'users', user!.uid, 'advancedVocab', vocabId, 'practices', pId);
+        batch.delete(pDoc);
+      });
+      await batch.commit();
+    } catch (e) { console.error("Batch delete error:", e); }
   };
 
   const handleAnalyze = async (text: string, language: string) => {
@@ -287,7 +300,6 @@ const App: React.FC = () => {
       const historyContext = entries.filter(e => e.language === language && e.analysis).slice(0, 5);
       const analysis = await analyzeDiaryEntry(text, language, historyContext);
       const clientTimestamp = Date.now();
-      
       const newEntrySkeleton: Omit<DiaryEntry, 'id'> = {
         timestamp: clientTimestamp,
         date: new Date(clientTimestamp).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
@@ -297,11 +309,9 @@ const App: React.FC = () => {
         analysis,
         iterationCount: 0
       };
-
       const vocabItemsToSave = analysis.advancedVocab.filter(v => 
         !allAdvancedVocab.some(existing => existing.word === v.word && existing.language === language)
       ).map(v => ({ ...v, id: uuidv4(), mastery: 0, language, practices: [] }));
-
       if (vocabItemsToSave.length > 0) {
         if (!db || user.isMock) {
           const updated = [...vocabItemsToSave, ...allAdvancedVocab];
@@ -313,11 +323,9 @@ const App: React.FC = () => {
             const { id, practices, ...data } = item;
             await addDoc(vocabCol, data);
           }
-          // Reload to get fresh IDs and structure
           loadUserData(user.uid, user.isMock);
         }
       }
-
       if (!db || user.isMock) {
         const finalEntry = { ...newEntrySkeleton, id: uuidv4() } as DiaryEntry;
         const updatedEntries = [finalEntry, ...entries];
@@ -363,13 +371,18 @@ const App: React.FC = () => {
         setIsPracticeActive(true);
         setView('vocab_practice');
       }} entries={entries} />}
-      {view === 'editor' && <Editor onAnalyze={handleAnalyze} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} />}
+      {view === 'editor' && <Editor onAnalyze={handleAnalyze} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} />}
       {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} />}
       {view === 'history' && <History entries={entries} onSelect={(e) => { setCurrentEntry(e); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { 
         if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); 
         setEntries(prev => prev.filter(e => e.id !== id));
       }} onRewrite={(e) => { setPrefilledEditorText(e.originalText); setView('editor'); }} />}
-      {view === 'chat' && <ChatEditor onFinish={(msgs, lang) => { setChatLanguage(lang); setPrefilledEditorText(msgs.map(m => m.content).join('\n\n')); setView('editor'); }} allGems={allAdvancedVocab} />}
+      {view === 'chat' && <ChatEditor onFinish={(msgs, lang, summary) => { 
+        setChatLanguage(lang); 
+        setPrefilledEditorText(''); 
+        setSummaryPrompt(summary);
+        setView('editor'); 
+      }} allGems={allAdvancedVocab} />}
       {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} />}
       {view === 'vocab_practice' && selectedVocabForPracticeId && (
         <VocabPractice 
@@ -396,6 +409,7 @@ const App: React.FC = () => {
           allAdvancedVocab={allAdvancedVocab} 
           onBackToPracticeHistory={() => setView('vocab_list')} 
           onDeletePractice={handleDeletePractice}
+          onBatchDeletePractices={handleBatchDeletePractices}
         />
       )}
       {view === 'rehearsal' && <Rehearsal onSaveToMuseum={(lang, reh) => {

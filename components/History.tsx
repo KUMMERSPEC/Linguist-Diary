@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { DiaryEntry } from '../types';
-import { renderRuby } from '../utils/textHelpers'; // Import renderRuby
+import { renderRuby } from '../utils/textHelpers'; 
 
 interface HistoryProps {
   entries: DiaryEntry[];
@@ -15,12 +15,10 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
   const [selectedLanguage, setSelectedLanguage] = useState('All');
 
   const getLatestText = (entry: DiaryEntry) => {
-    // With denormalization, entry.originalText already holds the latest iteration's text
     return entry.originalText;
   };
 
   const getIterationCountDisplay = (entry: DiaryEntry) => {
-    // Use the denormalized iterationCount for display
     return entry.iterationCount || 0;
   }
 
@@ -47,7 +45,7 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
   const availableLanguages = useMemo(() => ['All', ...Array.from(new Set(entries.map(e => e.language)))], [entries]);
 
   if (entries.length === 0) return (
-    <div className="flex flex-col items-center justify-center py-24 text-center space-y-6 animate-in fade-in zoom-in duration-700">
+    <div className="flex flex-col items-center justify-center h-full text-center space-y-6 animate-in fade-in zoom-in duration-700">
       <div className="w-28 h-28 bg-white rounded-[2.5rem] shadow-xl flex items-center justify-center text-5xl mb-4 border border-slate-100">🏛️</div>
       <div>
         <h3 className="text-2xl font-black text-slate-900 serif-font">馆藏空空如也</h3>
@@ -57,7 +55,7 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
   );
 
   return (
-    <div className="space-y-12 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-12">
       <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 border-b border-slate-200 pb-10">
         <div>
           <h2 className="text-3xl md:text-5xl font-black text-slate-900 serif-font">馆藏精品 Collection Exhibit</h2>

@@ -27,17 +27,6 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, initialDelay =
   throw lastError;
 }
 
-const getJapaneseInstruction = (language: string) => {
-  const isJapanese = language.toLowerCase() === 'japanese' || language === '日本語';
-  if (!isJapanese) return "DO NOT use '[Kanji](furigana)' format.";
-  return "FOR JAPANESE TEXT ONLY: Use '[Kanji](furigana)' format for kanji. Example: [今日](きょう).";
-};
-
-const getAiErrorMessage = (error: any) => {
-  if (error instanceof Error) return `AI 处理失败：${error.message}`;
-  return "AI 处理失败，请稍后重试。";
-};
-
 export const generatePracticeTasks = async (word: string, meaning: string, language: string): Promise<{ id: string, label: string, icon: string }[]> => {
   const ai = getAiInstance();
   return withRetry(async () => {
@@ -101,7 +90,7 @@ export const validateVocabUsage = async (
       }
     });
     return JSON.parse(response.text || "{}");
-  }).catch(error => { throw new Error(getAiErrorMessage(error)); });
+  }).catch(error => { throw new Error("AI 处理失败，请稍后重试。"); });
 };
 
 export const analyzeDiaryEntry = async (text: string, language: string, history: DiaryEntry[] = []): Promise<DiaryAnalysis> => {
@@ -112,8 +101,14 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
       model: 'gemini-3-flash-preview',
       contents: `Analyze: "${text}". Language: ${language}.
       ${historyContext}
+      STRICT VOCABULARY RULES:
+      1. FOR JAPANESE: The 'word' property MUST use '[Kanji](furigana)' format (e.g., "[形跡](けいせい)").
+      2. FOR JAPANESE: DO NOT use ruby/furigana in 'meaning' or 'usage' properties. Keep them as plain text.
+      3. NATIVE DEFINITION: The 'meaning' property MUST be in the target language (${language}), NOT Chinese. (e.g., explain an English word in English).
+      4. NATIVE EXAMPLE: The 'usage' property MUST be in the target language (${language}).
+      
       STRICT FORMAT RULES:
-      1. 'overallFeedback' and 'corrections.explanation' MUST be in Chinese (中文) WITHOUT any Japanese furigana [Kanji](furigana).
+      1. 'overallFeedback' and 'corrections.explanation' MUST be in Chinese (中文).
       2. ONLY 'modifiedText' and 'diffedText' should use '[Kanji](furigana)' if the language is Japanese.
       3. Use <add>/<rem> for diffs.`,
       config: {
@@ -168,7 +163,23 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
       }
     });
     return JSON.parse(response.text) as DiaryAnalysis;
-  }).catch(error => { throw new Error(getAiErrorMessage(error)); });
+  }).catch(error => { throw new Error("AI 分析失败，请检查 API 配置。"); });
+};
+
+export const generateChatSummaryPrompt = async (messages: ChatMessage[], language: string): Promise<string> => {
+  const ai = getAiInstance();
+  return withRetry(async () => {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `Dialogue History:\n${messages.map(m => `${m.role}: ${m.content}`).join('\n')}\n\nTask: Generate a warm and encouraging writing prompt in Chinese for the museum curator. 
+      The prompt should:
+      1. Summarize what they just talked about in ${language}.
+      2. Suggest they rewrite the core content as a diary entry.
+      3. Mention 1-2 useful words or grammar points from the chat.
+      Keep it under 80 words.`,
+    });
+    return response.text || "刚才的聊天很有趣，试着把这些零散的想法整理成一篇日记吧！";
+  }).catch(() => "试着把刚才聊的内容整理成一篇正式的日记吧。");
 };
 
 export const evaluateRetelling = async (source: string, retelling: string, language: string): Promise<RehearsalEvaluation> => {
@@ -176,8 +187,7 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
   return withRetry(async () => {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Evaluate retelling of "${source}" with "${retelling}" in ${language}.
-      Feedback in Chinese. No furigana in Chinese text.`,
+      contents: `Evaluate retelling of "${source}" with "${retelling}" in ${language}. Feedback in Chinese.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -195,7 +205,7 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
       }
     });
     return JSON.parse(response.text) as RehearsalEvaluation;
-  }).catch(error => { throw new Error(getAiErrorMessage(error)); });
+  }).catch(error => { throw new Error("评估失败。"); });
 };
 
 export const generateDiaryAudio = async (text: string): Promise<string> => {
@@ -210,7 +220,7 @@ export const generateDiaryAudio = async (text: string): Promise<string> => {
       },
     });
     return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
-  }).catch(error => { throw new Error(getAiErrorMessage(error)); });
+  }).catch(error => { throw new Error("TTS 失败。"); });
 };
 
 export const getChatFollowUp = async (messages: ChatMessage[], language: string): Promise<string> => {
@@ -219,10 +229,17 @@ export const getChatFollowUp = async (messages: ChatMessage[], language: string)
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: messages.map(m => ({ role: m.role === 'ai' ? 'model' : 'user', parts: [{ text: m.content }] })),
-      config: { systemInstruction: `Friendly language mentor in ${language}. No furigana in Chinese thought/meta-text.` }
+      config: { 
+        systemInstruction: `You are a friendly language mentor in ${language}. 
+        STRICT RULES:
+        1. Keep responses CONCISE (max 2-3 sentences).
+        2. Focus on the conversation, not formal teaching.
+        3. Do NOT provide "Corrections" or "Vocabulary Tips" in the chat bubble.
+        4. Ask only one natural follow-up question.` 
+      }
     });
     return response.text || "";
-  }).catch(error => { throw new Error(getAiErrorMessage(error)); });
+  }).catch(error => { throw new Error("无法获取回复。"); });
 };
 
 export const generatePracticeArtifact = async (language: string, keywords: string, difficulty: string, topic: string): Promise<string> => {
@@ -233,5 +250,5 @@ export const generatePracticeArtifact = async (language: string, keywords: strin
       contents: `Write short text in ${language}. Topic: ${topic}. Difficulty: ${difficulty}. Keywords: ${keywords}.`,
     });
     return response.text || "";
-  }).catch(error => { throw new Error(getAiErrorMessage(error)); });
+  }).catch(error => { throw new Error("生成失败。"); });
 };

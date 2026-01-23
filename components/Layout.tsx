@@ -51,9 +51,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      {/* Desktop & Tablet Sidebar - responsive width: slimmer on md, full on lg+ */}
-      <aside className="hidden md:flex flex-col md:w-60 lg:w-64 bg-white border-r border-slate-100 p-6 space-y-6 shrink-0 fixed h-full z-30">
+    <div className="flex h-screen w-full bg-slate-50 overflow-hidden">
+      {/* Desktop & Tablet Sidebar */}
+      <aside className="hidden md:flex flex-col md:w-60 lg:w-64 bg-white border-r border-slate-100 p-6 space-y-6 shrink-0 h-full z-30">
         <div className="flex items-center space-x-3 pb-4 border-b border-slate-100">
           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-xl">🖋️</div>
           <h1 className="text-lg font-bold text-slate-900 serif-font">Linguist Diary</h1>
@@ -99,14 +99,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
         </div>
       </aside>
 
-      {/* Main content area - responsive padding matching the sidebar width */}
-      <main className="flex-1 flex flex-col min-h-screen overflow-hidden md:pl-60 lg:pl-64 pb-20 md:pb-0">
-        <div className="flex-1 overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8">
+      {/* Main content area - NO GLOBAL SCROLL */}
+      <main className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
+        <div className="flex-1 h-full relative">
           {children}
         </div>
 
         {/* Mobile Bottom Navigation Bar */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-2 py-1 flex items-center justify-around z-40 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
+        <div className="md:hidden shrink-0 bg-white border-t border-slate-100 px-2 py-1 flex items-center justify-around z-40 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
           <MobileTab views="dashboard" label="主页" icon="🏠" activeIcon="🏠" />
           <MobileTab views="history" label="馆藏" icon="🏛️" activeIcon="🏛️" />
           
@@ -121,8 +121,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
             
             {isPracticeMenuOpen && (
               <>
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[-1]" onClick={() => setIsPracticeMenuOpen(false)}></div>
-                <div className="absolute bottom-20 left-1/2 -translate-x-1/2 w-48 bg-white rounded-3xl shadow-2xl border border-slate-100 p-2 flex flex-col space-y-1 animate-in slide-in-from-bottom-4 zoom-in-95">
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[45]" onClick={() => setIsPracticeMenuOpen(false)}></div>
+                <div className="absolute bottom-20 left-1/2 -translate-x-1/2 w-48 bg-white rounded-3xl shadow-2xl border border-slate-100 p-2 flex flex-col space-y-1 animate-in slide-in-from-bottom-4 zoom-in-95 z-50">
                   <button onClick={() => { onViewChange('editor'); setIsPracticeMenuOpen(false); }} className="flex items-center space-x-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors text-slate-700">
                     <span className="text-lg">✍️</span>
                     <span className="text-xs font-bold">自由撰写</span>

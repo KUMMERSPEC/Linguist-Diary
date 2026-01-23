@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChatMessage, AdvancedVocab } from '../types';
-import { getChatFollowUp, generatePracticeTasks } from '../services/geminiService';
+import { getChatFollowUp, generatePracticeTasks, generateChatSummaryPrompt } from '../services/geminiService';
 
 interface ChatEditorProps {
-  onFinish: (transcript: ChatMessage[], language: string) => void;
+  onFinish: (transcript: ChatMessage[], language: string, summaryPrompt: string) => void;
   allGems: (AdvancedVocab & { language: string })[];
 }
 
@@ -27,6 +27,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isFinishing, setIsFinishing] = useState(false);
   const [themeLabel, setThemeLabel] = useState('初始化...');
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -48,35 +49,23 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
 
   const refreshSessionGems = useCallback(async () => {
     if (!allGems) return;
-    
-    // 增强匹配：确保语言代码和待点亮状态正确
-    const available = allGems.filter(g => 
-      g.language.toLowerCase().trim() === language.code.toLowerCase().trim()
-    );
-    
-    // 如果该语言没有词汇，给个提示或者留空
+    const available = allGems.filter(g => g.language.toLowerCase().trim() === language.code.toLowerCase().trim());
     if (available.length === 0) {
       setSessionGems([]);
       setGemMissions({});
       return;
     }
-
     const shuffled = [...available].sort(() => 0.5 - Math.random());
     const selected = shuffled.slice(0, 5);
     setSessionGems(selected);
     setUsedGems(new Set());
-    
     const initialMissions: Record<string, GemMission> = {};
     selected.forEach(g => { initialMissions[g.word] = { word: g.word, isLoading: true }; });
     setGemMissions(initialMissions);
-
     selected.forEach(async (gem) => {
       try {
         const tasks = await generatePracticeTasks(gem.word, gem.meaning, language.code);
-        setGemMissions(prev => ({
-          ...prev,
-          [gem.word]: { word: gem.word, mission: tasks[0], isLoading: false }
-        }));
+        setGemMissions(prev => ({ ...prev, [gem.word]: { word: gem.word, mission: tasks[0], isLoading: false } }));
       } catch (e) {
         setGemMissions(prev => ({ ...prev, [gem.word]: { word: gem.word, isLoading: false } }));
       }
@@ -88,7 +77,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
     setMessages([{ role: 'ai', content: start.text }]);
     setThemeLabel(start.theme);
     refreshSessionGems();
-  }, [language]); // 当语言切换时刷新
+  }, [language]);
 
   const getStarter = useCallback(() => {
     const hour = new Date().getHours();
@@ -113,33 +102,26 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
     if (lang.code === language.code) return;
     if (messages.some(m => m.role === 'user')) {
       if (window.confirm("切换语言将清空当前对话，确定吗？")) setLanguage(lang);
-    } else {
-      setLanguage(lang);
-    }
+    } else { setLanguage(lang); }
   };
 
   const handleSend = async () => {
     if (!inputValue.trim() || isTyping) return;
     const content = inputValue.trim();
-    
-    // 优化点亮逻辑：关键词匹配去除假名干扰
     const newlyDetected = sessionGems.filter(gem => {
       if (usedGems.has(gem.word)) return false;
       const cleanWord = stripRuby(gem.word).toLowerCase().trim();
       return content.toLowerCase().includes(cleanWord);
     });
-
     if (newlyDetected.length > 0) {
       const nextUsed = new Set(usedGems);
       newlyDetected.forEach(gem => nextUsed.add(gem.word));
       setUsedGems(nextUsed);
     }
-
     const newMessages = [...messages, { role: 'user', content } as ChatMessage];
     setMessages(newMessages);
     setInputValue('');
     setIsTyping(true);
-    
     try {
       const followUp = await getChatFollowUp(newMessages, language.code);
       setMessages(prev => [...prev, { role: 'ai', content: followUp }]);
@@ -149,14 +131,29 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
     } finally { setIsTyping(false); }
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     if (messages.filter(m => m.role === 'user').length === 0) return alert("请先开始对话。");
-    onFinish(messages, language.code);
+    setIsFinishing(true);
+    try {
+      const summary = await generateChatSummaryPrompt(messages, language.code);
+      onFinish(messages, language.code, summary);
+    } catch (e) {
+      onFinish(messages, language.code, "试着把刚才聊的内容整理成一篇正式的日记吧。");
+    } finally {
+      setIsFinishing(false);
+    }
   };
 
   return (
-    <div className="flex h-full animate-in fade-in duration-500 overflow-hidden w-full bg-slate-50 relative">
-      <aside className="hidden md:flex w-80 flex-col bg-white border-r border-slate-100 p-6 space-y-6 shrink-0 z-10">
+    <div className="flex h-full max-h-full animate-in fade-in duration-500 overflow-hidden w-full bg-slate-50 relative">
+      {isFinishing && (
+        <div className="absolute inset-0 bg-white/80 backdrop-blur-md z-[100] flex flex-col items-center justify-center space-y-4">
+           <div className="w-12 h-12 border-4 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin"></div>
+           <p className="text-sm font-black text-indigo-900 uppercase tracking-widest">馆长正在准备灵感寄语...</p>
+        </div>
+      )}
+      
+      <aside className="hidden md:flex w-80 flex-col bg-white border-r border-slate-100 p-6 space-y-6 shrink-0 z-10 h-full overflow-hidden">
         <div className="flex items-center justify-between">
            <div className="flex items-center space-x-2">
              <span className="text-xl">💎</span>
@@ -164,12 +161,12 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
            </div>
            <button onClick={refreshSessionGems} className="text-[10px] text-indigo-500 font-bold hover:underline">换一批</button>
         </div>
-        <div className="space-y-4 overflow-y-auto no-scrollbar">
+        <div className="flex-1 space-y-4 overflow-y-auto no-scrollbar">
            {sessionGems.length > 0 ? sessionGems.map((gem, idx) => {
              const isLit = usedGems.has(gem.word);
              const mission = gemMissions[gem.word];
              return (
-               <div key={idx} className={`p-4 rounded-[1.8rem] border transition-all duration-500 ${isLit ? 'bg-amber-50 border-amber-200 shadow-md' : 'bg-white border-slate-100'}`}>
+               <div key={idx} className={`p-4 rounded-[1.8rem] border transition-colors duration-200 ${isLit ? 'bg-amber-50 border-amber-200 shadow-md' : 'bg-white border-slate-100'}`}>
                  <div className="flex items-center justify-between mb-2">
                    <h4 className={`text-base font-black serif-font ${isLit ? 'text-amber-700' : 'text-slate-800'}`}>{renderRuby(gem.word)}</h4>
                    {isLit && <span className="text-amber-500 text-sm">✨</span>}
@@ -196,7 +193,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col h-full bg-white md:bg-slate-50 min-w-0">
+      <div className="flex-1 flex flex-col h-full bg-white md:bg-slate-50 min-w-0 overflow-hidden">
         <header className="flex flex-col shrink-0 border-b border-slate-100 bg-white/90 backdrop-blur-md z-20 px-4 md:px-8 py-3">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center space-x-3">
