@@ -3,17 +3,21 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AdvancedVocab, PracticeRecord } from '../types';
 import { generateDiaryAudio } from '../services/geminiService';
 import { decode, decodeAudioData } from '../utils/audioHelpers';
+// Fix: Import renderRuby from textHelpers as rubyUtil for dangerouslySetInnerHTML usage
+import { renderRuby as rubyUtil } from '../utils/textHelpers';
 
 interface VocabPracticeDetailViewProps {
   selectedVocabId: string; // ID of the vocab to show details for (e.g., 'word-language')
   allAdvancedVocab: (AdvancedVocab & { language: string })[];
   onBackToPracticeHistory: () => void;
+  onDeletePractice?: (vocabId: string, practiceId: string) => void;
 }
 
 const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
   selectedVocabId,
   allAdvancedVocab,
   onBackToPracticeHistory,
+  onDeletePractice,
 }) => {
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -85,6 +89,12 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
     }
   };
 
+  const handleDelete = (practiceId: string) => {
+    if (window.confirm("确定要移除这条打磨记录吗？此操作无法撤销。")) {
+      onDeletePractice?.(currentVocab.id, practiceId);
+    }
+  };
+
   const getMasteryColor = (mastery: number | undefined) => {
     const m = mastery || 0;
     if (m >= 4) return 'bg-emerald-100 text-emerald-700 border-emerald-300';
@@ -140,7 +150,7 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
               {playingAudioId === `vocab-word-${currentVocab.word}` ? '⏹' : '🎧'}
             </button>
           </div>
-          <p className="text-slate-600 text-base italic leading-relaxed" dangerouslySetInnerHTML={{ __html: renderRuby(currentVocab.meaning).props.dangerouslySetInnerHTML.__html }} />
+          <p className="text-slate-600 text-base italic leading-relaxed" dangerouslySetInnerHTML={{ __html: rubyUtil(currentVocab.meaning) }} />
           <div className="bg-indigo-50/40 p-5 rounded-2xl italic text-xs text-indigo-800 border-l-4 border-indigo-400 flex items-start space-x-2">
             <button
               onClick={() => handlePlayAudio(currentVocab.usage, `vocab-usage-${currentVocab.word}`)}
@@ -159,10 +169,19 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
           {sortedPractices.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {sortedPractices.map((practice, pIdx) => (
-                <div key={pIdx} className={`p-6 rounded-2xl border transition-all duration-300 ${
+                <div key={practice.id || pIdx} className={`p-6 rounded-2xl border transition-all duration-300 relative group/pitem ${
                   practice.status === 'Perfect' ? 'bg-emerald-50 border-emerald-200 shadow-sm shadow-emerald-50/10' : 'bg-rose-50 border-rose-200 shadow-sm shadow-rose-50/10'
                 }`}>
-                  <div className="flex items-center justify-between mb-3">
+                  {/* Delete Button */}
+                  <button 
+                    onClick={() => handleDelete(practice.id)}
+                    className="absolute top-4 right-4 text-slate-300 hover:text-rose-500 transition-colors opacity-0 group-hover/pitem:opacity-100 p-1"
+                    title="移除记录"
+                  >
+                    ✕
+                  </button>
+
+                  <div className="flex items-center justify-between mb-3 pr-6">
                     <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest ${
                       practice.status === 'Perfect' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
                     }`}>

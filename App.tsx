@@ -249,6 +249,36 @@ const App: React.FC = () => {
     } catch (e) { console.error("Update mastery error:", e); }
   };
 
+  const handleDeletePractice = async (vocabId: string, practiceId: string) => {
+    if (!user) return;
+    
+    // Update local state immediately
+    setAllAdvancedVocab(prev => prev.map(v => {
+      if (v.id === vocabId) {
+        return { ...v, practices: (v.practices || []).filter(p => p.id !== practiceId) };
+      }
+      return v;
+    }));
+
+    if (!db || user.isMock) {
+      const localVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
+      const updated = localVocab.map((v: any) => {
+        if (v.id === vocabId) {
+          return { ...v, practices: (v.practices || []).filter((p: any) => p.id !== practiceId) };
+        }
+        return v;
+      });
+      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'advancedVocab', vocabId, 'practices', practiceId));
+    } catch (e) {
+      console.error("Delete practice error:", e);
+    }
+  };
+
   const handleAnalyze = async (text: string, language: string) => {
     if (!user) return;
     setIsLoading(true);
@@ -360,7 +390,14 @@ const App: React.FC = () => {
           }}
         />
       )}
-      {view === 'vocab_practice_detail' && selectedVocabForPracticeId && <VocabPracticeDetailView selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onBackToPracticeHistory={() => setView('vocab_list')} />}
+      {view === 'vocab_practice_detail' && selectedVocabForPracticeId && (
+        <VocabPracticeDetailView 
+          selectedVocabId={selectedVocabForPracticeId} 
+          allAdvancedVocab={allAdvancedVocab} 
+          onBackToPracticeHistory={() => setView('vocab_list')} 
+          onDeletePractice={handleDeletePractice}
+        />
+      )}
       {view === 'rehearsal' && <Rehearsal onSaveToMuseum={(lang, reh) => {
          const dataSkeleton: Omit<DiaryEntry, 'id'> = { timestamp: Date.now(), date: new Date().toLocaleDateString('zh-CN'), originalText: reh.userRetelling || "", language: lang, type: 'rehearsal', rehearsal: reh, iterationCount: 0 };
          if (!db || user.isMock) setEntries(prev => [{ ...dataSkeleton, id: uuidv4() } as DiaryEntry, ...prev]);
