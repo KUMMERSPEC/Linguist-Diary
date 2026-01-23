@@ -217,7 +217,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, onViewC
                   </span>
                 </div>
                 <p className="text-sm text-slate-600 italic mb-4 line-clamp-2">
-                  {vocab.meaning}
+                  {renderRuby(vocab.meaning)}
                 </p>
 
                 <div className="mt-4 pt-3 border-t border-dashed border-slate-100 flex justify-between items-center">

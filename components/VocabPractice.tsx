@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { AdvancedVocab, PracticeRecord, ViewState } from '../types';
 import { validateVocabUsage, generateDiaryAudio } from '../services/geminiService';
 import { decode, decodeAudioData } from '../utils/audioHelpers';
-import { renderRuby, stripRuby } from '../utils/textHelpers'; 
+import { renderRuby as rubyUtil, stripRuby } from '../utils/textHelpers'; 
 import { v4 as uuidv4 } from 'uuid';
 
 interface VocabPracticeProps {
@@ -13,8 +13,8 @@ interface VocabPracticeProps {
   onBackToVocabList: () => void;
   onViewChange: (view: ViewState, vocabId?: string, isPracticeActive?: boolean) => void;
   isPracticeActive: boolean;
-  queueProgress?: { current: number; total: number }; // 新增：队列进度
-  onNextInQueue?: () => void; // 新增：切换下一个的回调
+  queueProgress?: { current: number; total: number }; 
+  onNextInQueue?: () => void; 
 }
 
 const VocabPractice: React.FC<VocabPracticeProps> = ({
@@ -56,6 +56,12 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
       </div>
     );
   }
+
+  const renderRuby = (text: string) => {
+    if (!text) return '';
+    const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
+    return <span dangerouslySetInnerHTML={{ __html: html }} />;
+  };
 
   const handlePlayAudio = async (text: string, id: string) => {
     if (!text) return;
@@ -184,17 +190,18 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
       </header>
 
       <div className="flex-1 flex flex-col lg:flex-row gap-8 overflow-y-auto no-scrollbar pb-8">
-        {/* Vocab Info Panel */}
-        <div className="lg:w-1/2 shrink-0 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl space-y-6 relative group h-fit">
+        {/* Left Column: Dynamic Panel (Vocab Info vs. AI Evaluation) */}
+        <div className="lg:w-1/2 shrink-0 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl space-y-6 relative group h-fit min-h-[400px]">
           {showSuccessAnimation && (
-            <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/80 rounded-[2.5rem] z-10 animate-in fade-in zoom-in duration-500">
+            <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/80 rounded-[2.5rem] z-20 animate-in fade-in zoom-in duration-500">
               <span className="text-7xl">✨</span>
             </div>
           )}
           
-          <div className="flex items-center justify-between">
+          {/* Header always visible */}
+          <div className="flex items-center justify-between pb-4 border-b border-slate-50">
             <h3 className="text-3xl font-black text-slate-900 serif-font">
-              <span dangerouslySetInnerHTML={{ __html: renderRuby(currentVocab.word) }} />
+              {renderRuby(currentVocab.word)}
             </h3>
             <button
               onClick={() => handlePlayAudio(currentVocab.word, `vocab-word-${currentVocab.word}`)}
@@ -204,103 +211,141 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
               {playingAudioId === `vocab-word-${currentVocab.word}` ? '⏹' : '🎧'}
             </button>
           </div>
-          <p className="text-slate-600 text-base italic leading-relaxed">{currentVocab.meaning}</p>
-          <div className="bg-indigo-50/40 p-5 rounded-2xl italic text-xs text-indigo-800 border-l-4 border-indigo-400 flex items-start space-x-2">
-            <button
-              onClick={() => handlePlayAudio(currentVocab.usage, `vocab-usage-${currentVocab.word}`)}
-              className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all ${playingAudioId === `vocab-usage-${currentVocab.word}` ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-100 text-indigo-500 hover:bg-indigo-600 hover:text-white'}`}
-              title="收听例句发音"
-            >
-              {playingAudioId === `vocab-usage-${currentVocab.word}` ? '⏹' : '🎧'}
-            </button>
-            <p className="flex-1">“ <span dangerouslySetInnerHTML={{ __html: renderRuby(currentVocab.usage) }} /> ”</p>
-          </div>
-          <div className="pt-6 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              Level: {currentVocab.level}
-            </span>
-            <button
-              onClick={() => onViewChange('vocab_practice_detail', currentVocab.id)} 
-              className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-800 transition-colors"
-            >
-              练习足迹 →
-            </button>
-          </div>
+
+          {/* Conditional Content with Animation */}
+          {!lastFeedback ? (
+            <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-500">
+              <div>
+                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest block mb-2">词汇解析 DEFINITION</span>
+                <p className="text-slate-600 text-base italic leading-relaxed" dangerouslySetInnerHTML={{ __html: rubyUtil(currentVocab.meaning) }} />
+              </div>
+              
+              <div>
+                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest block mb-2">参考范例 EXAMPLE</span>
+                <div className="bg-indigo-50/40 p-5 rounded-2xl italic text-xs text-indigo-800 border-l-4 border-indigo-400 flex items-start space-x-2">
+                  <button
+                    onClick={() => handlePlayAudio(currentVocab.usage, `vocab-usage-${currentVocab.word}`)}
+                    className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all ${playingAudioId === `vocab-usage-${currentVocab.word}` ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-100 text-indigo-500 hover:bg-indigo-600 hover:text-white'}`}
+                    title="收听例句发音"
+                  >
+                    {playingAudioId === `vocab-usage-${currentVocab.word}` ? '⏹' : '🎧'}
+                  </button>
+                  <p className="flex-1">“ {renderRuby(currentVocab.usage)} ”</p>
+                </div>
+              </div>
+
+              <div className="pt-4 flex items-center justify-between">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Level: {currentVocab.level}
+                </span>
+                <button
+                  onClick={() => onViewChange('vocab_practice_detail', currentVocab.id)} 
+                  className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-800 transition-colors"
+                >
+                  练习足迹 →
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
+              {/* Feedback Badge & Header */}
+              <div className={`p-4 rounded-2xl flex items-center justify-between ${lastFeedback.isCorrect ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                <div className="flex items-center space-x-2">
+                  <span className="text-xl">{lastFeedback.isCorrect ? '✅' : '📝'}</span>
+                  <span className="font-black uppercase tracking-widest text-xs">
+                    {lastFeedback.isCorrect ? '鉴定通过 PERFECT' : '需要打磨 POLISHED'}
+                  </span>
+                </div>
+                <button 
+                  onClick={() => setLastFeedback(null)} 
+                  className="text-[10px] font-black underline opacity-50 hover:opacity-100 transition-opacity"
+                >
+                  查看原文定义
+                </button>
+              </div>
+
+              {/* Feedback Text */}
+              <div>
+                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest block mb-2">馆长鉴定结果 FEEDBACK</span>
+                <p className="text-sm text-slate-700 leading-relaxed italic">
+                  “ {lastFeedback.feedback} ”
+                </p>
+              </div>
+
+              {/* Better Version Card */}
+              {lastFeedback.betterVersion && (
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest block">AI 修复建议 SUGGESTION</span>
+                  <div className="bg-slate-900 text-white p-6 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden group/feedback">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-bl-[3rem] -mr-8 -mt-8"></div>
+                    <p className="relative z-10 text-lg serif-font leading-relaxed italic">
+                       {renderRuby(lastFeedback.betterVersion)}
+                    </p>
+                    <button
+                      onClick={() => handlePlayAudio(lastFeedback.betterVersion!, `feedback-better-${currentVocab.word}`)}
+                      className={`absolute bottom-4 right-4 w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-lg ${playingAudioId === `feedback-better-${currentVocab.word}` ? 'bg-indigo-500 text-white' : 'bg-white/10 text-indigo-400 hover:bg-indigo-600 hover:text-white'}`}
+                    >
+                      {playingAudioId === `feedback-better-${currentVocab.word}` ? '⏹' : '🎧'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Practice Input & Feedback */}
+        {/* Right Column: Practice Input Area */}
         <div className="lg:w-1/2 flex flex-col space-y-6">
-          <div className="flex-1 bg-white border border-slate-200 rounded-[2.5rem] shadow-xl overflow-hidden flex flex-col focus-within:ring-4 focus-within:ring-indigo-500/5 focus-within:border-indigo-200 transition-all">
+          <div className={`flex-1 bg-white border border-slate-200 rounded-[2.5rem] shadow-xl overflow-hidden flex flex-col focus-within:ring-4 focus-within:ring-indigo-500/5 focus-within:border-indigo-200 transition-all ${lastFeedback ? 'opacity-50 pointer-events-none grayscale-[0.5]' : ''}`}>
             <textarea
               value={practiceInput}
               onChange={(e) => setPracticeInput(e.target.value)}
               placeholder={`用 ${currentVocab.language} 造句，运用词汇 "${stripRuby(currentVocab.word)}"...`}
               className="flex-1 w-full border-none focus:ring-0 p-8 md:p-14 text-lg md:text-2xl leading-relaxed serif-font resize-none bg-transparent placeholder:text-slate-300"
-              disabled={isValidating}
+              disabled={isValidating || !!lastFeedback}
             />
             <div className="px-8 py-4 bg-slate-50/50 border-t border-slate-50 flex items-center justify-between shrink-0">
-              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Your Practice</span>
+              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Your Work In Progress</span>
               <span className="text-[10px] font-black text-slate-300">{practiceInput.length} chars</span>
             </div>
           </div>
 
           <div className="flex gap-4">
-            <button
-              onClick={handleValidate}
-              disabled={!practiceInput.trim() || isValidating}
-              className={`flex-1 py-5 rounded-3xl font-black shadow-2xl transition-all active:scale-[0.98] ${
-                !practiceInput.trim() || isValidating
-                  ? 'bg-slate-100 text-slate-300'
-                  : 'bg-indigo-600 text-white shadow-indigo-100 hover:bg-indigo-700'
-              }`}
-            >
-              {isValidating ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto"></div>
-              ) : (
-                <span className="text-sm md:text-lg">✨ 提交评估 SUBMIT</span>
-              )}
-            </button>
-            
-            {onNextInQueue && (
+            {!lastFeedback ? (
               <button
-                onClick={onNextInQueue}
-                className="px-8 py-5 bg-slate-900 text-white rounded-3xl font-black shadow-xl hover:bg-slate-800 transition-all active:scale-95 text-xs uppercase tracking-widest"
+                onClick={handleValidate}
+                disabled={!practiceInput.trim() || isValidating}
+                className={`flex-1 py-5 rounded-3xl font-black shadow-2xl transition-all active:scale-[0.98] ${
+                  !practiceInput.trim() || isValidating
+                    ? 'bg-slate-100 text-slate-300'
+                    : 'bg-indigo-600 text-white shadow-indigo-100 hover:bg-indigo-700'
+                }`}
               >
-                下一个 NEXT →
+                {isValidating ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto"></div>
+                ) : (
+                  <span className="text-sm md:text-lg">✨ 提交评估 SUBMIT</span>
+                )}
               </button>
+            ) : (
+              <div className="flex-1 flex gap-4">
+                 <button
+                    onClick={() => { setLastFeedback(null); setPracticeInput(''); }}
+                    className="flex-1 py-5 bg-white border border-slate-200 text-slate-400 rounded-3xl font-black hover:bg-slate-50 transition-all active:scale-95 text-xs uppercase tracking-widest"
+                  >
+                    再次尝试 RETRY
+                  </button>
+                  {onNextInQueue && (
+                    <button
+                      onClick={onNextInQueue}
+                      className="flex-[2] py-5 bg-slate-900 text-white rounded-3xl font-black shadow-2xl shadow-slate-200 hover:bg-indigo-600 transition-all active:scale-95 text-sm md:text-lg uppercase tracking-widest"
+                    >
+                      下一个珍宝 NEXT →
+                    </button>
+                  )}
+              </div>
             )}
           </div>
-
-          {lastFeedback && (
-            <div className={`p-6 rounded-2xl border ${lastFeedback.isCorrect ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'} shadow-md animate-in slide-in-from-bottom-4 duration-500`}>
-              <div className="flex items-center space-x-2 mb-3">
-                <span className={`text-xl ${lastFeedback.isCorrect ? 'text-emerald-500' : 'text-rose-500'}`}>
-                  {lastFeedback.isCorrect ? '✅' : '❌'}
-                </span>
-                <span className={`font-black uppercase tracking-widest text-[11px] ${lastFeedback.isCorrect ? 'text-emerald-700' : 'text-rose-700'}`}>
-                  {lastFeedback.isCorrect ? '完美 Perfect!' : '需要打磨 Polished'}
-                </span>
-              </div>
-              <p className="text-sm text-slate-700 leading-relaxed mb-3">
-                <span className="font-semibold text-slate-500 mr-1">AI 反馈:</span> {lastFeedback.feedback}
-              </p>
-              {lastFeedback.betterVersion && (
-                <div className="bg-white p-3 rounded-xl border border-slate-100 italic text-xs text-slate-600 flex items-start space-x-2">
-                  <button
-                    onClick={() => handlePlayAudio(lastFeedback.betterVersion!, `feedback-better-${currentVocab.word}`)}
-                    className={`flex-shrink-0 w-6 h-6 rounded-full inline-flex items-center justify-center transition-all ${playingAudioId === `feedback-better-${currentVocab.word}` ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-indigo-600'}`}
-                    title="收听AI建议"
-                  >
-                    {playingAudioId === `feedback-better-${currentVocab.word}` ? '⏹' : '🎧'}
-                  </button>
-                  <p className="flex-1">
-                    <span className="font-semibold text-slate-500 mr-1">AI 建议版本:</span>
-                    “<span dangerouslySetInnerHTML={{ __html: renderRuby(lastFeedback.betterVersion) }} />”
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
     </div>

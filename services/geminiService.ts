@@ -98,9 +98,11 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
       
       STRICT OUTPUT RULES:
       1. 'diffedText' MUST use <add> and <rem> tags for word-level changes.
-      2. For 'modifiedText', 'diffedText', 'advancedVocab.meaning', and 'advancedVocab.usage': ${getJapaneseInstruction(language)}
-      3. Provide 'overallFeedback' and 'corrections.explanation' in Chinese (中文).
-      4. DO NOT use furigana brackets in 'corrections.original' or 'corrections.improved' fields.`,
+      2. For 'modifiedText', 'diffedText', and 'advancedVocab.usage': ${getJapaneseInstruction(language)}
+      3. For 'advancedVocab.meaning': Output a concise definition in ${language}. CRITICAL: DO NOT use furigana or ruby brackets '[Kanji](furigana)' in the 'meaning' field.
+      4. For 'advancedVocab.usage': This MUST be a full example sentence.
+      5. Provide 'overallFeedback' and 'corrections.explanation' in Chinese (中文).
+      6. DO NOT use furigana brackets in 'corrections.original' or 'corrections.improved' fields.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {

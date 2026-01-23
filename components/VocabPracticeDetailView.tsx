@@ -140,7 +140,7 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
               {playingAudioId === `vocab-word-${currentVocab.word}` ? '⏹' : '🎧'}
             </button>
           </div>
-          <p className="text-slate-600 text-base italic leading-relaxed">{currentVocab.meaning}</p>
+          <p className="text-slate-600 text-base italic leading-relaxed" dangerouslySetInnerHTML={{ __html: renderRuby(currentVocab.meaning).props.dangerouslySetInnerHTML.__html }} />
           <div className="bg-indigo-50/40 p-5 rounded-2xl italic text-xs text-indigo-800 border-l-4 border-indigo-400 flex items-start space-x-2">
             <button
               onClick={() => handlePlayAudio(currentVocab.usage, `vocab-usage-${currentVocab.word}`)}
