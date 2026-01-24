@@ -8,13 +8,23 @@ interface HistoryProps {
   onSelect: (entry: DiaryEntry) => void;
   onDelete: (id: string) => void;
   onRewrite: (entry: DiaryEntry) => void;
-  onAnalyzeDraft?: (entry: DiaryEntry) => void; // New: Trigger analysis for drafts
-  isAnalyzingId?: string | null; // New: Track which draft is being analyzed
+  onAnalyzeDraft?: (entry: DiaryEntry) => void; 
+  onUpdateLanguage?: (id: string, language: string) => void; // New: allow fixing metadata
+  isAnalyzingId?: string | null; 
 }
 
-const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrite, onAnalyzeDraft, isAnalyzingId }) => {
+const LANGUAGES = [
+  { code: 'English', label: 'English', flag: '🇬🇧' },
+  { code: 'Japanese', label: '日本語', flag: '🇯🇵' },
+  { code: 'French', label: 'Français', flag: '🇫🇷' },
+  { code: 'Spanish', label: 'Español', flag: '🇪🇸' },
+  { code: 'German', label: 'Deutsch', flag: '🇩🇪' },
+];
+
+const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrite, onAnalyzeDraft, onUpdateLanguage, isAnalyzingId }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('All');
+  const [fixingEntryId, setFixingEntryId] = useState<string | null>(null);
 
   const getLatestText = (entry: DiaryEntry) => {
     return entry.originalText;
@@ -44,7 +54,11 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
     return groups;
   }, [filteredEntries]);
 
-  const availableLanguages = useMemo(() => ['All', ...Array.from(new Set(entries.map(e => e.language)))], [entries]);
+  // Fix: filter out falsy/empty languages for the filter dropdown
+  const availableLanguages = useMemo(() => {
+    const langs = Array.from(new Set(entries.map(e => e.language).filter(Boolean)));
+    return ['All', ...langs];
+  }, [entries]);
 
   if (entries.length === 0) return (
     <div className="flex flex-col items-center justify-center h-full text-center space-y-6 animate-in fade-in zoom-in duration-700">
@@ -103,6 +117,7 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
                 const isDraft = !isRehearsal && !entry.analysis;
                 const displayText = getLatestText(entry);
                 const isAnalyzing = isAnalyzingId === entry.id;
+                const isFixing = fixingEntryId === entry.id;
                 
                 return (
                   <div key={entry.id} className="relative group perspective-1000">
@@ -119,9 +134,40 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
                        </div>
 
                        <div className="flex justify-between items-center mb-6">
-                         <span className="px-3 py-1 bg-slate-900 text-white text-[9px] font-black rounded-xl uppercase tracking-widest shadow-lg shadow-slate-200">
-                           {entry.language}
-                         </span>
+                         <div className="relative">
+                            {entry.language ? (
+                              <span className="px-3 py-1 bg-slate-900 text-white text-[9px] font-black rounded-xl uppercase tracking-widest shadow-lg shadow-slate-200">
+                                {entry.language}
+                              </span>
+                            ) : (
+                              isFixing ? (
+                                <div className="absolute top-0 left-0 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 p-2 flex flex-col space-y-1 animate-in zoom-in duration-300 min-w-[120px]">
+                                  <p className="text-[8px] font-black text-slate-400 uppercase p-1">补全语言修复</p>
+                                  {LANGUAGES.map(lang => (
+                                    <button 
+                                      key={lang.code} 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onUpdateLanguage?.(entry.id, lang.code);
+                                        setFixingEntryId(null);
+                                      }}
+                                      className="text-[10px] font-bold text-slate-700 hover:bg-indigo-50 p-2 rounded-lg text-left"
+                                    >
+                                      {lang.flag} {lang.label}
+                                    </button>
+                                  ))}
+                                  <button onClick={(e) => { e.stopPropagation(); setFixingEntryId(null); }} className="text-[8px] font-black text-rose-400 p-1 text-center">取消</button>
+                                </div>
+                              ) : (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); setFixingEntryId(entry.id); }}
+                                  className="px-3 py-1 bg-amber-50 text-amber-600 text-[9px] font-black rounded-xl uppercase tracking-widest border border-amber-200 animate-pulse shadow-lg shadow-amber-100 hover:bg-amber-100 transition-colors"
+                                >
+                                  ⚠️ 补全标签
+                                </button>
+                              )
+                            )}
+                         </div>
                          <div className="flex items-center space-x-1">
                             {!isRehearsal && (
                               <button onClick={() => onRewrite(entry)} className="p-2.5 rounded-2xl hover:bg-indigo-50 text-indigo-400 transition-colors" title="精进重写">🖋️</button>

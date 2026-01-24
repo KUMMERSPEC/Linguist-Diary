@@ -90,6 +90,7 @@ const App: React.FC = () => {
   const [chatLanguage, setChatLanguage] = useState('');
   const [prefilledEditorText, setPrefilledEditorText] = useState('');
   const [summaryPrompt, setSummaryPrompt] = useState<string>('');
+  const [isReviewingExisting, setIsReviewingExisting] = useState(false); 
 
   const [allAdvancedVocab, setAllAdvancedVocab] = useState<AdvancedVocab[]>([]); 
   const [selectedVocabForPracticeId, setSelectedVocabForPracticeId] = useState<string | null>(null);
@@ -202,10 +203,22 @@ const App: React.FC = () => {
     setView(newView);
     setSelectedVocabForPracticeId(vocabId || null);
     setIsPracticeActive(!!isPracticeActive);
-    if (newView !== 'editor') setSummaryPrompt(''); // Clear summary when moving away
+    if (newView !== 'editor') setSummaryPrompt(''); 
     if (newView === 'profile' && user) {
       setEditName(user.displayName);
       setEditPhoto(user.photoURL);
+    }
+  };
+
+  const handleUpdateEntryLanguage = async (entryId: string, newLanguage: string) => {
+    if (!user) return;
+    setEntries(prev => prev.map(e => e.id === entryId ? { ...e, language: newLanguage } : e));
+    if (!db || user.isMock) {
+      const currentEntries = JSON.parse(localStorage.getItem(`linguist_entries_${user.uid}`) || '[]');
+      const updated = currentEntries.map((e: any) => e.id === entryId ? { ...e, language: newLanguage } : e);
+      localStorage.setItem(`linguist_entries_${user.uid}`, JSON.stringify(updated));
+    } else {
+      await updateDoc(doc(db, 'users', user.uid, 'diaryEntries', entryId), { language: newLanguage });
     }
   };
 
@@ -357,10 +370,8 @@ const App: React.FC = () => {
         }
       }
 
-      // Update the entry in state
       setEntries(prev => prev.map(e => e.id === entry.id ? updatedEntry : e));
 
-      // Persist entry update
       if (!db || user.isMock) {
         const currentEntries = JSON.parse(localStorage.getItem(`linguist_entries_${user.uid}`) || '[]');
         const updatedEntries = currentEntries.map((e: any) => e.id === entry.id ? updatedEntry : e);
@@ -371,6 +382,9 @@ const App: React.FC = () => {
       }
 
       alert("分析完成！您可以查看报告了。");
+      setCurrentEntry(updatedEntry);
+      setIsReviewingExisting(false); 
+      setView('review');
     } catch (error) {
       console.error(error);
       alert("分析失败，请检查网络。");
@@ -432,9 +446,9 @@ const App: React.FC = () => {
         setEntries(prev => [finalEntry, ...prev]);
         setCurrentEntry(finalEntry);
       }
+      setIsReviewingExisting(false);
       setView('review');
     } catch (error: any) {
-      // Offer to save as draft if analysis fails
       if (window.confirm("AI 分析失败。是否要将该内容作为草稿暂存到收藏馆？")) {
         handleSaveDraft(text, language);
       }
@@ -524,8 +538,8 @@ const App: React.FC = () => {
         setView('vocab_practice');
       }} entries={entries} />}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraft} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} />}
-      {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} />}
-      {view === 'history' && <History entries={entries} isAnalyzingId={analyzingId} onAnalyzeDraft={handleAnalyzeExistingEntry} onSelect={(e) => { setCurrentEntry(e); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { 
+      {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isExistingEntry={isReviewingExisting} />}
+      {view === 'history' && <History entries={entries} isAnalyzingId={analyzingId} onAnalyzeDraft={handleAnalyzeExistingEntry} onUpdateLanguage={handleUpdateEntryLanguage} onSelect={(e) => { setCurrentEntry(e); setIsReviewingExisting(true); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { 
         if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); 
         setEntries(prev => prev.filter(e => e.id !== id));
       }} onRewrite={(e) => { setPrefilledEditorText(e.originalText); setView('editor'); }} />}

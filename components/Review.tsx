@@ -12,9 +12,10 @@ interface ReviewProps {
   onSave: () => void;
   onBack: () => void;
   onSaveManualVocab?: (vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>) => void;
+  isExistingEntry?: boolean; // New prop to identify context
 }
 
-const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave, onBack, onSaveManualVocab }) => {
+const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave, onBack, onSaveManualVocab, isExistingEntry }) => {
   const [activeTab, setActiveTab] = useState<'overall' | 'corrections' | 'vocab' | 'transitions' | 'history'>('overall');
   const [isPlaying, setIsPlaying] = useState<string | null>(null); 
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
@@ -286,15 +287,17 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
         )}
       </div>
 
-      <footer className="mt-12 flex justify-end shrink-0 px-2 md:px-0">
-        <button
-          onClick={onSave}
-          className="bg-slate-900 text-white px-10 py-4 rounded-2xl text-base font-black shadow-2xl hover:bg-indigo-600 transition-all active:scale-95 flex items-center space-x-3"
-        >
-          <span>🏛️ 存入收藏馆 Exhibit</span>
-          <span className="text-xl">→</span>
-        </button>
-      </footer>
+      {!isExistingEntry && (
+        <footer className="mt-12 flex justify-end shrink-0 px-2 md:px-0">
+          <button
+            onClick={onSave}
+            className="bg-slate-900 text-white px-10 py-4 rounded-2xl text-base font-black shadow-2xl hover:bg-indigo-600 transition-all active:scale-95 flex items-center space-x-3"
+          >
+            <span>🏛️ 存入收藏馆 Exhibit</span>
+            <span className="text-xl">→</span>
+          </button>
+        </footer>
+      )}
     </div>
   );
 };
