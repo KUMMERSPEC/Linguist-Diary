@@ -8,9 +8,11 @@ interface HistoryProps {
   onSelect: (entry: DiaryEntry) => void;
   onDelete: (id: string) => void;
   onRewrite: (entry: DiaryEntry) => void;
+  onAnalyzeDraft?: (entry: DiaryEntry) => void; // New: Trigger analysis for drafts
+  isAnalyzingId?: string | null; // New: Track which draft is being analyzed
 }
 
-const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrite }) => {
+const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrite, onAnalyzeDraft, isAnalyzingId }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('All');
 
@@ -98,19 +100,21 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
               {monthEntries.map((entry) => {
                 const iterCount = getIterationCountDisplay(entry);
                 const isRehearsal = entry.type === 'rehearsal';
+                const isDraft = !isRehearsal && !entry.analysis;
                 const displayText = getLatestText(entry);
+                const isAnalyzing = isAnalyzingId === entry.id;
                 
                 return (
                   <div key={entry.id} className="relative group perspective-1000">
-                    {iterCount > 0 && (
-                      <div className="absolute inset-0 bg-indigo-50/50 border border-indigo-100/50 rounded-[3rem] translate-x-3 translate-y-3 -z-10 transition-transform group-hover:translate-x-4 group-hover:translate-y-4"></div>
+                    {(iterCount > 0 || isDraft) && (
+                      <div className={`absolute inset-0 rounded-[3rem] translate-x-3 translate-y-3 -z-10 transition-transform group-hover:translate-x-4 group-hover:translate-y-4 ${isDraft ? 'bg-slate-100 border border-slate-200' : 'bg-indigo-50/50 border border-indigo-100/50'}`}></div>
                     )}
                     
                     <div className="bg-white p-8 pt-12 rounded-[3rem] border border-slate-200 shadow-sm hover:shadow-2xl transition-all duration-500 relative flex flex-col h-full overflow-hidden group-hover:-translate-y-2">
-                       <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-bl-[4rem] opacity-30 -mr-10 -mt-10 group-hover:scale-110 transition-transform"></div>
+                       <div className={`absolute top-0 right-0 w-24 h-24 rounded-bl-[4rem] opacity-30 -mr-10 -mt-10 group-hover:scale-110 transition-transform ${isDraft ? 'bg-slate-100' : 'bg-indigo-50'}`}></div>
                        
                        <div className="absolute top-6 left-8 flex items-center space-x-2">
-                         <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-pulse"></div>
+                         <div className={`w-1.5 h-1.5 rounded-full ${isDraft ? 'bg-slate-300' : 'bg-indigo-600 animate-pulse'}`}></div>
                          <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider">{new Date(entry.timestamp).getDate()}nd Exhibit</span>
                        </div>
 
@@ -126,8 +130,8 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
                          </div>
                        </div>
 
-                       <div className="flex-1 cursor-pointer" onClick={() => onSelect(entry)}>
-                         <p className="text-slate-600 line-clamp-5 serif-font mb-8 italic text-base md:text-lg leading-[2.2] group-hover:text-slate-900 transition-colors">
+                       <div className="flex-1 cursor-pointer" onClick={() => !isDraft && onSelect(entry)}>
+                         <p className={`line-clamp-5 serif-font mb-8 italic text-base md:text-lg leading-[2.2] transition-colors ${isDraft ? 'text-slate-400' : 'text-slate-600 group-hover:text-slate-900'}`}>
                            “ {renderRuby(displayText)} ”
                          </p>
                        </div>
@@ -135,13 +139,24 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
                        <div className="pt-6 border-t border-slate-50 flex items-center justify-between">
                           <div className="flex flex-col">
                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Status:</span>
-                             <span className={`text-[10px] font-bold ${iterCount > 0 ? 'text-amber-500' : 'text-emerald-500'} uppercase tracking-widest`}>
-                               {iterCount > 0 ? `Refined ${iterCount + 1}x` : (isRehearsal ? 'Rehearsal' : 'Archived')}
+                             <span className={`text-[10px] font-bold uppercase tracking-widest ${isDraft ? 'text-slate-400' : (iterCount > 0 ? 'text-amber-500' : 'text-emerald-500')}`}>
+                               {isDraft ? '📜 待打磨草稿' : (iterCount > 0 ? `Refined ${iterCount + 1}x` : (isRehearsal ? 'Rehearsal' : 'Archived'))}
                              </span>
                           </div>
-                          <button onClick={() => onSelect(entry)} className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl text-[10px] font-black uppercase hover:bg-indigo-600 hover:text-white transition-all">
-                             查看报告 VIEW
-                          </button>
+                          
+                          {isDraft ? (
+                            <button 
+                              onClick={() => onAnalyzeDraft?.(entry)} 
+                              disabled={isAnalyzing}
+                              className="px-4 py-2 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center space-x-2"
+                            >
+                              {isAnalyzing ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <span>✨ 立即分析</span>}
+                            </button>
+                          ) : (
+                            <button onClick={() => onSelect(entry)} className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl text-[10px] font-black uppercase hover:bg-indigo-600 hover:text-white transition-all">
+                               查看报告 VIEW
+                            </button>
+                          )}
                        </div>
                     </div>
                   </div>

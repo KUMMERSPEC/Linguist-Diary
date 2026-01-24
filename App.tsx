@@ -85,6 +85,7 @@ const App: React.FC = () => {
   const [currentEntry, setCurrentEntry] = useState<DiaryEntry | null>(null); 
   const [currentEntryIterations, setCurrentEntryIterations] = useState<DiaryIteration[]>([]); 
   const [isLoading, setIsLoading] = useState(false);
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chatLanguage, setChatLanguage] = useState('');
   const [prefilledEditorText, setPrefilledEditorText] = useState('');
@@ -292,6 +293,92 @@ const App: React.FC = () => {
     } catch (e) { console.error("Batch delete error:", e); }
   };
 
+  const handleSaveDraft = async (text: string, language: string) => {
+    if (!user) return;
+    setIsLoading(true);
+    try {
+      const clientTimestamp = Date.now();
+      const newEntrySkeleton: Omit<DiaryEntry, 'id'> = {
+        timestamp: clientTimestamp,
+        date: new Date(clientTimestamp).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
+        originalText: text,
+        language,
+        type: 'diary',
+        iterationCount: 0
+      };
+
+      if (!db || user.isMock) {
+        const finalEntry = { ...newEntrySkeleton, id: uuidv4() } as DiaryEntry;
+        const updatedEntries = [finalEntry, ...entries];
+        setEntries(updatedEntries);
+        localStorage.setItem(`linguist_entries_${user.uid}`, JSON.stringify(updatedEntries));
+      } else {
+        const docRef = await addDoc(collection(db, 'users', user.uid, 'diaryEntries'), { ...newEntrySkeleton, timestamp: serverTimestamp() });
+        const finalEntry = { ...newEntrySkeleton, id: docRef.id } as DiaryEntry;
+        setEntries(prev => [finalEntry, ...prev]);
+      }
+      setView('history');
+    } catch (e) {
+      alert("保存草稿失败。");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAnalyzeExistingEntry = async (entry: DiaryEntry) => {
+    if (!user || !entry.originalText) return;
+    setAnalyzingId(entry.id);
+    try {
+      const historyContext = entries.filter(e => e.language === entry.language && e.analysis && e.id !== entry.id).slice(0, 5);
+      const analysis = await analyzeDiaryEntry(entry.originalText, entry.language, historyContext);
+      
+      const updatedEntry = { ...entry, analysis };
+      
+      // Handle Vocab saving
+      const vocabItemsToSave = analysis.advancedVocab.filter(v => {
+        const normalizedNewWord = stripRuby(v.word).trim().toLowerCase();
+        return !allAdvancedVocab.some(existing => {
+          const normalizedExistingWord = stripRuby(existing.word).trim().toLowerCase();
+          return normalizedExistingWord === normalizedNewWord && existing.language === entry.language;
+        });
+      }).map(v => ({ ...v, id: uuidv4(), mastery: 0, language: entry.language, practices: [] }));
+
+      if (vocabItemsToSave.length > 0) {
+        if (!db || user.isMock) {
+          const updated = [...vocabItemsToSave, ...allAdvancedVocab];
+          setAllAdvancedVocab(updated);
+          localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
+        } else {
+          const vocabCol = collection(db, 'users', user.uid, 'advancedVocab');
+          for (const item of vocabItemsToSave) {
+            const { id, practices, ...data } = item;
+            await addDoc(vocabCol, data);
+          }
+        }
+      }
+
+      // Update the entry in state
+      setEntries(prev => prev.map(e => e.id === entry.id ? updatedEntry : e));
+
+      // Persist entry update
+      if (!db || user.isMock) {
+        const currentEntries = JSON.parse(localStorage.getItem(`linguist_entries_${user.uid}`) || '[]');
+        const updatedEntries = currentEntries.map((e: any) => e.id === entry.id ? updatedEntry : e);
+        localStorage.setItem(`linguist_entries_${user.uid}`, JSON.stringify(updatedEntries));
+      } else {
+        const docRef = doc(db, 'users', user.uid, 'diaryEntries', entry.id);
+        await updateDoc(docRef, { analysis });
+      }
+
+      alert("分析完成！您可以查看报告了。");
+    } catch (error) {
+      console.error(error);
+      alert("分析失败，请检查网络。");
+    } finally {
+      setAnalyzingId(null);
+    }
+  };
+
   const handleAnalyze = async (text: string, language: string) => {
     if (!user) return;
     setIsLoading(true);
@@ -310,7 +397,6 @@ const App: React.FC = () => {
         iterationCount: 0
       };
 
-      // 改良的查重逻辑：不区分大小写，且去除空格
       const vocabItemsToSave = analysis.advancedVocab.filter(v => {
         const normalizedNewWord = stripRuby(v.word).trim().toLowerCase();
         return !allAdvancedVocab.some(existing => {
@@ -330,7 +416,6 @@ const App: React.FC = () => {
             const { id, practices, ...data } = item;
             await addDoc(vocabCol, data);
           }
-          // Firebase 模式下重新加载以同步
           loadUserData(user.uid, user.isMock);
         }
       }
@@ -349,10 +434,43 @@ const App: React.FC = () => {
       }
       setView('review');
     } catch (error: any) {
-      setError("AI 分析失败。");
+      // Offer to save as draft if analysis fails
+      if (window.confirm("AI 分析失败。是否要将该内容作为草稿暂存到收藏馆？")) {
+        handleSaveDraft(text, language);
+      }
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSaveManualVocab = async (vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>) => {
+    if (!user) return;
+    const normalizedNewWord = stripRuby(vocab.word).trim().toLowerCase();
+    const isExisting = allAdvancedVocab.some(v => 
+      stripRuby(v.word).trim().toLowerCase() === normalizedNewWord && v.language === vocab.language
+    );
+    if (isExisting) {
+      alert("该词汇已在馆藏中。");
+      return;
+    }
+
+    const newVocab: AdvancedVocab = {
+      ...vocab,
+      id: uuidv4(),
+      mastery: 0,
+      practices: []
+    };
+
+    setAllAdvancedVocab(prev => [newVocab, ...prev]);
+
+    if (!db || user.isMock) {
+      const currentVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
+      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify([newVocab, ...currentVocab]));
+    } else {
+      const { id, practices, ...data } = newVocab;
+      await addDoc(collection(db, 'users', user.uid, 'advancedVocab'), data);
+    }
+    alert(`“${stripRuby(vocab.word)}” 已入馆！`);
   };
 
   const handleSaveProfile = async () => {
@@ -367,7 +485,6 @@ const App: React.FC = () => {
 
   if (isAuthInitializing) return (
     <div className="h-screen w-full bg-slate-50 flex flex-col items-center justify-center relative overflow-hidden">
-      {/* Decorative background elements */}
       <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-100 rounded-full blur-3xl opacity-50 -mr-20 -mt-20"></div>
       <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-50 -ml-20 -mb-20"></div>
       
@@ -406,9 +523,9 @@ const App: React.FC = () => {
         setIsPracticeActive(true);
         setView('vocab_practice');
       }} entries={entries} />}
-      {view === 'editor' && <Editor onAnalyze={handleAnalyze} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} />}
-      {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} />}
-      {view === 'history' && <History entries={entries} onSelect={(e) => { setCurrentEntry(e); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { 
+      {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraft} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} />}
+      {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} />}
+      {view === 'history' && <History entries={entries} isAnalyzingId={analyzingId} onAnalyzeDraft={handleAnalyzeExistingEntry} onSelect={(e) => { setCurrentEntry(e); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { 
         if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); 
         setEntries(prev => prev.filter(e => e.id !== id));
       }} onRewrite={(e) => { setPrefilledEditorText(e.originalText); setView('editor'); }} />}

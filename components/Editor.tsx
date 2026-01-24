@@ -3,10 +3,11 @@ import React, { useState, useEffect } from 'react';
 
 interface EditorProps {
   onAnalyze: (text: string, language: string) => void;
+  onSaveDraft: (text: string, language: string) => void; // New: Save raw text
   isLoading: boolean;
   initialText?: string;
   initialLanguage?: string;
-  summaryPrompt?: string; // New: Muse from chat
+  summaryPrompt?: string;
 }
 
 const LANGUAGES = [
@@ -17,7 +18,7 @@ const LANGUAGES = [
   { code: 'German', label: 'Deutsch', flag: '🇩🇪' },
 ];
 
-const Editor: React.FC<EditorProps> = ({ onAnalyze, isLoading, initialText = '', initialLanguage = 'English', summaryPrompt }) => {
+const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, initialText = '', initialLanguage = 'English', summaryPrompt }) => {
   const [text, setText] = useState(initialText);
   const [language, setLanguage] = useState(initialLanguage);
 
@@ -88,7 +89,15 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, isLoading, initialText = '',
           </div>
         </div>
         
-        <footer className="flex justify-end shrink-0 mt-4">
+        <footer className="flex items-center justify-end space-x-4 shrink-0 mt-4">
+          <button 
+            type="button"
+            onClick={() => onSaveDraft(text, language)}
+            disabled={text.trim().length < 10 || isLoading}
+            className="px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-400 border-2 border-slate-100 hover:bg-slate-50 transition-all"
+          >
+            存入草稿 DRAFT
+          </button>
           <button 
             type="submit"
             disabled={text.trim().length < 10 || isLoading}

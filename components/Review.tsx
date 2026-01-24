@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { DiaryAnalysis, DiaryIteration, Correction } from '../types';
+import { DiaryAnalysis, DiaryIteration, Correction, AdvancedVocab } from '../types';
 import { generateDiaryAudio } from '../services/geminiService';
 import { decode, decodeAudioData } from '../utils/audioHelpers'; 
 import { renderRuby, stripRuby } from '../utils/textHelpers';
@@ -11,11 +11,13 @@ interface ReviewProps {
   iterations: DiaryIteration[]; 
   onSave: () => void;
   onBack: () => void;
+  onSaveManualVocab?: (vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>) => void;
 }
 
-const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave, onBack }) => {
+const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave, onBack, onSaveManualVocab }) => {
   const [activeTab, setActiveTab] = useState<'overall' | 'corrections' | 'vocab' | 'transitions' | 'history'>('overall');
   const [isPlaying, setIsPlaying] = useState<string | null>(null); 
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   const allAnalyses = [
@@ -24,8 +26,6 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
   ].sort((a, b) => a.timestamp - b.timestamp);
 
   const renderDiffText = (diff: string) => {
-    // 采用与图3完全一致的配色与排版逻辑
-    // 核心更改：取消 inline-block，改回 inline，消除高度膨胀
     let processed = diff.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
     processed = processed
       .replace(/<add>(.*?)<\/add>/g, '<span class="bg-emerald-100 text-emerald-900 px-1 border-b-2 border-emerald-400 font-bold mx-0.5 inline">$1</span>')
@@ -72,6 +72,12 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
       console.error("Error playing audio:", e);
       setIsPlaying(null);
     }
+  };
+
+  const handleManualSave = (id: string, vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>) => {
+    if (savedIds.has(id)) return;
+    onSaveManualVocab?.(vocab);
+    setSavedIds(prev => new Set(prev).add(id));
   };
 
   const getCategoryColor = (category: Correction['category']) => {
@@ -125,7 +131,6 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
       <div className="flex-1 overflow-y-auto no-scrollbar space-y-10 p-2 md:p-0">
         {activeTab === 'overall' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            {/* MANUSCRIPT CARD (Strictly following Fig 3) */}
             <div className="bg-white p-6 md:p-14 rounded-[2.5rem] border border-slate-200 shadow-xl relative overflow-hidden">
               <header className="flex items-center justify-between mb-10 border-b border-slate-50 pb-4">
                 <div className="flex items-center space-x-3">
@@ -173,24 +178,37 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
         {activeTab === 'transitions' && (
           <div className="space-y-6 animate-in fade-in duration-500">
             {analysis.transitionSuggestions.length > 0 ? (
-              analysis.transitionSuggestions.map((t, index) => (
-                <div key={index} className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-md flex flex-col md:flex-row gap-8 items-start">
-                   <div className="bg-indigo-50 border border-indigo-100 px-6 py-4 rounded-2xl flex flex-col items-center justify-center shrink-0 min-w-[120px]">
-                      <span className="text-2xl font-black text-indigo-600 serif-font" dangerouslySetInnerHTML={{ __html: renderRuby(t.word) }}></span>
-                      <span className="text-[9px] font-bold text-indigo-400 uppercase mt-2">Connector</span>
-                   </div>
-                   <div className="flex-1 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">逻辑衔接建议 Logic Transition</h4>
-                        <button onClick={() => handlePlayAudio(t.word, `trans-word-${index}`)} className="text-indigo-600 hover:scale-110 transition-transform">🎧</button>
-                      </div>
-                      <p className="text-slate-700 text-base leading-relaxed">{t.explanation}</p>
-                      <div className="bg-slate-50 p-5 rounded-2xl border-l-4 border-indigo-400">
-                        <p className="text-sm italic text-slate-600" dangerouslySetInnerHTML={{ __html: `“ ${renderRuby(t.example)} ”` }}></p>
-                      </div>
-                   </div>
-                </div>
-              ))
+              analysis.transitionSuggestions.map((t, index) => {
+                const sid = `trans-${index}`;
+                const isSaved = savedIds.has(sid);
+                return (
+                  <div key={index} className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-md flex flex-col md:flex-row gap-8 items-start relative overflow-hidden">
+                     <div className="bg-indigo-50 border border-indigo-100 px-6 py-4 rounded-2xl flex flex-col items-center justify-center shrink-0 min-w-[120px]">
+                        <span className="text-2xl font-black text-indigo-600 serif-font" dangerouslySetInnerHTML={{ __html: renderRuby(t.word) }}></span>
+                        <span className="text-[9px] font-bold text-indigo-400 uppercase mt-2">Connector</span>
+                     </div>
+                     <div className="flex-1 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">逻辑衔接建议 Logic Transition</h4>
+                          <div className="flex items-center space-x-2">
+                             <button 
+                               onClick={() => handleManualSave(sid, { word: t.word, meaning: t.explanation, usage: t.example, level: 'Advanced', language: language })}
+                               className={`text-lg p-2 rounded-full transition-all ${isSaved ? 'text-amber-500 bg-amber-50' : 'text-slate-300 hover:text-indigo-600 hover:bg-slate-50'}`}
+                               title={isSaved ? "已入珍宝阁" : "加入珍宝阁"}
+                             >
+                               💎
+                             </button>
+                             <button onClick={() => handlePlayAudio(t.word, `trans-word-${index}`)} className="text-indigo-600 p-2">🎧</button>
+                          </div>
+                        </div>
+                        <p className="text-slate-700 text-base leading-relaxed">{t.explanation}</p>
+                        <div className="bg-slate-50 p-5 rounded-2xl border-l-4 border-indigo-400">
+                          <p className="text-sm italic text-slate-600" dangerouslySetInnerHTML={{ __html: `“ ${renderRuby(t.example)} ”` }}></p>
+                        </div>
+                     </div>
+                  </div>
+                );
+              })
             ) : (
               <div className="py-24 text-center text-slate-300 text-xl serif-font italic">衔接逻辑自然流畅。</div>
             )}
@@ -199,21 +217,34 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
 
         {activeTab === 'corrections' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-500">
-            {analysis.corrections.map((c, index) => (
-              <div key={index} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-                <div className="flex items-center justify-between mb-4">
-                  <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${getCategoryColor(c.category)}`}>
-                    {c.category}
-                  </span>
-                  <button onClick={() => handlePlayAudio(c.improved, `improved-${index}`)} className="text-indigo-400">🎧</button>
+            {analysis.corrections.map((c, index) => {
+              const sid = `correction-${index}`;
+              const isSaved = savedIds.has(sid);
+              return (
+                <div key={index} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all relative group/card">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${getCategoryColor(c.category)}`}>
+                      {c.category}
+                    </span>
+                    <div className="flex items-center space-x-1">
+                       <button 
+                         onClick={() => handleManualSave(sid, { word: c.improved, meaning: c.explanation, usage: analysis.modifiedText, level: 'Intermediate', language: language })}
+                         className={`text-lg p-2 rounded-full transition-all opacity-0 group-hover/card:opacity-100 ${isSaved ? 'text-amber-500 bg-amber-50 opacity-100' : 'text-slate-200 hover:text-indigo-600 hover:bg-slate-50'}`}
+                         title={isSaved ? "已入珍宝阁" : "加入珍宝阁"}
+                       >
+                         💎
+                       </button>
+                       <button onClick={() => handlePlayAudio(c.improved, `improved-${index}`)} className="text-indigo-400 p-2">🎧</button>
+                    </div>
+                  </div>
+                  <div className="space-y-3 mb-4">
+                    <p className="text-slate-400 line-through text-base serif-font" dangerouslySetInnerHTML={{ __html: renderRuby(c.original) }}></p>
+                    <p className="text-slate-900 font-bold text-lg serif-font" dangerouslySetInnerHTML={{ __html: renderRuby(c.improved) }}></p>
+                  </div>
+                  <p className="text-slate-500 text-xs italic border-t border-slate-50 pt-3">{c.explanation}</p>
                 </div>
-                <div className="space-y-3 mb-4">
-                  <p className="text-slate-400 line-through text-base serif-font" dangerouslySetInnerHTML={{ __html: renderRuby(c.original) }}></p>
-                  <p className="text-slate-900 font-bold text-lg serif-font" dangerouslySetInnerHTML={{ __html: renderRuby(c.improved) }}></p>
-                </div>
-                <p className="text-slate-500 text-xs italic border-t border-slate-50 pt-3">{c.explanation}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
