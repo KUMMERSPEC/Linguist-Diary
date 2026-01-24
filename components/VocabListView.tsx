@@ -15,8 +15,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, onViewC
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   const [filterLanguage, setFilterLanguage] = useState('All');
-  const [filterLevel, setFilterLevel] = useState('All');
-  const [sortBy, setSortBy] = useState<'mastery' | 'word'>('mastery'); // Changed default sort to mastery
+  const [sortBy, setSortBy] = useState<'mastery' | 'word'>('mastery');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -25,9 +24,6 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, onViewC
 
     if (filterLanguage !== 'All') {
       filtered = filtered.filter(v => v.language === filterLanguage);
-    }
-    if (filterLevel !== 'All') {
-      filtered = filtered.filter(v => v.level === filterLevel);
     }
     if (searchQuery) {
       filtered = filtered.filter(v =>
@@ -48,11 +44,10 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, onViewC
       return sortOrder === 'asc' ? comparison : -comparison;
     });
 
-    return filtered;
-  }, [allAdvancedVocab, filterLanguage, filterLevel, sortBy, sortOrder, searchQuery]);
+    return [...filtered];
+  }, [allAdvancedVocab, filterLanguage, sortBy, sortOrder, searchQuery]);
 
   const availableLanguages = useMemo(() => ['All', ...Array.from(new Set(allAdvancedVocab.map(v => v.language)))], [allAdvancedVocab]);
-  const availableLevels = useMemo(() => ['All', ...Array.from(new Set(allAdvancedVocab.map(v => v.level)))], [allAdvancedVocab]);
 
   const renderRuby = (text: string) => {
     if (!text) return '';
@@ -140,56 +135,46 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, onViewC
   return (
     <div className="flex flex-col h-full animate-in fade-in duration-500 overflow-hidden w-full relative p-4 md:p-8">
       <header className="mb-6 space-y-4 shrink-0">
-        <h2 className="text-3xl md:text-4xl font-black text-slate-900 serif-font">珍宝与足迹 Vocab & Practice History</h2>
+        <h2 className="text-3xl md:text-4xl font-black text-slate-900 serif-font">珍宝与足迹 Vocab & History</h2>
         <p className="text-slate-500 text-sm italic">重温您的语言珍宝，追踪每一次练习的足迹。</p>
 
-        {/* Combined filters and search into a single responsive row */}
-        <div className="flex flex-col md:flex-row gap-2">
-          <div className="relative group flex-1">
+        {/* Improved layout: Dual columns for Language and Search */}
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="relative group md:w-64">
             <select
               value={filterLanguage}
               onChange={(e) => setFilterLanguage(e.target.value)}
-              className="appearance-none p-2.5 pl-4 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-600 transition-all outline-none w-full"
+              className="appearance-none p-3 pl-5 pr-12 bg-white border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 transition-all outline-none w-full cursor-pointer"
             >
-              {availableLanguages.map(l => <option key={l} value={l}>{l === 'All' ? '🌐 所有语言' : l}</option>)}
+              {availableLanguages.map(l => <option key={l} value={l}>{l === 'All' ? '🌐 全部语言' : l}</option>)}
             </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-300">▼</div>
-          </div>
-          <div className="relative group flex-1">
-            <select
-              value={filterLevel}
-              onChange={(e) => setFilterLevel(e.target.value)}
-              className="appearance-none p-2.5 pl-4 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-600 transition-all outline-none w-full"
-            >
-              {availableLevels.map(l => <option key={l} value={l}>{l === 'All' ? '🌟 所有等级' : l}</option>)}
-            </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-300">▼</div>
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-300">▼</div>
           </div>
           <div className="relative flex-1">
             <input
               type="text"
-              placeholder="搜索词汇..."
+              placeholder="在馆藏中搜寻词汇..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="p-2.5 pl-9 pr-4 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium w-full shadow-sm focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-600 transition-all outline-none"
+              className="p-3 pl-10 pr-5 bg-white border border-slate-200 rounded-2xl text-xs font-medium w-full shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 transition-all outline-none"
             />
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 opacity-30">🔍</span>
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 opacity-30">🔍</span>
           </div>
         </div>
 
         <div className="flex items-center gap-4 text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4">
-          <span>排序:</span>
+          <span>排序方式:</span>
           <button
             onClick={() => { setSortBy('mastery'); setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc'); }}
-            className={`px-3 py-1 rounded-full transition-all ${sortBy === 'mastery' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 hover:bg-slate-100'}`}
+            className={`px-4 py-1.5 rounded-full transition-all border ${sortBy === 'mastery' ? 'bg-indigo-50 border-indigo-100 text-indigo-600' : 'bg-transparent border-transparent hover:bg-slate-100'}`}
           >
             掌握度 {sortBy === 'mastery' && (sortOrder === 'desc' ? '↓' : '↑')}
           </button>
           <button
             onClick={() => { setSortBy('word'); setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc'); }}
-            className={`px-3 py-1 rounded-full transition-all ${sortBy === 'word' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 hover:bg-slate-100'}`}
+            className={`px-4 py-1.5 rounded-full transition-all border ${sortBy === 'word' ? 'bg-indigo-50 border-indigo-100 text-indigo-600' : 'bg-transparent border-transparent hover:bg-slate-100'}`}
           >
-            词汇 {sortBy === 'word' && (sortOrder === 'desc' ? '↓' : '↑')}
+            字母 A-Z {sortBy === 'word' && (sortOrder === 'desc' ? '↓' : '↑')}
           </button>
         </div>
       </header>
@@ -201,35 +186,36 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, onViewC
               <button
                 key={`${vocab.word}-${vocab.language}-${idx}`}
                 onClick={() => handleCardClick(vocab)}
-                className="text-left w-full bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-indigo-100/50 hover:border-indigo-200"
+                className="group/vcard text-left w-full bg-white p-7 rounded-[2.5rem] border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-slate-200/50 hover:border-indigo-200 hover:-translate-y-1"
               >
                 <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-2">
+                  <div className="flex flex-col space-y-1">
                     <h3 className="text-xl font-black text-slate-900 serif-font">
                       {renderRuby(vocab.word)}
                     </h3>
-                    <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest ${getMasteryColor(vocab.mastery)}`}>
-                      {getMasteryIcon(vocab.mastery)} Mastery {vocab.mastery || 0}
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest border ${getMasteryColor(vocab.mastery)}`}>
+                        {getMasteryIcon(vocab.mastery)} {vocab.mastery || 0}
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">
+                  <span className="text-[10px] font-black text-indigo-500/40 group-hover/vcard:text-indigo-600 uppercase tracking-widest transition-colors">
                     {vocab.language}
                   </span>
                 </div>
-                <p className="text-sm text-slate-600 italic mb-4 line-clamp-2">
+                <p className="text-xs text-slate-500 italic mb-6 line-clamp-2 leading-relaxed serif-font">
                   {renderRuby(vocab.meaning)}
                 </p>
 
-                <div className="mt-4 pt-3 border-t border-dashed border-slate-100 flex justify-between items-center">
-                  <span className="text-xs font-semibold text-slate-700">
+                <div className="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 group-hover/vcard:text-indigo-500 transition-colors">
                     {vocab.practices && vocab.practices.length > 0
-                      ? `查看 ${vocab.practices.length} 条练习记录 →`
-                      : '暂无练习记录，点击开始练习 →'}
+                      ? `查看 ${vocab.practices.length} 条足迹 →`
+                      : '开始打磨 →'}
                   </span>
                   <button
                     onClick={(e) => { e.stopPropagation(); handlePlayAudio(vocab.word, `vocab-word-${vocab.word}-${vocab.language}`); }}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${playingAudioId === `vocab-word-${vocab.word}-${vocab.language}` ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-50 text-slate-400 hover:text-indigo-600'}`}
-                    title="收听单词发音"
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${playingAudioId === `vocab-word-${vocab.word}-${vocab.language}` ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-300 hover:text-indigo-600'}`}
                   >
                     {playingAudioId === `vocab-word-${vocab.word}-${vocab.language}` ? '⏹' : '🎧'}
                   </button>
@@ -238,7 +224,9 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, onViewC
             ))}
           </div>
         ) : (
-          <div className="py-16 text-center text-slate-400 text-sm italic">没有找到匹配的词汇珍宝。</div>
+          <div className="py-24 text-center bg-white border border-dashed border-slate-200 rounded-[3rem]">
+            <p className="text-[11px] font-black text-slate-300 uppercase tracking-widest">没有找到匹配的珍宝。</p>
+          </div>
         )}
       </div>
     </div>

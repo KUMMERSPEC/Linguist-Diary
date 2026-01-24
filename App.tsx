@@ -497,6 +497,51 @@ const App: React.FC = () => {
     } catch (e) { setError("保存失败。"); } finally { setIsLoading(false); }
   };
 
+  const handleStartSmartReview = () => {
+    if (allAdvancedVocab.length === 0) {
+      alert("馆长，您的珍宝馆还是空的。请先撰写日记以发现词汇！");
+      return;
+    }
+
+    // 智能筛选逻辑：
+    // 1. 过滤掉已经达到精通级别 (Mastery 5) 的词汇
+    const eligibleGems = allAdvancedVocab.filter(v => (v.mastery || 0) < 5);
+
+    if (eligibleGems.length === 0) {
+      alert("馆长，所有珍宝都已打磨至巅峰！请开启新的撰写以发掘更多珍宝。");
+      return;
+    }
+
+    // 2. 优先级排序：
+    //   - Mastery 0 的排在最前（从未练习过）
+    //   - 其余按 Mastery 从低到高排序
+    //   - 同等级下，练习次数更少的优先
+    const sortedGems = [...eligibleGems].sort((a, b) => {
+      const mA = a.mastery || 0;
+      const mB = b.mastery || 0;
+      if (mA !== mB) return mA - mB;
+      
+      const pA = a.practices?.length || 0;
+      const pB = b.practices?.length || 0;
+      return pA - pB;
+    });
+
+    // 3. 动态抽样：
+    //   为了避免每次点开看到的都是死板的完全相同的 5 个词，
+    //   我们从“最急需打磨”的前 15 个候选词中，随机抽取 5 个。
+    const topCandidates = sortedGems.slice(0, 15);
+    const selectedGems = topCandidates
+      .sort(() => 0.5 - Math.random())
+      .slice(0, 5);
+
+    const selectedIds = selectedGems.map(v => v.id);
+    setPracticeQueue(selectedIds);
+    setQueueIndex(0);
+    setSelectedVocabForPracticeId(selectedIds[0]);
+    setIsPracticeActive(true);
+    setView('vocab_practice');
+  };
+
   if (isAuthInitializing) return (
     <div className="h-screen w-full bg-slate-50 flex flex-col items-center justify-center relative overflow-hidden">
       <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-100 rounded-full blur-3xl opacity-50 -mr-20 -mt-20"></div>
@@ -528,15 +573,7 @@ const App: React.FC = () => {
 
   return (
     <Layout activeView={view} onViewChange={handleViewChange} user={user} onLogout={handleLogout}>
-      {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={() => {
-        const shuffled = [...allAdvancedVocab].sort(() => 0.5 - Math.random());
-        const selected = shuffled.slice(0, 5).map(v => v.id);
-        setPracticeQueue(selected);
-        setQueueIndex(0);
-        setSelectedVocabForPracticeId(selected[0]);
-        setIsPracticeActive(true);
-        setView('vocab_practice');
-      }} entries={entries} />}
+      {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartSmartReview} entries={entries} />}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraft} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} />}
       {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isExistingEntry={isReviewingExisting} />}
       {view === 'history' && <History entries={entries} isAnalyzingId={analyzingId} onAnalyzeDraft={handleAnalyzeExistingEntry} onUpdateLanguage={handleUpdateEntryLanguage} onSelect={(e) => { setCurrentEntry(e); setIsReviewingExisting(true); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { 

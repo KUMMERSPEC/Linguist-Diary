@@ -92,13 +92,25 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
   };
 
   return (
-    <div className="flex flex-col h-full animate-in fade-in duration-500 overflow-hidden w-full relative pb-24 md:pb-8">
+    <div className="flex flex-col h-full animate-in fade-in duration-500 overflow-hidden w-full relative pb-10 md:pb-8">
       <header className="flex flex-col md:flex-row md:items-end justify-between mb-8 px-2 md:px-0 gap-4">
-        <div>
+        <div className="flex-1">
           <button onClick={onBack} className="text-slate-400 hover:text-indigo-600 text-[10px] font-black uppercase tracking-widest mb-1 flex items-center group">
             <span className="mr-1 group-hover:-translate-x-1 transition-transform">←</span> 返回收藏馆 BACK TO EXHIBITS
           </button>
-          <h2 className="text-3xl font-black text-slate-900 serif-font tracking-tight">AI 审阅报告 <span className="text-indigo-600">AI Review</span></h2>
+          <div className="flex items-center justify-between md:block">
+            <h2 className="text-2xl md:text-3xl font-black text-slate-900 serif-font tracking-tight">AI 审阅报告 <span className="text-indigo-600">AI Review</span></h2>
+            
+            {/* Mobile-only Action: Exhibit button in header for compact layout */}
+            {!isExistingEntry && (
+              <button
+                onClick={onSave}
+                className="md:hidden bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-black shadow-lg active:scale-95 transition-all"
+              >
+                存入收藏 EXHIBIT
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex items-center space-x-3 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white px-4 py-2 rounded-xl border border-slate-100">
           <span className="text-slate-900">{new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
@@ -288,7 +300,7 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
       </div>
 
       {!isExistingEntry && (
-        <footer className="mt-12 flex justify-end shrink-0 px-2 md:px-0">
+        <footer className="hidden md:flex mt-12 justify-end shrink-0 px-2 md:px-0">
           <button
             onClick={onSave}
             className="bg-slate-900 text-white px-10 py-4 rounded-2xl text-base font-black shadow-2xl hover:bg-indigo-600 transition-all active:scale-95 flex items-center space-x-3"
