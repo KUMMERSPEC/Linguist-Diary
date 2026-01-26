@@ -18,6 +18,7 @@ interface ReviewProps {
 const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave, onBack, onSaveManualVocab, isExistingEntry }) => {
   const [activeTab, setActiveTab] = useState<'overall' | 'corrections' | 'vocab' | 'transitions' | 'history'>('overall');
   const [isPlaying, setIsPlaying] = useState<string | null>(null); 
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
@@ -35,7 +36,7 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
   };
 
   const handlePlayAudio = async (textToPlay: string, id: string) => {
-    if (!textToPlay) return;
+    if (!textToPlay || isAudioLoading) return;
 
     if (audioSourceRef.current) {
       audioSourceRef.current.stop();
@@ -47,9 +48,12 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
     }
     
     setIsPlaying(id);
+    setIsAudioLoading(true);
     try {
       const cleanText = stripRuby(textToPlay);
       const base64Audio = await generateDiaryAudio(cleanText);
+      setIsAudioLoading(false);
+
       if (!base64Audio) {
         setIsPlaying(null);
         return;
@@ -71,6 +75,7 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
       audioSourceRef.current = source;
     } catch (e) {
       console.error("Error playing audio:", e);
+      setIsAudioLoading(false);
       setIsPlaying(null);
     }
   };
@@ -101,7 +106,6 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
           <div className="flex items-center justify-between md:block">
             <h2 className="text-2xl md:text-3xl font-black text-slate-900 serif-font tracking-tight">AI 审阅报告 <span className="text-indigo-600">AI Review</span></h2>
             
-            {/* Mobile-only Action: Exhibit button in header for compact layout */}
             {!isExistingEntry && (
               <button
                 onClick={onSave}
@@ -157,9 +161,12 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
                   </div>
                   <button
                     onClick={() => handlePlayAudio(analysis.modifiedText, 'modifiedText')}
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isPlaying === 'modifiedText' ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-indigo-600'}`}
+                    disabled={isAudioLoading && isPlaying === 'modifiedText'}
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isPlaying === 'modifiedText' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-400 hover:text-indigo-600'}`}
                   >
-                    {isPlaying === 'modifiedText' ? '⏹' : '🎧'}
+                    {isAudioLoading && isPlaying === 'modifiedText' ? (
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    ) : isPlaying === 'modifiedText' ? '⏹' : '🎧'}
                   </button>
                 </div>
               </header>
@@ -188,51 +195,14 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
           </div>
         )}
 
-        {activeTab === 'transitions' && (
-          <div className="space-y-6 animate-in fade-in duration-500">
-            {analysis.transitionSuggestions.length > 0 ? (
-              analysis.transitionSuggestions.map((t, index) => {
-                const sid = `trans-${index}`;
-                const isSaved = savedIds.has(sid);
-                return (
-                  <div key={index} className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-md flex flex-col md:flex-row gap-8 items-start relative overflow-hidden">
-                     <div className="bg-indigo-50 border border-indigo-100 px-6 py-4 rounded-2xl flex flex-col items-center justify-center shrink-0 min-w-[120px]">
-                        <span className="text-2xl font-black text-indigo-600 serif-font" dangerouslySetInnerHTML={{ __html: renderRuby(t.word) }}></span>
-                        <span className="text-[9px] font-bold text-indigo-400 uppercase mt-2">Connector</span>
-                     </div>
-                     <div className="flex-1 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">逻辑衔接建议 Logic Transition</h4>
-                          <div className="flex items-center space-x-2">
-                             <button 
-                               onClick={() => handleManualSave(sid, { word: t.word, meaning: t.explanation, usage: t.example, level: 'Advanced', language: language })}
-                               className={`text-lg p-2 rounded-full transition-all ${isSaved ? 'text-amber-500 bg-amber-50' : 'text-slate-300 hover:text-indigo-600 hover:bg-slate-50'}`}
-                               title={isSaved ? "已入珍宝阁" : "加入珍宝阁"}
-                             >
-                               💎
-                             </button>
-                             <button onClick={() => handlePlayAudio(t.word, `trans-word-${index}`)} className="text-indigo-600 p-2">🎧</button>
-                          </div>
-                        </div>
-                        <p className="text-slate-700 text-base leading-relaxed">{t.explanation}</p>
-                        <div className="bg-slate-50 p-5 rounded-2xl border-l-4 border-indigo-400">
-                          <p className="text-sm italic text-slate-600" dangerouslySetInnerHTML={{ __html: `“ ${renderRuby(t.example)} ”` }}></p>
-                        </div>
-                     </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="py-24 text-center text-slate-300 text-xl serif-font italic">衔接逻辑自然流畅。</div>
-            )}
-          </div>
-        )}
-
         {activeTab === 'corrections' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-500">
             {analysis.corrections.map((c, index) => {
               const sid = `correction-${index}`;
               const isSaved = savedIds.has(sid);
+              const isItemPlaying = isPlaying === `improved-${index}`;
+              const isItemLoading = isAudioLoading && isItemPlaying;
+
               return (
                 <div key={index} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all relative group/card">
                   <div className="flex items-center justify-between mb-4">
@@ -247,7 +217,15 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
                        >
                          💎
                        </button>
-                       <button onClick={() => handlePlayAudio(c.improved, `improved-${index}`)} className="text-indigo-400 p-2">🎧</button>
+                       <button 
+                         onClick={() => handlePlayAudio(c.improved, `improved-${index}`)} 
+                         disabled={isItemLoading}
+                         className={`p-2 rounded-xl transition-all ${isItemPlaying ? 'bg-indigo-50 text-indigo-600' : 'text-indigo-400 hover:bg-indigo-50'}`}
+                       >
+                         {isItemLoading ? (
+                           <div className="w-4 h-4 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                         ) : isItemPlaying ? '⏹' : '🎧'}
+                       </button>
                     </div>
                   </div>
                   <div className="space-y-3 mb-4">
@@ -263,19 +241,32 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
 
         {activeTab === 'vocab' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
-            {analysis.advancedVocab.map((v, index) => (
-              <div key={index} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:border-indigo-200 transition-colors flex flex-col h-full">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-xl font-black text-slate-900 serif-font" dangerouslySetInnerHTML={{ __html: renderRuby(v.word) }}></h4>
-                  <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-lg text-[8px] font-black uppercase tracking-widest">{v.level}</span>
+            {analysis.advancedVocab.map((v, index) => {
+              const isItemPlaying = isPlaying === `vocab-audio-${index}`;
+              const isItemLoading = isAudioLoading && isItemPlaying;
+
+              return (
+                <div key={index} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:border-indigo-200 transition-colors flex flex-col h-full">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xl font-black text-slate-900 serif-font" dangerouslySetInnerHTML={{ __html: renderRuby(v.word) }}></h4>
+                    <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-lg text-[8px] font-black uppercase tracking-widest">{v.level}</span>
+                  </div>
+                  <p className="text-slate-600 text-xs mb-4 flex-1">{v.meaning}</p>
+                  <div className="bg-slate-50 p-4 rounded-xl relative group">
+                     <p className="text-[11px] text-slate-500 italic serif-font" dangerouslySetInnerHTML={{ __html: `“ ${renderRuby(v.usage)} ”` }}></p>
+                     <button 
+                       onClick={() => handlePlayAudio(v.usage, `vocab-audio-${index}`)} 
+                       disabled={isItemLoading}
+                       className={`absolute top-2 right-2 p-1.5 rounded-lg transition-all ${isItemPlaying ? 'bg-indigo-100 text-indigo-600 opacity-100' : 'text-indigo-400 opacity-0 group-hover:opacity-100 hover:bg-indigo-50'}`}
+                     >
+                       {isItemLoading ? (
+                         <div className="w-3 h-3 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                       ) : isItemPlaying ? '⏹' : '🎧'}
+                     </button>
+                  </div>
                 </div>
-                <p className="text-slate-600 text-xs mb-4 flex-1">{v.meaning}</p>
-                <div className="bg-slate-50 p-4 rounded-xl relative group">
-                   <p className="text-[11px] text-slate-500 italic serif-font" dangerouslySetInnerHTML={{ __html: `“ ${renderRuby(v.usage)} ”` }}></p>
-                   <button onClick={() => handlePlayAudio(v.usage, `vocab-audio-${index}`)} className="absolute top-2 right-2 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">🎧</button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

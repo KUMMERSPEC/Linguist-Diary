@@ -30,6 +30,7 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
   const [practiceInput, setPracticeInput] = useState('');
   const [isValidating, setIsValidating] = useState(false);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [lastFeedback, setLastFeedback] = useState<{ 
     isCorrect: boolean; 
     feedback: string; 
@@ -60,26 +61,46 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
   };
 
   const handlePlayAudio = async (text: string, id: string) => {
-    if (!text) return;
+    if (!text || isAudioLoading) return;
+
     if (audioSourceRef.current) {
       audioSourceRef.current.stop();
       audioSourceRef.current = null;
-      if (playingAudioId === id) { setPlayingAudioId(null); return; }
+      if (playingAudioId === id) { 
+        setPlayingAudioId(null); 
+        return; 
+      }
     }
+
     setPlayingAudioId(id);
+    setIsAudioLoading(true);
+
     try {
       const cleanText = stripRuby(text); 
       const base64Audio = await generateDiaryAudio(cleanText);
+      setIsAudioLoading(false);
+
+      if (!base64Audio) {
+        setPlayingAudioId(null);
+        return;
+      }
+
       const bytes = decode(base64Audio);
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       const audioBuffer = await decodeAudioData(bytes, audioCtx, 24000, 1);
       const source = audioCtx.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(audioCtx.destination);
-      source.onended = () => setPlayingAudioId(null);
+      source.onended = () => {
+        setPlayingAudioId(null);
+        setIsAudioLoading(false);
+      };
       source.start();
       audioSourceRef.current = source;
-    } catch (e) { setPlayingAudioId(null); }
+    } catch (e) { 
+      setIsAudioLoading(false);
+      setPlayingAudioId(null); 
+    }
   };
 
   const handleValidate = async () => {
@@ -158,7 +179,6 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
       </header>
 
       <div className="flex-1 flex flex-col lg:flex-row lg:items-stretch gap-6 md:gap-8 overflow-y-auto no-scrollbar pb-8">
-        {/* Word Card: Using shrink-0 on mobile to prevent clipping, and reducing padding/font-size */}
         <div className="shrink-0 lg:flex-1 lg:max-w-[40%] bg-white p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 space-y-6 md:space-y-8 relative overflow-hidden transition-all duration-700">
           {showSuccessAnimation && (
             <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/80 rounded-[2rem] md:rounded-[2.5rem] z-20 animate-in fade-in zoom-in duration-500">
@@ -172,7 +192,15 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
             </h3>
             <div className="flex items-center space-x-2">
               <span className="md:hidden px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-lg text-[8px] font-black uppercase tracking-widest">M{currentVocab.mastery || 0}</span>
-              <button onClick={() => handlePlayAudio(currentVocab.word, 'word')} className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400">🎧</button>
+              <button 
+                onClick={() => handlePlayAudio(currentVocab.word, 'word')} 
+                disabled={isAudioLoading && playingAudioId === 'word'}
+                className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-all ${playingAudioId === 'word' ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-indigo-600'}`}
+              >
+                {isAudioLoading && playingAudioId === 'word' ? (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                ) : playingAudioId === 'word' ? '⏹' : '🎧'}
+              </button>
             </div>
           </div>
 
@@ -190,7 +218,6 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
           </div>
         </div>
 
-        {/* Input Area: Added minimum height for better mobile interaction */}
         <div className="flex-1 flex flex-col space-y-4 md:space-y-6 min-h-[300px] md:min-h-0">
           <div className={`flex-1 bg-white border border-slate-200 rounded-[2rem] md:rounded-[2.5rem] shadow-xl overflow-hidden flex flex-col focus-within:ring-8 focus-within:ring-indigo-500/5 transition-all ${lastFeedback ? 'opacity-50 pointer-events-none' : ''}`}>
              <textarea
@@ -221,7 +248,15 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
                  <div className="mt-4 p-4 md:p-5 bg-slate-900 text-white rounded-[1.5rem] md:rounded-3xl relative">
                    <span className="text-[8px] font-black uppercase text-indigo-400 absolute top-3 left-5">AI 优化建议</span>
                    <p className="mt-2 serif-font italic text-base md:text-lg leading-relaxed">{renderRuby(lastFeedback.betterVersion)}</p>
-                   <button onClick={() => handlePlayAudio(lastFeedback.betterVersion!, 'better')} className="absolute bottom-3 right-5 text-indigo-400">🎧</button>
+                   <button 
+                    onClick={(e) => { e.stopPropagation(); handlePlayAudio(lastFeedback.betterVersion!, 'better'); }} 
+                    disabled={isAudioLoading && playingAudioId === 'better'}
+                    className={`absolute bottom-3 right-5 w-8 h-8 rounded-lg flex items-center justify-center transition-all ${playingAudioId === 'better' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/10 text-slate-400 hover:text-indigo-400'}`}
+                   >
+                     {isAudioLoading && playingAudioId === 'better' ? (
+                       <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin"></div>
+                     ) : playingAudioId === 'better' ? '⏹' : '🎧'}
+                   </button>
                  </div>
                )}
                <div className="flex gap-3 md:gap-4 mt-4">

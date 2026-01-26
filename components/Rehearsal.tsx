@@ -42,7 +42,8 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [showSource, setShowSource] = useState(true);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState<string | null>(null);
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'diff' | 'final'>('diff');
 
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -100,27 +101,44 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
     }
   };
 
-  const handlePlayAudio = async (textToPlay: string) => {
-    if (!textToPlay) return;
+  const handlePlayAudio = async (textToPlay: string, id: string) => {
+    if (!textToPlay || isAudioLoading) return;
+    
     if (audioSourceRef.current) {
       audioSourceRef.current.stop();
       audioSourceRef.current = null;
-      if (isPlaying) { setIsPlaying(false); return; }
+      if (isPlaying === id) { setIsPlaying(null); return; }
     }
-    setIsPlaying(true);
+
+    setIsPlaying(id);
+    setIsAudioLoading(true);
+
     try {
       const cleanText = textToPlay.replace(/\[(.*?)\]\(.*?\)/g, '$1');
       const base64Audio = await generateDiaryAudio(cleanText);
+      setIsAudioLoading(false);
+
+      if (!base64Audio) {
+        setIsPlaying(null);
+        return;
+      }
+
       const bytes = decode(base64Audio);
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       const audioBuffer = await decodeAudioData(bytes, audioCtx, 24000, 1);
       const source = audioCtx.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(audioCtx.destination);
-      source.onended = () => setIsPlaying(false);
+      source.onended = () => {
+        setIsPlaying(null);
+        setIsAudioLoading(false);
+      };
       source.start();
       audioSourceRef.current = source;
-    } catch (e) { setIsPlaying(false); }
+    } catch (e) { 
+      setIsAudioLoading(false);
+      setIsPlaying(null); 
+    }
   };
 
   return (
@@ -173,9 +191,12 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
               </div>
               <div className="lg:col-span-4 flex flex-col justify-between">
                 <section className="mb-6 lg:mb-0">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">指定关键词 KEYWORDS</label>
+                  <div className="flex items-center justify-between mb-4">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">指定关键词 KEYWORDS</label>
+                    <span className="text-[8px] font-bold text-indigo-400 bg-indigo-50 px-2 py-0.5 rounded-full uppercase">支持多词</span>
+                  </div>
                   <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
-                    <textarea value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="例如: coffee, morning, city..." className="w-full bg-transparent border-none focus:ring-0 text-sm italic serif-font text-slate-700 resize-none h-20" />
+                    <textarea value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="输入您想练习的一个或多个词汇，用逗号分隔。例如: coffee, morning, city..." className="w-full bg-transparent border-none focus:ring-0 text-sm italic serif-font text-slate-700 resize-none h-20" />
                   </div>
                 </section>
                 <button onClick={handleGenerate} disabled={isGenerating} className="w-full bg-indigo-600 text-white py-6 rounded-3xl font-black text-lg shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center space-x-3 active:scale-95 group">
@@ -187,7 +208,7 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
         </div>
       ) : !evaluation ? (
         <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-700">
-           <div className="bg-white p-10 md:p-14 rounded-[3rem] border border-slate-200 shadow-xl relative overflow-hidden">
+           <div className="bg-white p-10 md:p-14 rounded-[3rem] border border-slate-200 shadow-xl relative overflow-hidden min-h-[220px]">
              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-full opacity-50 -mr-10 -mt-10"></div>
              <div className="flex items-center justify-between mb-8">
                <div className="flex items-center space-x-3">
@@ -195,12 +216,32 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
                  <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em]">源文物内容 ARCHIVE ARTIFACT</h3>
                </div>
                <div className="flex items-center space-x-4">
-                 <button onClick={() => setShowSource(!showSource)} className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:underline">{showSource ? '🙈 隐藏内容' : '👁️ 显示内容'}</button>
-                 <button onClick={() => handlePlayAudio(sourceText)} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isPlaying ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-400 hover:text-indigo-600'}`}>{isPlaying ? '⏹' : '🎧'}</button>
+                 <button onClick={() => setShowSource(!showSource)} className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:underline flex items-center space-x-1.5">
+                    <span>{showSource ? '👁️' : '👁️‍🗨️'}</span>
+                    <span>{showSource ? '隐藏内容' : '显示内容'}</span>
+                 </button>
+                 <button 
+                  onClick={() => handlePlayAudio(sourceText, 'source')} 
+                  disabled={isAudioLoading && isPlaying === 'source'}
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isPlaying === 'source' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-400 hover:text-indigo-600'}`}
+                 >
+                   {isAudioLoading && isPlaying === 'source' ? (
+                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                   ) : isPlaying === 'source' ? '⏹' : '🎧'}
+                 </button>
                </div>
              </div>
-             <div className={`transition-all duration-700 ${showSource ? 'blur-0 opacity-100' : 'blur-2xl opacity-10 select-none'}`}>
-               <p className="text-lg md:text-xl text-slate-800 leading-[2.2] serif-font italic">“ {renderRuby(sourceText)} ”</p>
+             
+             {/* Enhanced "Misty Glass" or "Frosted" Effect */}
+             <div className="relative">
+                <div className={`transition-all duration-700 ease-in-out ${showSource ? 'blur-0 opacity-100 pointer-events-auto' : 'blur-[14px] opacity-30 select-none pointer-events-none grayscale-[0.3]'}`}>
+                  <p className="text-lg md:text-xl text-slate-800 leading-[2.2] serif-font italic">“ {renderRuby(sourceText)} ”</p>
+                </div>
+                {!showSource && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                     <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] opacity-50">Content Encrypted for Rehearsal</span>
+                  </div>
+                )}
              </div>
            </div>
 
@@ -286,8 +327,16 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum }) => {
                      )}
                    </div>
                    <div className="mt-8 pt-6 border-t border-white/5 flex justify-end">
-                      <button onClick={() => handlePlayAudio(evaluation.suggestedVersion)} className={`flex items-center space-x-2 px-6 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${isPlaying ? 'bg-indigo-600 text-white' : 'bg-white/5 text-slate-400 hover:text-white'}`}>
-                        <span>{isPlaying ? '⏹ 停止播放' : '🎧 收听打磨版'}</span>
+                      <button 
+                        onClick={() => handlePlayAudio(evaluation.suggestedVersion, 'suggested')} 
+                        disabled={isAudioLoading && isPlaying === 'suggested'}
+                        className={`flex items-center space-x-2 px-6 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${isPlaying === 'suggested' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-slate-400 hover:text-white'}`}
+                      >
+                        {isAudioLoading && isPlaying === 'suggested' ? (
+                          <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin"></div>
+                        ) : (
+                          <span>{isPlaying === 'suggested' ? '⏹ 停止播放' : '🎧 收听打磨版'}</span>
+                        )}
                       </button>
                    </div>
                 </div>
