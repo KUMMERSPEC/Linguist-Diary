@@ -78,7 +78,7 @@ const AVATAR_SEEDS = [
 ];
 
 const App: React.FC = () => {
-  const [user, setUser] = useState<{ uid: string, displayName: string, photoURL: string, isMock: boolean } | null>(null);
+  const [user, setUser] = useState<{ uid: string, displayName: string, photoURL: string, isMock: boolean, iterationDay?: number } | null>(null);
   const [isAuthInitializing, setIsAuthInitializing] = useState(true); 
   const [view, setView] = useState<ViewState>('dashboard');
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
@@ -115,7 +115,8 @@ const App: React.FC = () => {
           uid: firebaseUser.uid,
           displayName: firebaseUser.displayName || firebaseUser.email || '馆长',
           photoURL: userPhotoURL,
-          isMock: false
+          isMock: false,
+          iterationDay: 0 // Default Sunday
         });
       } else {
         setUser(null);
@@ -136,6 +137,11 @@ const App: React.FC = () => {
         if (localEntries) setEntries(JSON.parse(localEntries));
         const localVocab = localStorage.getItem(`linguist_vocab_${userId}`);
         if (localVocab) setAllAdvancedVocab(JSON.parse(localVocab));
+        const localProfile = localStorage.getItem(`linguist_profile_${userId}`);
+        if (localProfile) {
+          const profile = JSON.parse(localProfile);
+          setUser(prev => prev ? { ...prev, ...profile } : null);
+        }
       } else {
         const userDocRef = doc(db, 'users', userId);
         const userDocSnap = await getDoc(userDocRef);
@@ -172,14 +178,19 @@ const App: React.FC = () => {
     }
   }, [db]);
 
-  const saveProfileData = useCallback(async (userId: string, isMock: boolean, updatedProfile: { displayName: string, photoURL: string }) => {
+  const saveProfileData = useCallback(async (userId: string, isMock: boolean, updatedProfile: { displayName: string, photoURL: string, iterationDay?: number }) => {
     try {
       if (!db || isMock) {
-        localStorage.setItem(`linguist_profile_${userId}`, JSON.stringify(updatedProfile));
+        const existing = JSON.parse(localStorage.getItem(`linguist_profile_${userId}`) || '{}');
+        localStorage.setItem(`linguist_profile_${userId}`, JSON.stringify({ ...existing, ...updatedProfile }));
       } else {
         const docRef = doc(db, 'users', userId);
         await setDoc(docRef, { profile: updatedProfile }, { merge: true });
-        if (auth.currentUser) await updateProfile(auth.currentUser, updatedProfile);
+        if (auth.currentUser) {
+          if (updatedProfile.displayName !== auth.currentUser.displayName || updatedProfile.photoURL !== auth.currentUser.photoURL) {
+            await updateProfile(auth.currentUser, { displayName: updatedProfile.displayName, photoURL: updatedProfile.photoURL });
+          }
+        }
       }
     } catch (e) { console.error(e); }
   }, [db]);
@@ -189,7 +200,7 @@ const App: React.FC = () => {
   }, [user?.uid, user?.isMock, loadUserData]);
 
   const handleLogin = (userData: { uid: string, displayName: string, photoURL: string }, isMock: boolean) => {
-    setUser({ ...userData, isMock });
+    setUser({ ...userData, isMock, iterationDay: 0 });
     setView('dashboard');
   };
 
@@ -502,44 +513,55 @@ const App: React.FC = () => {
       alert("馆长，您的珍宝馆还是空的。请先撰写日记以发现词汇！");
       return;
     }
-
-    // 智能筛选逻辑：
-    // 1. 过滤掉已经达到精通级别 (Mastery 5) 的词汇
     const eligibleGems = allAdvancedVocab.filter(v => (v.mastery || 0) < 5);
-
     if (eligibleGems.length === 0) {
       alert("馆长，所有珍宝都已打磨至巅峰！请开启新的撰写以发掘更多珍宝。");
       return;
     }
-
-    // 2. 优先级排序：
-    //   - Mastery 0 的排在最前（从未练习过）
-    //   - 其余按 Mastery 从低到高排序
-    //   - 同等级下，练习次数更少的优先
     const sortedGems = [...eligibleGems].sort((a, b) => {
       const mA = a.mastery || 0;
       const mB = b.mastery || 0;
       if (mA !== mB) return mA - mB;
-      
       const pA = a.practices?.length || 0;
       const pB = b.practices?.length || 0;
       return pA - pB;
     });
-
-    // 3. 动态抽样：
-    //   为了避免每次点开看到的都是死板的完全相同的 5 个词，
-    //   我们从“最急需打磨”的前 15 个候选词中，随机抽取 5 个。
     const topCandidates = sortedGems.slice(0, 15);
     const selectedGems = topCandidates
       .sort(() => 0.5 - Math.random())
       .slice(0, 5);
-
     const selectedIds = selectedGems.map(v => v.id);
     setPracticeQueue(selectedIds);
     setQueueIndex(0);
     setSelectedVocabForPracticeId(selectedIds[0]);
     setIsPracticeActive(true);
     setView('vocab_practice');
+  };
+
+  // --- 时光回响推荐逻辑 (Echo Recommendation) ---
+  const recommendedIteration = useMemo(() => {
+    if (!user || entries.length === 0) return null;
+    const today = new Date();
+    const iterDay = user.iterationDay ?? 0; // Default Sunday
+    if (today.getDay() !== iterDay) return null;
+
+    // 筛选规则：日记类型、已分析、非草稿、距今超过7天、尚未进行大量迭代
+    const candidates = entries.filter(e => {
+      if (e.type !== 'diary' || !e.analysis) return false;
+      const diffDays = (today.getTime() - e.timestamp) / (1000 * 60 * 60 * 24);
+      return diffDays > 7 && (e.iterationCount || 0) < 2;
+    });
+
+    if (candidates.length === 0) return null;
+    // 选取最早的一篇
+    return [...candidates].sort((a, b) => a.timestamp - b.timestamp)[0];
+  }, [entries, user]);
+
+  const handleStartIteration = (entry: DiaryEntry) => {
+    setPrefilledEditorText(entry.originalText);
+    setChatLanguage(entry.language);
+    setSummaryPrompt(`这是您在 ${entry.date} 的记录。现在的您，语言能力已有长足进步，试着用更地道的表达进行迭代重写。`);
+    setView('editor');
   };
 
   if (isAuthInitializing) return (
@@ -573,13 +595,13 @@ const App: React.FC = () => {
 
   return (
     <Layout activeView={view} onViewChange={handleViewChange} user={user} onLogout={handleLogout}>
-      {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartSmartReview} entries={entries} />}
+      {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartSmartReview} entries={entries} recommendedIteration={recommendedIteration} onStartIteration={handleStartIteration} />}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraft} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} />}
       {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isExistingEntry={isReviewingExisting} />}
       {view === 'history' && <History entries={entries} isAnalyzingId={analyzingId} onAnalyzeDraft={handleAnalyzeExistingEntry} onUpdateLanguage={handleUpdateEntryLanguage} onSelect={(e) => { setCurrentEntry(e); setIsReviewingExisting(true); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { 
         if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); 
         setEntries(prev => prev.filter(e => e.id !== id));
-      }} onRewrite={(e) => { setPrefilledEditorText(e.originalText); setView('editor'); }} />}
+      }} onRewrite={(e) => { handleStartIteration(e); }} />}
       {view === 'chat' && <ChatEditor onFinish={(msgs, lang, summary) => { 
         setChatLanguage(lang); 
         setPrefilledEditorText(''); 
@@ -621,7 +643,7 @@ const App: React.FC = () => {
          else addDoc(collection(db, 'users', user.uid, 'diaryEntries'), { ...dataSkeleton, timestamp: serverTimestamp() }).then(d => setEntries(prev => [{ ...dataSkeleton, id: d.id } as DiaryEntry, ...prev]));
       }} />}
       {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} />}
-      {view === 'profile' && <ProfileView user={user} editName={editName} setEditName={setEditName} editPhoto={editPhoto} setEditPhoto={setEditPhoto} isAvatarPickerOpen={isAvatarPickerOpen} setIsAvatarPickerOpen={setIsAvatarPickerOpen} avatarSeeds={AVATAR_SEEDS} onSaveProfile={handleSaveProfile} isLoading={isLoading} />}
+      {view === 'profile' && <ProfileView user={user} editName={editName} setEditName={setEditName} editPhoto={editPhoto} setEditPhoto={setEditPhoto} isAvatarPickerOpen={isAvatarPickerOpen} setIsAvatarPickerOpen={setIsAvatarPickerOpen} avatarSeeds={AVATAR_SEEDS} onSaveProfile={handleSaveProfile} isLoading={isLoading} iterationDay={user.iterationDay ?? 0} onSetIterationDay={(day) => setUser(prev => prev ? { ...prev, iterationDay: day } : null)} />}
     </Layout>
   );
 };

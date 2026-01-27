@@ -7,9 +7,17 @@ interface DashboardProps {
   onNewEntry: () => void;
   onStartReview: () => void; 
   entries: DiaryEntry[];
+  recommendedIteration?: DiaryEntry | null;
+  onStartIteration?: (entry: DiaryEntry) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, onStartReview, entries }) => {
+const Dashboard: React.FC<DashboardProps> = ({ 
+  onNewEntry, 
+  onStartReview, 
+  entries, 
+  recommendedIteration,
+  onStartIteration 
+}) => {
   // --- 近 7 天趋势图数据 ---
   const chartData = React.useMemo(() => {
     const last7Days = Array.from({length: 7}, (_, i) => {
@@ -94,6 +102,36 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewEntry, onStartReview, entrie
 
   return (
     <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-24 md:pb-12 animate-in fade-in duration-700 space-y-8">
+      {/* 时光回响推荐卡片 (Time's Echo) */}
+      {recommendedIteration && (
+        <section className="animate-in slide-in-from-top-4 duration-1000">
+          <div className="relative group bg-amber-50 border border-amber-200 p-6 md:p-10 rounded-[2.5rem] shadow-2xl shadow-amber-100/50 overflow-hidden">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-amber-100/50 rounded-bl-full -mr-12 -mt-12 transition-transform group-hover:scale-110 duration-1000"></div>
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center space-x-2">
+                  <span className="text-2xl">🕰️</span>
+                  <h3 className="text-[10px] font-black text-amber-800 uppercase tracking-[0.3em]">时光回响 Time's Echo</h3>
+                </div>
+                <h4 className="text-xl md:text-2xl font-bold text-slate-900 serif-font">馆长，这件往昔作品正待您的新笔触。</h4>
+                <p className="text-amber-900/60 text-xs md:text-sm italic leading-relaxed max-w-2xl">
+                  “ 您在 {recommendedIteration.date} 留下的记录已尘封。现在的您，是否能用更精进的语言，赋予它新的生命？ ”
+                </p>
+                <div className="pt-2 text-[9px] font-bold text-amber-800/40 uppercase tracking-widest">
+                  Original: {recommendedIteration.originalText.substring(0, 40)}...
+                </div>
+              </div>
+              <button 
+                onClick={() => onStartIteration?.(recommendedIteration)}
+                className="bg-amber-800 text-white px-8 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-amber-900/20 hover:bg-amber-900 transition-all active:scale-95 shrink-0"
+              >
+                开启迭代 REWRITE →
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* 1. 馆长欢迎区 & 核心动作按钮 */}
       <section className="space-y-6">
         <header className="px-2 space-y-1">
