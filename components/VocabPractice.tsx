@@ -178,8 +178,8 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col lg:flex-row lg:items-stretch gap-6 md:gap-8 overflow-y-auto no-scrollbar pb-8">
-        <div className="shrink-0 lg:flex-1 lg:max-w-[40%] bg-white p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 space-y-6 md:space-y-8 relative overflow-hidden transition-all duration-700">
+      <div className="flex-1 flex flex-col lg:flex-row lg:items-start gap-6 md:gap-8 overflow-y-auto no-scrollbar pb-8">
+        <div className="shrink-0 lg:flex-1 lg:max-w-[40%] bg-white p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 space-y-6 md:space-y-8 relative transition-all duration-700">
           {showSuccessAnimation && (
             <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/80 rounded-[2rem] md:rounded-[2.5rem] z-20 animate-in fade-in zoom-in duration-500">
               <span className="text-6xl md:text-7xl">✨</span>
@@ -211,8 +211,8 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
             </div>
             <div>
               <span className="text-[9px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest block mb-2">参考范例 EXAMPLE</span>
-              <div className="bg-indigo-50/40 p-4 md:p-5 rounded-2xl italic text-[11px] md:text-xs text-indigo-800 border-l-4 border-indigo-400">
-                <p>“ {renderRuby(currentVocab.usage)} ”</p>
+              <div className="bg-indigo-50/40 p-4 md:p-6 rounded-2xl italic text-sm md:text-base text-indigo-800 border-l-4 border-indigo-400">
+                <p className="leading-relaxed">“ {renderRuby(currentVocab.usage)} ”</p>
               </div>
             </div>
           </div>
@@ -239,9 +239,14 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
             </button>
           ) : (
             <div className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border border-slate-200 shadow-xl space-y-4 animate-in slide-in-from-bottom-4">
-               <div className="flex items-center space-x-3 mb-1">
-                 <span className="text-xl md:text-2xl">{lastFeedback.isCorrect ? '✅' : '❌'}</span>
-                 <h4 className="text-base md:text-lg font-bold text-slate-900 serif-font">{lastFeedback.isCorrect ? '完美的表达！' : '还需要打磨...'}</h4>
+               <div className="flex items-center justify-between mb-1">
+                 <div className="flex items-center space-x-3">
+                   <span className="text-xl md:text-2xl">{lastFeedback.isCorrect ? '✅' : '❌'}</span>
+                   <h4 className="text-base md:text-lg font-bold text-slate-900 serif-font">{lastFeedback.isCorrect ? '完美的表达！' : '还需要打磨...'}</h4>
+                 </div>
+                 <div className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-widest ${lastFeedback.isCorrect ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                   {lastFeedback.isCorrect ? 'Mastery +1' : 'Mastery -1'}
+                 </div>
                </div>
                <p className="text-slate-600 text-xs md:text-sm italic leading-relaxed">“ {lastFeedback.feedback} ”</p>
                {lastFeedback.betterVersion && (

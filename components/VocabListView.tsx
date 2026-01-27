@@ -26,12 +26,28 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, onViewC
     if (filterLanguage !== 'All') {
       filtered = filtered.filter(v => v.language === filterLanguage);
     }
+    
     if (searchQuery) {
-      filtered = filtered.filter(v =>
-        v.word.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        v.meaning.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (v.usage && v.usage.toLowerCase().includes(searchQuery.toLowerCase()))
-      );
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(v => {
+        // 1. 匹配词汇基本信息
+        const baseMatch = 
+          v.word.toLowerCase().includes(q) ||
+          v.meaning.toLowerCase().includes(q) ||
+          (v.usage && v.usage.toLowerCase().includes(q));
+        
+        if (baseMatch) return true;
+
+        // 2. 匹配打磨足迹中的句子
+        if (v.practices && v.practices.length > 0) {
+          return v.practices.some(p => 
+            (p.originalAttempt && p.originalAttempt.toLowerCase().includes(q)) ||
+            (p.betterVersion && p.betterVersion.toLowerCase().includes(q))
+          );
+        }
+
+        return false;
+      });
     }
 
     // Sorting
@@ -139,7 +155,6 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, onViewC
         <h2 className="text-3xl md:text-4xl font-black text-slate-900 serif-font">珍宝与足迹 Vocab & History</h2>
         <p className="text-slate-500 text-sm italic">重温您的语言珍宝，追踪每一次练习的足迹。</p>
 
-        {/* Improved layout: Dual columns for Language and Search */}
         <div className="flex flex-col md:flex-row gap-3">
           <div className="relative group md:w-64">
             <select
@@ -154,7 +169,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, onViewC
           <div className="relative flex-1">
             <input
               type="text"
-              placeholder="在馆藏中搜寻词汇..."
+              placeholder="在馆藏中搜寻词汇或您的打磨句子..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="p-3 pl-10 pr-5 bg-white border border-slate-200 rounded-2xl text-xs font-medium w-full shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 transition-all outline-none"
@@ -183,58 +198,73 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, onViewC
       <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-4">
         {filteredAndSortedVocab.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredAndSortedVocab.map((vocab, idx) => (
-              <button
-                key={`${vocab.word}-${vocab.language}-${idx}`}
-                onClick={() => handleCardClick(vocab)}
-                className="group/vcard text-left w-full bg-white p-7 rounded-[2.5rem] border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-slate-200/50 hover:border-indigo-200 hover:-translate-y-1 relative"
-              >
-                {/* Delete Button (De-accessioning) */}
+            {filteredAndSortedVocab.map((vocab, idx) => {
+              // 检查当前搜索是否匹配到了 practice
+              const hasPracticeMatch = searchQuery && !vocab.word.toLowerCase().includes(searchQuery.toLowerCase()) && 
+                !vocab.meaning.toLowerCase().includes(searchQuery.toLowerCase()) && 
+                !(vocab.usage && vocab.usage.toLowerCase().includes(searchQuery.toLowerCase())) &&
+                vocab.practices?.some(p => 
+                  (p.originalAttempt && p.originalAttempt.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                  (p.betterVersion && p.betterVersion.toLowerCase().includes(searchQuery.toLowerCase()))
+                );
+
+              return (
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteVocab?.(vocab.id);
-                  }}
-                  className="absolute top-6 right-6 w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-slate-300 hover:bg-rose-50 hover:text-rose-400 transition-all opacity-0 group-hover/vcard:opacity-100"
-                  title="移出珍宝阁"
+                  key={`${vocab.word}-${vocab.language}-${idx}`}
+                  onClick={() => handleCardClick(vocab)}
+                  className="group/vcard text-left w-full bg-white p-7 rounded-[2.5rem] border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-slate-200/50 hover:border-indigo-200 hover:-translate-y-1 relative"
                 >
-                  ✕
-                </button>
-
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex flex-col space-y-1">
-                    <h3 className="text-xl font-black text-slate-900 serif-font">
-                      {renderRuby(vocab.word)}
-                    </h3>
-                    <div className="flex items-center space-x-2">
-                      <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest border ${getMasteryColor(vocab.mastery)}`}>
-                        {getMasteryIcon(vocab.mastery)} {vocab.mastery || 0}
-                      </span>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-black text-indigo-500/40 group-hover/vcard:text-indigo-600 uppercase tracking-widest transition-colors mr-6">
-                    {vocab.language}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 italic mb-6 line-clamp-2 leading-relaxed serif-font">
-                  {renderRuby(vocab.meaning)}
-                </p>
-
-                <div className="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center">
-                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 group-hover/vcard:text-indigo-500 transition-colors">
-                    {vocab.practices && vocab.practices.length > 0
-                      ? `查看 ${vocab.practices.length} 条足迹 →`
-                      : '开始打磨 →'}
-                  </span>
                   <button
-                    onClick={(e) => { e.stopPropagation(); handlePlayAudio(vocab.word, `vocab-word-${vocab.word}-${vocab.language}`); }}
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${playingAudioId === `vocab-word-${vocab.word}-${vocab.language}` ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-300 hover:text-indigo-600'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteVocab?.(vocab.id);
+                    }}
+                    className="absolute top-6 right-6 w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-slate-300 hover:bg-rose-50 hover:text-rose-400 transition-all opacity-0 group-hover/vcard:opacity-100"
+                    title="移出珍宝阁"
                   >
-                    {playingAudioId === `vocab-word-${vocab.word}-${vocab.language}` ? '⏹' : '🎧'}
+                    ✕
                   </button>
-                </div>
-              </button>
-            ))}
+
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex flex-col space-y-1">
+                      <h3 className="text-xl font-black text-slate-900 serif-font">
+                        {renderRuby(vocab.word)}
+                      </h3>
+                      <div className="flex items-center space-x-2">
+                        <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest border ${getMasteryColor(vocab.mastery)}`}>
+                          {getMasteryIcon(vocab.mastery)} {vocab.mastery || 0}
+                        </span>
+                        {hasPracticeMatch && (
+                          <span className="bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter animate-in fade-in zoom-in">
+                            Matched in Practices 👣
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-black text-indigo-500/40 group-hover/vcard:text-indigo-600 uppercase tracking-widest transition-colors mr-6">
+                      {vocab.language}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 italic mb-6 line-clamp-2 leading-relaxed serif-font">
+                    {renderRuby(vocab.meaning)}
+                  </p>
+
+                  <div className="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 group-hover/vcard:text-indigo-500 transition-colors">
+                      {vocab.practices && vocab.practices.length > 0
+                        ? `查看 ${vocab.practices.length} 条足迹 →`
+                        : '开始打磨 →'}
+                    </span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handlePlayAudio(vocab.word, `vocab-word-${vocab.word}-${vocab.language}`); }}
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${playingAudioId === `vocab-word-${vocab.word}-${vocab.language}` ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-300 hover:text-indigo-600'}`}
+                    >
+                      {playingAudioId === `vocab-word-${vocab.word}-${vocab.language}` ? '⏹' : '🎧'}
+                    </button>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         ) : (
           <div className="py-24 text-center bg-white border border-dashed border-slate-200 rounded-[3rem]">

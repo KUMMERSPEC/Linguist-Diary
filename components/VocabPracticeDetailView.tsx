@@ -26,7 +26,7 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   const currentVocab = useMemo(() => {
-    return allAdvancedVocab.find(v => `${v.word}-${v.language}` === selectedVocabId);
+    return allAdvancedVocab.find(v => `${v.word}-${v.language}` === selectedVocabId || v.id === selectedVocabId);
   }, [selectedVocabId, allAdvancedVocab]);
 
   if (!currentVocab) {
@@ -147,7 +147,7 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
       </header>
 
       <div className="flex-1 overflow-y-auto no-scrollbar space-y-10 pb-32">
-        {/* Vocab Header Card - Slightly more compact */}
+        {/* Vocab Header Card */}
         <div className="bg-white p-8 md:p-10 rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 relative group overflow-hidden">
           <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-bl-full opacity-30 -mr-8 -mt-8 group-hover:scale-110 transition-transform duration-1000"></div>
           <div className="flex items-center justify-between mb-4 relative z-10">
@@ -162,6 +162,11 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
             </button>
           </div>
           <p className="text-slate-500 text-base italic leading-relaxed serif-font relative z-10" dangerouslySetInnerHTML={{ __html: rubyUtil(currentVocab.meaning) }} />
+          
+          <div className="mt-6 pt-6 border-t border-slate-50 text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-2">
+            <span>💡 提示：</span>
+            <span>独立精准造句 (Perfect) 提升掌握度，否则视为仍需磨练。</span>
+          </div>
         </div>
 
         {/* Practice Timeline */}
@@ -173,11 +178,11 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
 
           {sortedPractices.length > 0 ? (
             <div className="space-y-6 relative">
-              {/* Vertical line connector - More subtle */}
               <div className="absolute left-5 top-2 bottom-2 w-[1px] bg-slate-100 hidden md:block"></div>
 
               {sortedPractices.map((practice, pIdx) => {
                 const isSelected = selectedIds.has(practice.id);
+
                 return (
                   <div 
                     key={practice.id || pIdx} 
@@ -185,14 +190,15 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
                     className="relative group/pitem animate-in fade-in slide-in-from-bottom-2"
                     style={{ animationDelay: `${pIdx * 30}ms` }}
                   >
-                    {/* Date/Marker - Smaller and more precise */}
-                    <div className="flex items-center space-x-3 mb-2 px-1">
-                      <div className="w-8 h-8 rounded-full bg-white border border-slate-100 shadow-sm flex items-center justify-center shrink-0 z-10 transition-transform group-hover/pitem:scale-110">
-                        <span className="text-[9px] font-black text-slate-400">{new Date(practice.timestamp).getDate()}</span>
+                    <div className="flex items-center justify-between mb-2 px-1">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 rounded-full bg-white border border-slate-100 shadow-sm flex items-center justify-center shrink-0 z-10 transition-transform group-hover/pitem:scale-110">
+                          <span className="text-[9px] font-black text-slate-400">{new Date(practice.timestamp).getDate()}</span>
+                        </div>
+                        <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">
+                          {new Date(practice.timestamp).toLocaleDateString('zh-CN', { month: 'short' })}
+                        </span>
                       </div>
-                      <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">
-                        {new Date(practice.timestamp).toLocaleDateString('zh-CN', { month: 'short' })}
-                      </span>
                       {isManageMode && (
                         <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600 shadow-md' : 'bg-white border-slate-200'}`}>
                           {isSelected && <span className="text-white text-[8px]">✓</span>}
@@ -200,7 +206,6 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
                       )}
                     </div>
 
-                    {/* Content Bubble Strip - Much more compact and sleek */}
                     <div className={`ml-4 md:ml-14 p-5 md:py-6 md:px-8 rounded-[2rem] border transition-all duration-300 relative flex flex-col ${
                       isManageMode ? (isSelected ? 'bg-indigo-50 border-indigo-200 shadow-lg' : 'bg-white border-slate-100 shadow-sm') : 
                       'bg-white border-slate-100 shadow-sm hover:shadow-xl hover:shadow-slate-200/30 hover:-translate-y-0.5'
@@ -214,12 +219,10 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
                         </button>
                       )}
 
-                      {/* Original Attempt - Smaller font, tighter margin */}
                       <p className="text-slate-400 italic text-sm mb-3 leading-relaxed serif-font opacity-60">
                         “ {renderRuby(practice.originalAttempt || practice.sentence)} ”
                       </p>
                       
-                      {/* Better Version - Smaller but clear font */}
                       {practice.betterVersion && (
                         <div className="pt-3 border-t border-slate-50 flex items-center justify-between space-x-4">
                           <p className="text-base md:text-lg text-slate-800 leading-snug serif-font font-medium flex-1">
