@@ -264,6 +264,25 @@ const App: React.FC = () => {
     } catch (e) { console.error("Update mastery error:", e); }
   };
 
+  const handleDeleteVocab = async (vocabId: string) => {
+    if (!user) return;
+    if (!window.confirm("确定要将这件珍宝移出珍宝阁吗？")) return;
+    
+    setAllAdvancedVocab(prev => prev.filter(v => v.id !== vocabId));
+    
+    if (!db || user.isMock) {
+      const currentVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
+      const updatedVocab = currentVocab.filter((v: any) => v.id !== vocabId);
+      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updatedVocab));
+    } else {
+      try {
+        await deleteDoc(doc(db, 'users', user.uid, 'advancedVocab', vocabId));
+      } catch (e) {
+        console.error("Delete vocab error:", e);
+      }
+    }
+  };
+
   const handleDeletePractice = async (vocabId: string, practiceId: string) => {
     if (!user) return;
     setAllAdvancedVocab(prev => prev.map(v => {
@@ -597,7 +616,7 @@ const App: React.FC = () => {
     <Layout activeView={view} onViewChange={handleViewChange} user={user} onLogout={handleLogout}>
       {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartSmartReview} entries={entries} recommendedIteration={recommendedIteration} onStartIteration={handleStartIteration} />}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraft} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} />}
-      {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isExistingEntry={isReviewingExisting} />}
+      {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isReviewingExisting={isReviewingExisting} />}
       {view === 'history' && <History entries={entries} isAnalyzingId={analyzingId} onAnalyzeDraft={handleAnalyzeExistingEntry} onUpdateLanguage={handleUpdateEntryLanguage} onSelect={(e) => { setCurrentEntry(e); setIsReviewingExisting(true); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { 
         if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); 
         setEntries(prev => prev.filter(e => e.id !== id));
@@ -608,7 +627,7 @@ const App: React.FC = () => {
         setSummaryPrompt(summary);
         setView('editor'); 
       }} allGems={allAdvancedVocab} />}
-      {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} />}
+      {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} onDeleteVocab={handleDeleteVocab} />}
       {view === 'vocab_practice' && selectedVocabForPracticeId && (
         <VocabPractice 
           selectedVocabId={selectedVocabForPracticeId} 

@@ -8,9 +8,10 @@ interface VocabListViewProps {
   allAdvancedVocab: (AdvancedVocab & { language: string })[];
   onViewChange: (view: ViewState, vocabId?: string, isPracticeActive?: boolean) => void;
   onUpdateMastery: (entryId: string, word: string, newMastery: number, record?: PracticeRecord) => void;
+  onDeleteVocab?: (vocabId: string) => void;
 }
 
-const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, onViewChange }) => {
+const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, onViewChange, onDeleteVocab }) => {
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
@@ -186,8 +187,20 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, onViewC
               <button
                 key={`${vocab.word}-${vocab.language}-${idx}`}
                 onClick={() => handleCardClick(vocab)}
-                className="group/vcard text-left w-full bg-white p-7 rounded-[2.5rem] border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-slate-200/50 hover:border-indigo-200 hover:-translate-y-1"
+                className="group/vcard text-left w-full bg-white p-7 rounded-[2.5rem] border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-slate-200/50 hover:border-indigo-200 hover:-translate-y-1 relative"
               >
+                {/* Delete Button (De-accessioning) */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteVocab?.(vocab.id);
+                  }}
+                  className="absolute top-6 right-6 w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-slate-300 hover:bg-rose-50 hover:text-rose-400 transition-all opacity-0 group-hover/vcard:opacity-100"
+                  title="移出珍宝阁"
+                >
+                  ✕
+                </button>
+
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex flex-col space-y-1">
                     <h3 className="text-xl font-black text-slate-900 serif-font">
@@ -199,7 +212,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, onViewC
                       </span>
                     </div>
                   </div>
-                  <span className="text-[10px] font-black text-indigo-500/40 group-hover/vcard:text-indigo-600 uppercase tracking-widest transition-colors">
+                  <span className="text-[10px] font-black text-indigo-500/40 group-hover/vcard:text-indigo-600 uppercase tracking-widest transition-colors mr-6">
                     {vocab.language}
                   </span>
                 </div>
