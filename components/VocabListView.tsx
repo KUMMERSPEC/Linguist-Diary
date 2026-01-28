@@ -114,13 +114,13 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
                 className="group text-left bg-white p-7 rounded-[2.5rem] border border-slate-200 shadow-sm transition-all hover:shadow-2xl hover:border-indigo-200 relative"
               >
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-black text-slate-900 serif-font">{renderRuby(vocab.word)}</h3>
+                  <h3 className="text-xl md:text-2xl font-black text-slate-900 serif-font leading-[2.5]">{renderRuby(vocab.word)}</h3>
                   <button onClick={(e) => { e.stopPropagation(); onDeleteVocab?.(vocab.id); }} className="text-slate-200 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-all">✕</button>
                 </div>
-                <p className="text-xs text-slate-500 italic mb-4 line-clamp-2 serif-font">{renderRuby(vocab.meaning)}</p>
+                <p className="text-xs text-slate-500 italic mb-4 line-clamp-2 serif-font leading-relaxed">{renderRuby(vocab.meaning)}</p>
                 <div className="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center">
                    <span className="text-[9px] font-black uppercase text-indigo-500">Mastery {vocab.mastery || 0}</span>
-                   <button onClick={(e) => { e.stopPropagation(); handlePlayAudio(vocab.word, vocab.id); }} className={`w-8 h-8 rounded-xl flex items-center justify-center ${playingAudioId === vocab.id ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-300'}`}>🎧</button>
+                   <button onClick={(e) => { e.stopPropagation(); handlePlayAudio(vocab.word, vocab.id); }} className={`w-8 h-8 rounded-xl flex items-center justify-center ${playingAudioId === vocab.id ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-300 hover:text-indigo-600'}`}>🎧</button>
                 </div>
               </button>
             ))}
