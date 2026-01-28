@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChatMessage, AdvancedVocab } from '../types';
-import { getChatFollowUp, generatePracticeTasks, generateChatSummaryPrompt } from '../services/geminiService';
+import { getChatFollowUp, generatePracticeTasks, generateChatSummaryPrompt, generateDailyMuses } from '../services/geminiService';
 
 interface ChatEditorProps {
   onFinish: (transcript: ChatMessage[], language: string, summaryPrompt: string) => void;
@@ -12,6 +12,13 @@ interface GemMission {
   word: string;
   mission?: { label: string, icon: string };
   isLoading: boolean;
+}
+
+interface MuseCard {
+  id: string;
+  title: string;
+  prompt: string;
+  icon: string;
 }
 
 const LANGUAGES = [
@@ -30,6 +37,10 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
   const [isFinishing, setIsFinishing] = useState(false);
   const [themeLabel, setThemeLabel] = useState('初始化...');
   const [isMobileGemsOpen, setIsMobileGemsOpen] = useState(false); 
+  const [muses, setMuses] = useState<MuseCard[]>([]);
+  const [isMusesLoading, setIsMusesLoading] = useState(false);
+  const [showMuses, setShowMuses] = useState(false); // Manually toggle muses
+  
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -47,6 +58,15 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
     if (!text) return '';
     return text.replace(/\[(.*?)\]\(.*?\)/g, '$1');
   };
+
+  const loadMuses = useCallback(async () => {
+    if (!showMuses || muses.length > 0) return;
+    setIsMusesLoading(true);
+    try {
+      const dailyMuses = await generateDailyMuses(language.label);
+      setMuses(dailyMuses);
+    } catch (e) { console.error(e); } finally { setIsMusesLoading(false); }
+  }, [language, showMuses]);
 
   const refreshSessionGems = useCallback(async () => {
     if (!allGems) return;
@@ -78,7 +98,14 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
     setMessages([{ role: 'ai', content: start.text }]);
     setThemeLabel(start.theme);
     refreshSessionGems();
+    // Reset muses on language change
+    setMuses([]);
+    setShowMuses(false);
   }, [language]);
+
+  useEffect(() => {
+    if (showMuses) loadMuses();
+  }, [showMuses, loadMuses]);
 
   const getStarter = useCallback(() => {
     const hour = new Date().getHours();
@@ -92,23 +119,23 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, isTyping]);
 
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
-    }
-  }, [inputValue]);
-
   const handleLanguageChange = (lang: typeof LANGUAGES[0]) => {
-    if (lang.code === language.code) return;
-    if (messages.some(m => m.role === 'user')) {
-      if (window.confirm("切换语言将清空当前对话，确定吗？")) setLanguage(lang);
-    } else { setLanguage(lang); }
+    setLanguage(lang);
+  };
+
+  const handleSelectMuse = (muse: MuseCard) => {
+    setMessages([{ 
+      role: 'ai', 
+      content: `馆长，很有意思的主题！${muse.prompt} 请用 ${language.label} 跟我分享一下你的想法。` 
+    }]);
+    setThemeLabel(`✨ ${muse.title}`);
+    setShowMuses(false);
   };
 
   const handleSend = async () => {
-    if (!inputValue.trim() || isTyping) return;
     const content = inputValue.trim();
+    if (!content || isTyping) return;
+    
     const newlyDetected = sessionGems.filter(gem => {
       if (usedGems.has(gem.word)) return false;
       const cleanWord = stripRuby(gem.word).toLowerCase().trim();
@@ -175,7 +202,6 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
                     )}
                  </div>
                )}
-               {isLit && <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mt-1">已在对话中点亮！</p>}
              </div>
            );
          }) : (
@@ -187,9 +213,10 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
     </div>
   );
 
+  const isUserStarted = messages.some(m => m.role === 'user');
+
   return (
     <div className="flex h-full animate-in fade-in duration-700 overflow-hidden w-full bg-slate-50 relative">
-      {/* Sidebar for Desktop */}
       <aside className="hidden lg:flex w-80 bg-white border-r border-slate-100 flex-col p-8 shrink-0">
         <header className="mb-8">
            <h2 className="text-2xl font-black text-slate-900 serif-font tracking-tight">启发对话 <span className="text-indigo-600">Guided Chat</span></h2>
@@ -198,7 +225,6 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
         <GemsContent />
       </aside>
 
-      {/* Mobile Mission Drawer */}
       {isMobileGemsOpen && (
         <>
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] lg:hidden" onClick={() => setIsMobileGemsOpen(false)}></div>
@@ -209,7 +235,6 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
         </>
       )}
 
-      {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0 bg-slate-50 relative">
         <header className="bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 py-3 flex items-center justify-between sticky top-0 z-50 shrink-0">
           <div className="flex items-center space-x-3 overflow-x-auto no-scrollbar py-1">
@@ -224,9 +249,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
                </button>
              ))}
           </div>
-
           <div className="flex items-center space-x-2">
-            {/* Mobile Mission Tracker Button */}
             <button 
               onClick={() => setIsMobileGemsOpen(true)}
               className="lg:hidden flex items-center space-x-1.5 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-xl text-amber-600 font-black shadow-sm"
@@ -234,7 +257,6 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
               <span className={`text-xs ${usedGems.size > 0 ? 'animate-bounce' : ''}`}>💎</span>
               <span className="text-[10px] uppercase tracking-tighter">{usedGems.size}/{sessionGems.length || 0}</span>
             </button>
-
             <div className="px-3 py-1.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hidden sm:block">
               {themeLabel}
             </div>
@@ -246,12 +268,56 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in ${msg.role === 'user' ? 'slide-in-from-right-4' : 'slide-in-from-left-4'} fade-in duration-500`}>
                <div className={`max-w-[85%] md:max-w-[70%] p-5 md:p-6 rounded-[2rem] shadow-sm relative ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white text-slate-800 rounded-tl-none border border-slate-100'}`}>
                   <p className="text-sm md:text-base leading-relaxed serif-font">{msg.content}</p>
-                  <div className={`text-[8px] font-black uppercase tracking-widest mt-2 opacity-40 ${msg.role === 'user' ? 'text-indigo-100' : 'text-slate-400'}`}>
-                    {msg.role === 'user' ? 'Curator' : 'Mentor AI'}
-                  </div>
                </div>
              </div>
            ))}
+           
+           {!isUserStarted && (
+             <div className="pt-8 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                {!showMuses ? (
+                  <div className="flex justify-center">
+                    <button 
+                      onClick={() => setShowMuses(true)}
+                      className="flex items-center space-x-2 px-6 py-2.5 rounded-2xl bg-white border border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:border-indigo-200 hover:text-indigo-600 transition-all shadow-sm active:scale-95"
+                    >
+                      <span>💡</span>
+                      <span>寻求灵感支点？ Get Muses</span>
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center space-x-3 px-2">
+                      <div className="h-[1px] flex-1 bg-slate-200"></div>
+                      <div className="flex items-center space-x-4">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">馆长灵感 Daily Muse</span>
+                        <button onClick={() => setShowMuses(false)} className="text-[10px] text-slate-300 hover:text-rose-400 font-bold">收起 ×</button>
+                      </div>
+                      <div className="h-[1px] flex-1 bg-slate-200"></div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {isMusesLoading ? (
+                        [1,2,3].map(i => <div key={i} className="bg-white/50 border border-slate-100 h-24 rounded-3xl animate-pulse"></div>)
+                      ) : (
+                        muses.map(muse => (
+                          <button 
+                            key={muse.id} 
+                            onClick={() => handleSelectMuse(muse)}
+                            className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm text-left hover:border-indigo-400 hover:shadow-xl transition-all group"
+                          >
+                            <div className="flex items-center space-x-2 mb-2">
+                              <span className="text-xl group-hover:scale-110 transition-transform">{muse.icon}</span>
+                              <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">{muse.title}</span>
+                            </div>
+                            <p className="text-xs text-slate-500 leading-relaxed italic line-clamp-2">{muse.prompt}</p>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </>
+                )}
+             </div>
+           )}
+
            {isTyping && (
              <div className="flex justify-start animate-in fade-in duration-300">
                <div className="bg-white p-5 rounded-[2rem] rounded-tl-none border border-slate-100 flex space-x-1 items-center">
@@ -263,7 +329,6 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
            )}
         </div>
 
-        {/* Floating Input area */}
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-2xl bg-white/80 backdrop-blur-xl border border-slate-200 rounded-[2.5rem] shadow-2xl p-3 flex flex-col space-y-3 z-50">
            <div className="flex items-end space-x-2">
              <textarea
@@ -276,7 +341,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
                className="flex-1 bg-slate-50 border-none rounded-3xl py-3 px-6 text-sm md:text-base text-slate-700 resize-none focus:ring-2 focus:ring-indigo-500/20 transition-all no-scrollbar max-h-40 min-h-[48px]"
              />
              <button 
-               onClick={handleSend}
+               onClick={() => handleSend()}
                disabled={!inputValue.trim() || isTyping}
                className="w-12 h-12 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 disabled:opacity-50 transition-all shrink-0"
              >
@@ -285,9 +350,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
            </div>
            
            <div className="flex items-center justify-between px-2 pb-1">
-              <div className="text-[9px] font-black text-slate-300 uppercase tracking-widest">
-                Shift+Enter 换行
-              </div>
+              <div className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Shift+Enter 换行</div>
               <button 
                 onClick={handleFinish}
                 disabled={isFinishing || messages.filter(m => m.role === 'user').length === 0}

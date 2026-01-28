@@ -19,19 +19,40 @@
         .serif-font {
             font-family: 'Playfair Display', serif;
         }
-        /* Ruby 假名标注优化 - 关键：不占用行高 */
+        
+        /* Ruby 假名标注优化 - 解决长单词遮挡问题 */
         ruby {
             ruby-align: center;
+            ruby-overhang: none; /* 强制不重叠，防止长单词遮挡相邻汉字 */
+            padding: 0 0.15em;   /* 增加微小的水平呼吸间距 */
+            display: inline-block; /* 确保 padding 在某些浏览器生效 */
+            vertical-align: bottom;
+            position: relative;
         }
+        
         rt {
             ruby-position: over;
             font-size: 0.45em;
-            font-weight: 500;
+            font-weight: 600;
             color: #94a3b8;
             letter-spacing: 0.05em;
-            /* 向上偏移，防止撑高背景色块 */
-            transform: translateY(-0.1em); 
+            /* 基础偏移量 */
+            transform: translateY(-0.15em); 
+            display: block;
+            line-height: 1;
+            /* 平滑动画 */
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            user-select: none;
+            pointer-events: none;
         }
+
+        /* 鼠标悬停时的“跳动”升起效果 - 更加优雅且不会遮挡 */
+        ruby:hover rt {
+            color: #6366f1; /* 变色提示 */
+            transform: translateY(-0.6em) scale(1.15); /* 优雅向上升起并微增 */
+            text-shadow: 0 4px 6px -1px rgb(99 102 241 / 0.1);
+        }
+
         /* 稿纸背景样式 - 严格对齐 leading-[3rem] */
         .manuscript-grid {
             background-image: linear-gradient(#e2e8f0 1px, transparent 1px);

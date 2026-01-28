@@ -21,7 +21,6 @@ export interface PracticeRecord {
   timestamp: number;
   status: 'Perfect' | 'Polished'; 
   vocabId: string;
-  // 新增字段
   context?: string;
   appropriatenessScore?: number; // 0-100
   synonymLadder?: SynonymStep[];
@@ -37,6 +36,14 @@ export interface AdvancedVocab {
   language: string;
   practiceCount?: number;
   practices?: PracticeRecord[];
+}
+
+export interface InspirationFragment {
+  id: string;
+  content: string;
+  timestamp: number;
+  language: string;
+  tags?: string[];
 }
 
 export type ExtendedVocab = AdvancedVocab & { date: string, entryId: string, language: string };

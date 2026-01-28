@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { DiaryEntry } from '../types';
 
@@ -9,6 +9,7 @@ interface DashboardProps {
   entries: DiaryEntry[];
   recommendedIteration?: DiaryEntry | null;
   onStartIteration?: (entry: DiaryEntry) => void;
+  onSaveFragment: (content: string, language: string) => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ 
@@ -16,9 +17,11 @@ const Dashboard: React.FC<DashboardProps> = ({
   onStartReview, 
   entries, 
   recommendedIteration,
-  onStartIteration 
+  onStartIteration,
+  onSaveFragment
 }) => {
-  // --- 近 7 天趋势图数据 ---
+  const [fragmentText, setFragmentText] = useState('');
+
   const chartData = React.useMemo(() => {
     const last7Days = Array.from({length: 7}, (_, i) => {
       const d = new Date();
@@ -41,7 +44,6 @@ const Dashboard: React.FC<DashboardProps> = ({
     return last7Days;
   }, [entries]);
 
-  // --- 热力图数据 ---
   const { columns, monthLabels } = React.useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -100,39 +102,15 @@ const Dashboard: React.FC<DashboardProps> = ({
     return 'bg-indigo-600';
   };
 
+  const handleCaptureFragment = () => {
+    if (!fragmentText.trim()) return;
+    onSaveFragment(fragmentText, 'English'); 
+    setFragmentText('');
+  };
+
   return (
     <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-24 md:pb-12 animate-in fade-in duration-700 space-y-8">
-      {/* 时光回响推荐卡片 (Time's Echo) */}
-      {recommendedIteration && (
-        <section className="animate-in slide-in-from-top-4 duration-1000">
-          <div className="relative group bg-amber-50 border border-amber-200 p-6 md:p-10 rounded-[2.5rem] shadow-2xl shadow-amber-100/50 overflow-hidden">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-amber-100/50 rounded-bl-full -mr-12 -mt-12 transition-transform group-hover:scale-110 duration-1000"></div>
-            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-              <div className="flex-1 space-y-2">
-                <div className="flex items-center space-x-2">
-                  <span className="text-2xl">🕰️</span>
-                  <h3 className="text-[10px] font-black text-amber-800 uppercase tracking-[0.3em]">时光回响 Time's Echo</h3>
-                </div>
-                <h4 className="text-xl md:text-2xl font-bold text-slate-900 serif-font">馆长，这件往昔作品正待您的新笔触。</h4>
-                <p className="text-amber-900/60 text-xs md:text-sm italic leading-relaxed max-w-2xl">
-                  “ 您在 {recommendedIteration.date} 留下的记录已尘封。现在的您，是否能用更精进的语言，赋予它新的生命？ ”
-                </p>
-                <div className="pt-2 text-[9px] font-bold text-amber-800/40 uppercase tracking-widest">
-                  Original: {recommendedIteration.originalText.substring(0, 40)}...
-                </div>
-              </div>
-              <button 
-                onClick={() => onStartIteration?.(recommendedIteration)}
-                className="bg-amber-800 text-white px-8 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-amber-900/20 hover:bg-amber-900 transition-all active:scale-95 shrink-0"
-              >
-                开启迭代 REWRITE →
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* 1. 馆长欢迎区 & 核心动作按钮 */}
+      {/* 1. 馆长欢迎区 & 核心动作按钮 (Moved to Top) */}
       <section className="space-y-6">
         <header className="px-2 space-y-1">
           <h2 className="text-3xl md:text-4xl font-bold text-slate-900 serif-font tracking-tight">馆长，欢迎回来。</h2>
@@ -166,7 +144,57 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </section>
 
-      {/* 2. 统计卡片 */}
+      {/* 2. 灵感碎片快捕卡片 (Moved here, below the welcome/buttons) */}
+      <section className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/50 rounded-bl-[4rem] -mr-8 -mt-8 opacity-40"></div>
+        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">灵感碎片快捕 Fragment Capture</h4>
+        <div className="flex items-center space-x-3">
+          <input 
+            type="text" 
+            value={fragmentText}
+            onChange={(e) => setFragmentText(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleCaptureFragment()}
+            placeholder="捕捉一个瞬间的念头、生词或感悟..." 
+            className="flex-1 bg-slate-50 border-none rounded-2xl px-5 py-3.5 text-sm serif-font text-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+          />
+          <button 
+            onClick={handleCaptureFragment}
+            disabled={!fragmentText.trim()}
+            className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-95 disabled:opacity-50 transition-all"
+          >
+            <span className="text-xl">✨</span>
+          </button>
+        </div>
+      </section>
+
+      {/* 3. 时光回响推荐卡片 */}
+      {recommendedIteration && (
+        <section className="animate-in slide-in-from-top-4 duration-1000">
+          <div className="relative group bg-amber-50 border border-amber-200 p-6 md:p-10 rounded-[2.5rem] shadow-2xl shadow-amber-100/50 overflow-hidden">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-amber-100/50 rounded-bl-full -mr-12 -mt-12 transition-transform group-hover:scale-110 duration-1000"></div>
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center space-x-2">
+                  <span className="text-2xl">🕰️</span>
+                  <h3 className="text-[10px] font-black text-amber-800 uppercase tracking-[0.3em]">时光回响 Time's Echo</h3>
+                </div>
+                <h4 className="text-xl md:text-2xl font-bold text-slate-900 serif-font">馆长，这件往昔作品正待您的新笔触。</h4>
+                <p className="text-amber-900/60 text-xs md:text-sm italic leading-relaxed max-w-2xl">
+                  “ 您在 {recommendedIteration.date} 留下的记录已尘封。现在的您，是否能用更精进的语言，赋予它新的生命？ ”
+                </p>
+              </div>
+              <button 
+                onClick={() => onStartIteration?.(recommendedIteration)}
+                className="bg-amber-800 text-white px-8 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-amber-900/20 hover:bg-amber-900 transition-all active:scale-95 shrink-0"
+              >
+                开启迭代 REWRITE →
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* 4. 统计卡片 */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:border-indigo-100 transition-colors">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">馆藏总数 Total</p>
@@ -188,15 +216,10 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* 3. 年度足迹 */}
+      {/* 5. 年度足迹 */}
       <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between mb-8">
           <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">馆长年度足迹 Annual Footprint</h4>
-          <div className="flex space-x-1 items-center">
-            <span className="text-[9px] text-slate-400 mr-1 font-bold">LESS</span>
-            {[0, 1, 2, 3].map(v => <div key={v} className={`w-2.5 h-2.5 rounded-sm ${getColor(v)}`}></div>)}
-            <span className="text-[9px] text-slate-400 ml-1 font-bold">MORE</span>
-          </div>
         </div>
         
         <div className="overflow-x-auto no-scrollbar pb-2">
@@ -214,13 +237,9 @@ const Dashboard: React.FC<DashboardProps> = ({
 
           <div className="flex min-w-max">
             <div className="flex flex-col gap-[3px] pr-3 justify-between py-[2px] h-[95px] w-8 shrink-0">
-              <span className="text-[9px] font-bold text-slate-300"></span>
               <span className="text-[9px] font-bold text-slate-400 uppercase opacity-60">Mon</span>
-              <span className="text-[9px] font-bold text-slate-300"></span>
               <span className="text-[9px] font-bold text-slate-400 uppercase opacity-60">Wed</span>
-              <span className="text-[9px] font-bold text-slate-300"></span>
               <span className="text-[9px] font-bold text-slate-400 uppercase opacity-60">Fri</span>
-              <span className="text-[9px] font-bold text-slate-300"></span>
             </div>
 
             <div className="flex gap-[3px]">
@@ -229,8 +248,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                   {week.map((day, dIdx) => (
                     <div
                       key={dIdx}
-                      title={`${day.date.toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric'})}: ${day.count} 篇藏品`}
-                      className={`w-[11px] h-[11px] rounded-[2px] transition-all hover:ring-2 hover:ring-indigo-300 ${getColor(day.count)} cursor-crosshair`}
+                      title={`${day.date.toLocaleDateString('zh-CN')}: ${day.count} 篇`}
+                      className={`w-[11px] h-[11px] rounded-[2px] transition-all ${getColor(day.count)} cursor-crosshair`}
                     ></div>
                   ))}
                 </div>
@@ -240,7 +259,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </section>
 
-      {/* 4. 活跃趋势图 */}
+      {/* 6. 活跃趋势图 */}
       <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm mb-12">
         <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-8">馆藏增长趋势 Growth Trend</h4>
         <div className="h-64">

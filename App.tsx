@@ -36,7 +36,7 @@ import Rehearsal from './components/Rehearsal';
 import RehearsalReport from './components/RehearsalReport';
 import ProfileView from './components/ProfileView';
 
-import { ViewState, DiaryEntry, ChatMessage, RehearsalEvaluation, DiaryIteration, AdvancedVocab, PracticeRecord } from './types';
+import { ViewState, DiaryEntry, ChatMessage, RehearsalEvaluation, DiaryIteration, AdvancedVocab, PracticeRecord, InspirationFragment } from './types';
 import { analyzeDiaryEntry } from './services/geminiService';
 import { stripRuby } from './utils/textHelpers';
 
@@ -82,6 +82,7 @@ const App: React.FC = () => {
   const [isAuthInitializing, setIsAuthInitializing] = useState(true); 
   const [view, setView] = useState<ViewState>('dashboard');
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
+  const [fragments, setFragments] = useState<InspirationFragment[]>([]);
   const [currentEntry, setCurrentEntry] = useState<DiaryEntry | null>(null); 
   const [currentEntryIterations, setCurrentEntryIterations] = useState<DiaryIteration[]>([]); 
   const [isLoading, setIsLoading] = useState(false);
@@ -122,6 +123,7 @@ const App: React.FC = () => {
         setUser(null);
         setEntries([]);
         setAllAdvancedVocab([]);
+        setFragments([]);
       }
       setIsAuthInitializing(false);
     });
@@ -137,10 +139,12 @@ const App: React.FC = () => {
         if (localEntries) setEntries(JSON.parse(localEntries));
         const localVocab = localStorage.getItem(`linguist_vocab_${userId}`);
         if (localVocab) setAllAdvancedVocab(JSON.parse(localVocab));
+        const localFragments = localStorage.getItem(`linguist_fragments_${userId}`);
+        if (localFragments) setFragments(JSON.parse(localFragments));
         const localProfile = localStorage.getItem(`linguist_profile_${userId}`);
         if (localProfile) {
           const profile = JSON.parse(localProfile);
-          setUser(prev => prev ? { ...prev, ...profile } : null);
+          setUser(prev => prev ? { iterationDay: 0, ...prev, ...profile } : null);
         }
       } else {
         const userDocRef = doc(db, 'users', userId);
@@ -148,9 +152,10 @@ const App: React.FC = () => {
         if (userDocSnap.exists()) {
           const data = userDocSnap.data();
           if (data.profile) {
-             setUser(prev => prev ? { ...prev, ...data.profile } : null);
+             setUser(prev => prev ? { iterationDay: 0, ...prev, ...data.profile } : null);
           }
         }
+        // Load entries
         const diaryEntriesColRef = collection(db, 'users', userId, 'diaryEntries');
         const diaryEntriesQuery = query(diaryEntriesColRef, orderBy('timestamp', 'desc'));
         const diaryEntriesSnapshot = await getDocs(diaryEntriesQuery);
@@ -159,6 +164,17 @@ const App: React.FC = () => {
             id: d.id, 
             timestamp: (d.data().timestamp as Timestamp).toMillis() 
         })) as DiaryEntry[]);
+
+        // Load fragments
+        const fragmentsColRef = collection(db, 'users', userId, 'fragments');
+        const fragmentsQuery = query(fragmentsColRef, orderBy('timestamp', 'desc'));
+        const fragmentsSnapshot = await getDocs(fragmentsQuery);
+        setFragments(fragmentsSnapshot.docs.map(d => ({
+            ...d.data(),
+            id: d.id,
+            timestamp: (d.data().timestamp as Timestamp).toMillis()
+        })) as InspirationFragment[]);
+
         const advancedVocabColRef = collection(db, 'users', userId, 'advancedVocab');
         const vocabSnapshot = await getDocs(advancedVocabColRef);
         const vocabWithPractices = await Promise.all(vocabSnapshot.docs.map(async (vDoc) => {
@@ -178,6 +194,39 @@ const App: React.FC = () => {
     }
   }, [db]);
 
+  const handleSaveFragment = async (content: string, language: string) => {
+    if (!user || !content.trim()) return;
+    const newFragment: InspirationFragment = {
+      id: uuidv4(),
+      content,
+      language,
+      timestamp: Date.now()
+    };
+    setFragments(prev => [newFragment, ...prev]);
+    if (!db || user.isMock) {
+      const local = JSON.parse(localStorage.getItem(`linguist_fragments_${user.uid}`) || '[]');
+      localStorage.setItem(`linguist_fragments_${user.uid}`, JSON.stringify([newFragment, ...local]));
+    } else {
+      await addDoc(collection(db, 'users', user.uid, 'fragments'), { ...newFragment, timestamp: serverTimestamp() });
+    }
+  };
+
+  const handleDeleteFragment = async (id: string) => {
+    if (!user) return;
+    setFragments(prev => prev.filter(f => f.id !== id));
+    if (!db || user.isMock) {
+      const local = JSON.parse(localStorage.getItem(`linguist_fragments_${user.uid}`) || '[]');
+      localStorage.setItem(`linguist_fragments_${user.uid}`, JSON.stringify(local.filter((f: any) => f.id !== id)));
+    } else {
+      // Note: In a real app we'd need the Firestore ID which might differ from uuidv4 
+      // but for this demo assume they are mapped or just use setEntries/Fragments to find doc ref.
+      const fragmentsColRef = collection(db, 'users', user.uid, 'fragments');
+      const q = query(fragmentsColRef, where('id', '==', id));
+      const snap = await getDocs(q);
+      snap.forEach(async (doc) => await deleteDoc(doc.ref));
+    }
+  };
+
   const saveProfileData = useCallback(async (userId: string, isMock: boolean, updatedProfile: { displayName: string, photoURL: string, iterationDay?: number }) => {
     try {
       if (!db || isMock) {
@@ -186,18 +235,18 @@ const App: React.FC = () => {
       } else {
         const docRef = doc(db, 'users', userId);
         await setDoc(docRef, { profile: updatedProfile }, { merge: true });
-        if (auth.currentUser) {
+        if (auth?.currentUser) {
           if (updatedProfile.displayName !== auth.currentUser.displayName || updatedProfile.photoURL !== auth.currentUser.photoURL) {
             await updateProfile(auth.currentUser, { displayName: updatedProfile.displayName, photoURL: updatedProfile.photoURL });
           }
         }
       }
     } catch (e) { console.error(e); }
-  }, [db]);
+  }, [db, auth]);
 
   useEffect(() => {
     if (user) loadUserData(user.uid, user.isMock);
-  }, [user?.uid, user?.isMock, loadUserData]);
+  }, [user?.uid, user?.isMock]);
 
   const handleLogin = (userData: { uid: string, displayName: string, photoURL: string }, isMock: boolean) => {
     setUser({ ...userData, isMock, iterationDay: 0 });
@@ -520,11 +569,19 @@ const App: React.FC = () => {
   const handleSaveProfile = async () => {
     if (!user) return;
     setIsLoading(true);
-    const updatedProfile = { displayName: editName, photoURL: editPhoto };
+    const updatedProfile = { displayName: editName, photoURL: editPhoto, iterationDay: user.iterationDay };
     try {
       await saveProfileData(user.uid, user.isMock, updatedProfile);
       setUser(prev => prev ? { ...prev, ...updatedProfile } : null);
     } catch (e) { setError("保存失败。"); } finally { setIsLoading(false); }
+  };
+
+  const handleSetIterationDay = async (day: number) => {
+    if (!user) return;
+    const updatedUser = { ...user, iterationDay: day };
+    setUser(updatedUser);
+    const updatedProfile = { displayName: updatedUser.displayName, photoURL: updatedUser.photoURL, iterationDay: day };
+    await saveProfileData(user.uid, user.isMock, updatedProfile);
   };
 
   const handleStartSmartReview = () => {
@@ -534,7 +591,7 @@ const App: React.FC = () => {
     }
     const eligibleGems = allAdvancedVocab.filter(v => (v.mastery || 0) < 5);
     if (eligibleGems.length === 0) {
-      alert("馆长，所有珍宝都已打磨至巅峰！请开启新的撰写以发掘更多珍宝。");
+      alert("馆长，所有珍宝都已打磨至巅峰！请开启新的撰写以发掘更多珍宝. ");
       return;
     }
     const sortedGems = [...eligibleGems].sort((a, b) => {
@@ -557,14 +614,12 @@ const App: React.FC = () => {
     setView('vocab_practice');
   };
 
-  // --- 时光回响推荐逻辑 (Echo Recommendation) ---
   const recommendedIteration = useMemo(() => {
     if (!user || entries.length === 0) return null;
     const today = new Date();
-    const iterDay = user.iterationDay ?? 0; // Default Sunday
+    const iterDay = user.iterationDay ?? 0; 
     if (today.getDay() !== iterDay) return null;
 
-    // 筛选规则：日记类型、已分析、非草稿、距今超过7天、尚未进行大量迭代
     const candidates = entries.filter(e => {
       if (e.type !== 'diary' || !e.analysis) return false;
       const diffDays = (today.getTime() - e.timestamp) / (1000 * 60 * 60 * 24);
@@ -572,7 +627,6 @@ const App: React.FC = () => {
     });
 
     if (candidates.length === 0) return null;
-    // 选取最早的一篇
     return [...candidates].sort((a, b) => a.timestamp - b.timestamp)[0];
   }, [entries, user]);
 
@@ -600,12 +654,6 @@ const App: React.FC = () => {
              <div className="h-[1px] w-8 bg-slate-200"></div>
           </div>
         </div>
-        
-        <div className="mt-12 flex space-x-2">
-          <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-ping"></div>
-          <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-ping [animation-delay:150ms]"></div>
-          <div className="w-1.5 h-1.5 bg-indigo-200 rounded-full animate-ping [animation-delay:300ms]"></div>
-        </div>
       </div>
     </div>
   );
@@ -614,8 +662,8 @@ const App: React.FC = () => {
 
   return (
     <Layout activeView={view} onViewChange={handleViewChange} user={user} onLogout={handleLogout}>
-      {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartSmartReview} entries={entries} recommendedIteration={recommendedIteration} onStartIteration={handleStartIteration} />}
-      {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraft} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} />}
+      {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartSmartReview} entries={entries} recommendedIteration={recommendedIteration} onStartIteration={handleStartIteration} onSaveFragment={handleSaveFragment} />}
+      {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraft} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} fragments={fragments} onDeleteFragment={handleDeleteFragment} />}
       {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isReviewingExisting={isReviewingExisting} />}
       {view === 'history' && <History entries={entries} isAnalyzingId={analyzingId} onAnalyzeDraft={handleAnalyzeExistingEntry} onUpdateLanguage={handleUpdateEntryLanguage} onSelect={(e) => { setCurrentEntry(e); setIsReviewingExisting(true); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { 
         if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); 
@@ -627,7 +675,7 @@ const App: React.FC = () => {
         setSummaryPrompt(summary);
         setView('editor'); 
       }} allGems={allAdvancedVocab} />}
-      {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} onDeleteVocab={handleDeleteVocab} />}
+      {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} fragments={fragments} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} onDeleteVocab={handleDeleteVocab} onDeleteFragment={handleDeleteFragment} />}
       {view === 'vocab_practice' && selectedVocabForPracticeId && (
         <VocabPractice 
           selectedVocabId={selectedVocabForPracticeId} 
@@ -662,7 +710,7 @@ const App: React.FC = () => {
          else addDoc(collection(db, 'users', user.uid, 'diaryEntries'), { ...dataSkeleton, timestamp: serverTimestamp() }).then(d => setEntries(prev => [{ ...dataSkeleton, id: d.id } as DiaryEntry, ...prev]));
       }} />}
       {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} />}
-      {view === 'profile' && <ProfileView user={user} editName={editName} setEditName={setEditName} editPhoto={editPhoto} setEditPhoto={setEditPhoto} isAvatarPickerOpen={isAvatarPickerOpen} setIsAvatarPickerOpen={setIsAvatarPickerOpen} avatarSeeds={AVATAR_SEEDS} onSaveProfile={handleSaveProfile} isLoading={isLoading} iterationDay={user.iterationDay ?? 0} onSetIterationDay={(day) => setUser(prev => prev ? { ...prev, iterationDay: day } : null)} />}
+      {view === 'profile' && <ProfileView user={user} editName={editName} setEditName={setEditName} editPhoto={editPhoto} setEditPhoto={setEditPhoto} isAvatarPickerOpen={isAvatarPickerOpen} setIsAvatarPickerOpen={setIsAvatarPickerOpen} avatarSeeds={AVATAR_SEEDS} onSaveProfile={handleSaveProfile} isLoading={isLoading} iterationDay={user.iterationDay ?? 0} onSetIterationDay={handleSetIterationDay} />}
     </Layout>
   );
 };

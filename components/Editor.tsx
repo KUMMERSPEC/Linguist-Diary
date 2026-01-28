@@ -1,13 +1,24 @@
 
 import React, { useState, useEffect } from 'react';
+import { InspirationFragment } from '../types';
+import { generateDailyMuses } from '../services/geminiService';
 
 interface EditorProps {
   onAnalyze: (text: string, language: string) => void;
-  onSaveDraft: (text: string, language: string) => void; // New: Save raw text
+  onSaveDraft: (text: string, language: string) => void; 
   isLoading: boolean;
   initialText?: string;
   initialLanguage?: string;
   summaryPrompt?: string;
+  fragments: InspirationFragment[];
+  onDeleteFragment?: (id: string) => void;
+}
+
+interface MuseCard {
+  id: string;
+  title: string;
+  prompt: string;
+  icon: string;
 }
 
 const LANGUAGES = [
@@ -18,14 +29,37 @@ const LANGUAGES = [
   { code: 'German', label: 'Deutsch', flag: '🇩🇪' },
 ];
 
-const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, initialText = '', initialLanguage = 'English', summaryPrompt }) => {
+const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, initialText = '', initialLanguage = 'English', summaryPrompt, fragments, onDeleteFragment }) => {
   const [text, setText] = useState(initialText);
   const [language, setLanguage] = useState(initialLanguage);
+  const [isFragmentDrawerOpen, setIsFragmentDrawerOpen] = useState(false);
+  const [muses, setMuses] = useState<MuseCard[]>([]);
+  const [isMusesLoading, setIsMusesLoading] = useState(false);
+  const [showMuses, setShowMuses] = useState(false); // Manually toggle muses
 
   useEffect(() => {
     setText(initialText);
     setLanguage(initialLanguage);
   }, [initialText, initialLanguage]);
+
+  useEffect(() => {
+    if (showMuses && muses.length === 0) {
+      loadMuses();
+    }
+  }, [language, showMuses]);
+
+  const loadMuses = async () => {
+    if (isMusesLoading) return;
+    setIsMusesLoading(true);
+    try {
+      const data = await generateDailyMuses(language);
+      setMuses(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsMusesLoading(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,18 +67,45 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
     onAnalyze(text, language);
   };
 
+  const handleInsertFragment = (content: string) => {
+    setText(prev => prev + (prev.length > 0 ? '\n' : '') + content);
+  };
+
+  const handleSelectMuse = (musePrompt: string) => {
+    setText(musePrompt + '\n\n');
+    setShowMuses(false);
+  };
+
   return (
-    <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-500">
-      <header className="mb-4 space-y-3 shrink-0">
-        <div className="flex items-baseline justify-between">
+    <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-500 relative">
+      <header className="mb-6 space-y-4 shrink-0">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <h2 className="text-2xl md:text-3xl font-bold text-slate-900 serif-font">
             {initialText ? '🏛️ 迭代打磨 Refinement' : '✨ 开启撰写 New Artifact'}
           </h2>
-          <span className="text-[10px] font-black text-slate-400 tracking-widest uppercase opacity-60">Curator's Studio</span>
+          
+          <div className="flex items-center space-x-2">
+            {/* Daily Muse Toggle Button - Moved to Header */}
+            <button 
+              onClick={() => { setShowMuses(!showMuses); if(isFragmentDrawerOpen) setIsFragmentDrawerOpen(false); }}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${showMuses ? 'bg-amber-500 border-amber-500 text-white shadow-lg shadow-amber-100' : 'bg-white border-slate-200 text-slate-400 hover:border-amber-200 hover:text-amber-600'}`}
+            >
+              <span>💡 今日灵感</span>
+            </button>
+
+            {/* Fragments Toggle Button */}
+            <button 
+              onClick={() => { setIsFragmentDrawerOpen(!isFragmentDrawerOpen); if(showMuses) setShowMuses(false); }}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${isFragmentDrawerOpen ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border-slate-200 text-slate-400 hover:border-indigo-200 hover:text-indigo-600'}`}
+            >
+              <span>✨ 灵感碎片</span>
+              {fragments.length > 0 && <span className={`w-1.5 h-1.5 rounded-full ${isFragmentDrawerOpen ? 'bg-white' : 'bg-indigo-400'} animate-pulse`}></span>}
+            </button>
+          </div>
         </div>
         
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar pb-0.5">
+        <div className="flex items-center justify-between border-b border-slate-50 pb-2">
+          <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar">
             {LANGUAGES.map((lang) => (
               <button
                 key={lang.code}
@@ -52,7 +113,7 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
                 onClick={() => setLanguage(lang.code)}
                 className={`flex-shrink-0 flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-[10px] md:text-xs font-bold transition-all border ${
                   language === lang.code 
-                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' 
+                    ? 'bg-slate-900 border-slate-900 text-white shadow-sm' 
                     : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-200'
                 }`}
               >
@@ -64,29 +125,91 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
         </div>
       </header>
 
+      {/* Fragments Slider Overlay */}
+      {isFragmentDrawerOpen && (
+        <div className="mb-6 animate-in slide-in-from-top-4 duration-500 bg-indigo-50/30 backdrop-blur-sm border border-indigo-100/50 rounded-[2rem] p-6 shadow-inner">
+          <div className="flex items-center justify-between mb-4">
+             <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">灵感碎片池 Inspiration Shards</h4>
+             <button onClick={() => setIsFragmentDrawerOpen(false)} className="text-[10px] text-indigo-300 hover:text-indigo-500 font-bold uppercase">收起 ×</button>
+          </div>
+          <div className="flex space-x-4 overflow-x-auto no-scrollbar pb-2">
+            {fragments.length > 0 ? fragments.map(f => (
+              <div key={f.id} className="min-w-[200px] max-w-[250px] bg-white p-4 rounded-2xl border border-slate-100 shadow-sm relative group">
+                <p className="text-xs text-slate-600 italic line-clamp-3 mb-3 serif-font">“ {f.content} ”</p>
+                <div className="flex items-center justify-between">
+                   <button onClick={() => handleInsertFragment(f.content)} className="text-[9px] font-black text-indigo-600 uppercase tracking-widest hover:underline">点击引用</button>
+                   <button onClick={() => onDeleteFragment?.(f.id)} className="text-[9px] text-slate-200 hover:text-rose-400 transition-colors">删除</button>
+                </div>
+              </div>
+            )) : (
+              <div className="w-full text-center py-4 text-[10px] font-black text-slate-300 uppercase">暂时没有储存的碎片。</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Daily Muse - Expanded Section */}
+      {showMuses && !isLoading && (
+        <div className="mb-8 animate-in slide-in-from-top-4 duration-700 bg-amber-50/30 backdrop-blur-sm border border-amber-100/50 rounded-[2.5rem] p-6 shadow-inner">
+           <div className="flex items-center justify-between mb-6">
+              <span className="text-[10px] font-black text-amber-600 uppercase tracking-[0.3em]">今日灵感支点 Daily Muse</span>
+              <button onClick={() => setShowMuses(false)} className="text-[10px] text-amber-400 hover:text-amber-600 font-bold uppercase">收起 ×</button>
+           </div>
+
+           {isMusesLoading ? (
+             <div className="flex flex-col items-center justify-center py-6 space-y-3">
+                <div className="w-10 h-10 bg-white rounded-2xl shadow-sm flex items-center justify-center text-xl animate-bounce">🖋️</div>
+                <p className="text-[10px] font-black text-amber-700/50 uppercase tracking-widest animate-pulse">正在搜寻今日灵感...</p>
+                <div className="flex space-x-4 w-full pt-4 overflow-hidden opacity-30">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="flex-1 bg-white border border-slate-100 h-24 rounded-[2rem] shadow-sm animate-pulse"></div>
+                  ))}
+                </div>
+             </div>
+           ) : (
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+               {muses.map(muse => (
+                 <button 
+                   key={muse.id} 
+                   onClick={() => handleSelectMuse(muse.prompt)}
+                   className="bg-white p-5 rounded-[2rem] border border-amber-100/50 shadow-sm text-left hover:border-amber-400 hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden"
+                 >
+                   <div className="flex items-center space-x-2 mb-3">
+                     <span className="text-xl group-hover:scale-125 transition-transform duration-500">{muse.icon}</span>
+                     <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">{muse.title}</span>
+                   </div>
+                   <p className="text-[11px] text-slate-500 leading-relaxed italic line-clamp-2 serif-font">“ {muse.prompt} ”</p>
+                 </button>
+               ))}
+             </div>
+           )}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 space-y-4">
         {summaryPrompt && (
-          <div className="bg-indigo-50 border border-indigo-100 p-5 rounded-[2rem] animate-in fade-in slide-in-from-top-2 duration-700">
+          <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-[2.5rem] animate-in fade-in duration-700 shadow-sm">
              <div className="flex items-center space-x-2 mb-2">
-               <span className="text-lg">💡</span>
-               <h4 className="text-[10px] font-black text-indigo-900 uppercase tracking-widest">馆长灵感 Curator's Muse</h4>
+               <span className="text-indigo-400 text-xs">💭</span>
+               <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Iterative Prompt</span>
              </div>
-             <p className="text-sm text-indigo-800/80 leading-relaxed italic serif-font">“ {summaryPrompt} ”</p>
+             <p className="text-sm md:text-base text-indigo-800/80 leading-relaxed italic serif-font">“ {summaryPrompt} ”</p>
           </div>
         )}
 
-        <div className="flex-1 bg-white border border-slate-200 rounded-[2.5rem] shadow-xl overflow-hidden focus-within:ring-4 focus-within:ring-indigo-500/5 focus-within:border-indigo-200 transition-all flex flex-col min-h-[300px]">
+        <div className="flex-1 bg-white border border-slate-200 rounded-[2.5rem] shadow-xl overflow-hidden focus-within:ring-8 focus-within:ring-indigo-500/5 transition-all flex flex-col min-h-[300px] relative group">
+          {text.trim() === '' && (
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-0 group-hover:opacity-[0.03] transition-opacity">
+               <span className="text-9xl font-black serif-font select-none">MUSEUM</span>
+            </div>
+          )}
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="今天您想用语言记录些什么？"
-            className="flex-1 w-full border-none focus:ring-0 p-8 md:p-14 text-lg md:text-2xl leading-relaxed serif-font resize-none bg-transparent placeholder:text-slate-300"
+            placeholder="在此开启您的撰写之旅..."
+            className="flex-1 w-full border-none focus:ring-0 p-8 md:p-14 text-lg md:text-2xl leading-relaxed serif-font resize-none bg-transparent placeholder:text-slate-200 z-10"
             disabled={isLoading}
           />
-          <div className="px-8 py-4 bg-slate-50/50 border-t border-slate-50 flex items-center justify-between shrink-0">
-            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Editor's Canvas</span>
-            <span className="text-[10px] font-black text-slate-300">{text.length} chars</span>
-          </div>
         </div>
         
         <footer className="flex items-center justify-end space-x-4 shrink-0 mt-4">
@@ -94,20 +217,16 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
             type="button"
             onClick={() => onSaveDraft(text, language)}
             disabled={text.trim().length < 10 || isLoading}
-            className="px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-400 border-2 border-slate-100 hover:bg-slate-50 transition-all"
+            className="px-8 py-4 rounded-3xl text-[10px] font-black uppercase tracking-widest text-slate-400 border-2 border-slate-100 hover:bg-slate-50 transition-all shadow-sm"
           >
             存入草稿 DRAFT
           </button>
           <button 
             type="submit"
             disabled={text.trim().length < 10 || isLoading}
-            className="bg-indigo-600 text-white px-8 py-4 rounded-3xl text-lg font-black shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-[0.98] flex items-center justify-center space-x-3"
+            className="bg-indigo-600 text-white px-10 py-4 rounded-3xl text-lg font-black shadow-2xl hover:bg-indigo-700 hover:shadow-indigo-200 transition-all flex items-center justify-center space-x-3 active:scale-95"
           >
-            {isLoading ? (
-              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-            ) : (
-              '✨ AI 智能校对 ANALYZE'
-            )}
+            {isLoading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <><span>✨ AI 智能校对</span><span className="text-[10px] opacity-70">ANALYZE</span></>}
           </button>
         </footer>
       </form>

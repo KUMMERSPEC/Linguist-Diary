@@ -27,6 +27,40 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, initialDelay =
   throw lastError;
 }
 
+export const generateDailyMuses = async (language: string): Promise<{ id: string, title: string, prompt: string, icon: string }[]> => {
+  const ai = getAiInstance();
+  return withRetry(async () => {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `Current Language: ${language}.
+      Generate 3 creative writing/chat prompts (Muses) for a diary application.
+      The prompts should be diverse: 1 philosophical, 1 daily/simple, 1 imaginative/future.
+      Output ONLY JSON in Chinese (中文) for title/prompt: [{ id, title, prompt, icon }]`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              title: { type: Type.STRING },
+              prompt: { type: Type.STRING },
+              icon: { type: Type.STRING }
+            },
+            required: ["id", "title", "prompt", "icon"]
+          }
+        }
+      }
+    });
+    return JSON.parse(response.text) || [];
+  }).catch(() => [
+    { id: '1', title: '今日心情', prompt: '用三个词形容你今天的情绪。', icon: '🎭' },
+    { id: '2', title: '美味瞬间', prompt: '描述今天让你印象最深的一顿饭。', icon: '🍜' },
+    { id: '3', title: '未来幻想', prompt: '如果你能穿越到50年后，第一眼想看什么？', icon: '🚀' },
+  ]);
+};
+
 export const generatePracticeTasks = async (word: string, meaning: string, language: string): Promise<{ id: string, label: string, icon: string }[]> => {
   const ai = getAiInstance();
   return withRetry(async () => {
