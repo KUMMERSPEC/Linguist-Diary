@@ -1,10 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { InspirationFragment } from '../types';
 import { generateDailyMuses } from '../services/geminiService';
 
 interface EditorProps {
-  onAnalyze: (text: string, language: string) => void;
+  onAnalyze: (text: string, language: string, usedFragmentIds: string[]) => void;
   onSaveDraft: (text: string, language: string) => void; 
   isLoading: boolean;
   initialText?: string;
@@ -33,9 +33,12 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
   const [text, setText] = useState(initialText);
   const [language, setLanguage] = useState(initialLanguage);
   const [isFragmentDrawerOpen, setIsFragmentDrawerOpen] = useState(false);
+  const [fragmentSearch, setFragmentSearch] = useState('');
+  const [usedFragmentIds, setUsedFragmentIds] = useState<Set<string>>(new Set());
+  
   const [muses, setMuses] = useState<MuseCard[]>([]);
   const [isMusesLoading, setIsMusesLoading] = useState(false);
-  const [showMuses, setShowMuses] = useState(false); // Manually toggle muses
+  const [showMuses, setShowMuses] = useState(false);
 
   useEffect(() => {
     setText(initialText);
@@ -61,14 +64,25 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
     }
   };
 
+  const filteredFragments = useMemo(() => {
+    return fragments.filter(f => 
+      f.content.toLowerCase().includes(fragmentSearch.toLowerCase()) || 
+      (f.meaning && f.meaning.toLowerCase().includes(fragmentSearch.toLowerCase()))
+    );
+  }, [fragments, fragmentSearch]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (text.trim().length < 10) return;
-    onAnalyze(text, language);
+    // Pass only transient fragments that were actually clicked/inserted
+    onAnalyze(text, language, Array.from(usedFragmentIds));
   };
 
-  const handleInsertFragment = (content: string) => {
-    setText(prev => prev + (prev.length > 0 ? '\n' : '') + content);
+  const handleInsertFragment = (f: InspirationFragment) => {
+    setText(prev => prev + (prev.length > 0 ? '\n' : '') + f.content);
+    if (f.fragmentType === 'transient') {
+      setUsedFragmentIds(prev => new Set(prev).add(f.id));
+    }
   };
 
   const handleSelectMuse = (musePrompt: string) => {
@@ -85,7 +99,6 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
           </h2>
           
           <div className="flex items-center space-x-2">
-            {/* Daily Muse Toggle Button - Moved to Header */}
             <button 
               onClick={() => { setShowMuses(!showMuses); if(isFragmentDrawerOpen) setIsFragmentDrawerOpen(false); }}
               className={`flex items-center space-x-2 px-4 py-2 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${showMuses ? 'bg-amber-500 border-amber-500 text-white shadow-lg shadow-amber-100' : 'bg-white border-slate-200 text-slate-400 hover:border-amber-200 hover:text-amber-600'}`}
@@ -93,7 +106,6 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
               <span>💡 今日灵感</span>
             </button>
 
-            {/* Fragments Toggle Button */}
             <button 
               onClick={() => { setIsFragmentDrawerOpen(!isFragmentDrawerOpen); if(showMuses) setShowMuses(false); }}
               className={`flex items-center space-x-2 px-4 py-2 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${isFragmentDrawerOpen ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border-slate-200 text-slate-400 hover:border-indigo-200 hover:text-indigo-600'}`}
@@ -125,46 +137,62 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
         </div>
       </header>
 
-      {/* Fragments Slider Overlay */}
+      {/* Fragments Slider Overlay with Search */}
       {isFragmentDrawerOpen && (
         <div className="mb-6 animate-in slide-in-from-top-4 duration-500 bg-indigo-50/30 backdrop-blur-sm border border-indigo-100/50 rounded-[2rem] p-6 shadow-inner">
-          <div className="flex items-center justify-between mb-4">
-             <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">灵感碎片池 Inspiration Shards</h4>
-             <button onClick={() => setIsFragmentDrawerOpen(false)} className="text-[10px] text-indigo-300 hover:text-indigo-500 font-bold uppercase">收起 ×</button>
+          <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
+             <div>
+               <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">灵感碎片池 Inspiration Shards</h4>
+               <p className="text-[8px] text-indigo-300 font-bold uppercase mt-1">📜 随笔类在使用后将自动存入历史并消失</p>
+             </div>
+             <div className="flex items-center space-x-2">
+               <input 
+                type="text" 
+                value={fragmentSearch}
+                onChange={(e) => setFragmentSearch(e.target.value)}
+                placeholder="搜索碎片..." 
+                className="bg-white/50 border-none rounded-xl px-4 py-1.5 text-[10px] focus:ring-2 focus:ring-indigo-500/20 w-32 md:w-48"
+               />
+               <button onClick={() => setIsFragmentDrawerOpen(false)} className="text-[10px] text-indigo-300 hover:text-indigo-500 font-bold uppercase">收起 ×</button>
+             </div>
           </div>
           <div className="flex space-x-4 overflow-x-auto no-scrollbar pb-2">
-            {fragments.length > 0 ? fragments.map(f => (
-              <div key={f.id} className="min-w-[200px] max-w-[250px] bg-white p-4 rounded-2xl border border-slate-100 shadow-sm relative group">
+            {filteredFragments.length > 0 ? filteredFragments.map(f => (
+              <div key={f.id} className={`min-w-[200px] max-w-[250px] p-4 rounded-2xl border shadow-sm relative group transition-all ${usedFragmentIds.has(f.id) ? 'bg-slate-50 opacity-50 grayscale' : 'bg-white border-slate-100'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[9px] font-black text-indigo-400">{f.fragmentType === 'transient' ? '📜 随笔' : '🌱 种子'}</span>
+                  {usedFragmentIds.has(f.id) && <span className="text-[8px] font-black text-emerald-500 uppercase">已引用</span>}
+                </div>
                 <p className="text-xs text-slate-600 italic line-clamp-3 mb-3 serif-font">“ {f.content} ”</p>
                 <div className="flex items-center justify-between">
-                   <button onClick={() => handleInsertFragment(f.content)} className="text-[9px] font-black text-indigo-600 uppercase tracking-widest hover:underline">点击引用</button>
+                   <button 
+                    onClick={() => handleInsertFragment(f)} 
+                    disabled={usedFragmentIds.has(f.id)}
+                    className="text-[9px] font-black text-indigo-600 uppercase tracking-widest hover:underline disabled:text-slate-300"
+                   >
+                     点击引用
+                   </button>
                    <button onClick={() => onDeleteFragment?.(f.id)} className="text-[9px] text-slate-200 hover:text-rose-400 transition-colors">删除</button>
                 </div>
               </div>
             )) : (
-              <div className="w-full text-center py-4 text-[10px] font-black text-slate-300 uppercase">暂时没有储存的碎片。</div>
+              <div className="w-full text-center py-4 text-[10px] font-black text-slate-300 uppercase">暂时没有符合搜索条件的碎片。</div>
             )}
           </div>
         </div>
       )}
 
-      {/* Daily Muse - Expanded Section */}
+      {/* Daily Muse Section */}
       {showMuses && !isLoading && (
         <div className="mb-8 animate-in slide-in-from-top-4 duration-700 bg-amber-50/30 backdrop-blur-sm border border-amber-100/50 rounded-[2.5rem] p-6 shadow-inner">
            <div className="flex items-center justify-between mb-6">
               <span className="text-[10px] font-black text-amber-600 uppercase tracking-[0.3em]">今日灵感支点 Daily Muse</span>
               <button onClick={() => setShowMuses(false)} className="text-[10px] text-amber-400 hover:text-amber-600 font-bold uppercase">收起 ×</button>
            </div>
-
            {isMusesLoading ? (
              <div className="flex flex-col items-center justify-center py-6 space-y-3">
                 <div className="w-10 h-10 bg-white rounded-2xl shadow-sm flex items-center justify-center text-xl animate-bounce">🖋️</div>
                 <p className="text-[10px] font-black text-amber-700/50 uppercase tracking-widest animate-pulse">正在搜寻今日灵感...</p>
-                <div className="flex space-x-4 w-full pt-4 overflow-hidden opacity-30">
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className="flex-1 bg-white border border-slate-100 h-24 rounded-[2rem] shadow-sm animate-pulse"></div>
-                  ))}
-                </div>
              </div>
            ) : (
              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -198,11 +226,6 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
         )}
 
         <div className="flex-1 bg-white border border-slate-200 rounded-[2.5rem] shadow-xl overflow-hidden focus-within:ring-8 focus-within:ring-indigo-500/5 transition-all flex flex-col min-h-[300px] relative group">
-          {text.trim() === '' && (
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-0 group-hover:opacity-[0.03] transition-opacity">
-               <span className="text-9xl font-black serif-font select-none">MUSEUM</span>
-            </div>
-          )}
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}

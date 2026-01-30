@@ -211,7 +211,8 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
                     </span>
                     <div className="flex items-center space-x-1">
                        <button 
-                         onClick={() => handleManualSave(sid, { word: c.improved, meaning: c.explanation, usage: analysis.modifiedText, level: 'Intermediate', language: language })}
+                         // ADDED timestamp property to manual save
+                         onClick={() => handleManualSave(sid, { word: c.improved, meaning: c.explanation, usage: analysis.modifiedText, level: 'Intermediate', language: language, timestamp: Date.now() })}
                          className={`text-lg p-2 rounded-full transition-all opacity-0 group-hover/card:opacity-100 ${isSaved ? 'text-amber-500 bg-amber-50 opacity-100' : 'text-slate-200 hover:text-indigo-600 hover:bg-slate-50'}`}
                          title={isSaved ? "已入珍宝阁" : "加入珍宝阁"}
                        >

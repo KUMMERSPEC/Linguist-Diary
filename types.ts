@@ -36,14 +36,18 @@ export interface AdvancedVocab {
   language: string;
   practiceCount?: number;
   practices?: PracticeRecord[];
+  timestamp: number; // Added to match history sorting
 }
 
 export interface InspirationFragment {
   id: string;
   content: string;
+  meaning?: string;
+  usage?: string;
   timestamp: number;
   language: string;
   tags?: string[];
+  fragmentType: 'transient' | 'seed'; // New: transient = use once; seed = study
 }
 
 export type ExtendedVocab = AdvancedVocab & { date: string, entryId: string, language: string };

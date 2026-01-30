@@ -108,7 +108,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
         {/* Mobile Bottom Navigation Bar - Optimized for Mobile Screen Bottoms */}
         <div className="md:hidden shrink-0 bg-white border-t border-slate-100 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+8px)] flex items-center justify-around z-40 shadow-[0_-8px_30px_-10px_rgba(0,0,0,0.12)] overflow-visible min-h-[72px]">
           <MobileTab views="dashboard" label="主页" icon="🏠" activeIcon="🏠" />
-          <MobileTab views="history" label="馆藏" icon="🏛️" activeIcon="🏛️" />
+          {/* Swapped: Gems moved to the left of the add button */}
+          <MobileTab views={['vocab_list', 'vocab_practice', 'vocab_practice_detail']} label="珍宝" icon="💎" activeIcon="💎" />
           
           <div className="relative flex flex-col items-center justify-center flex-1 h-full overflow-visible min-w-[72px]">
             <button 
@@ -140,7 +141,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
             )}
           </div>
 
-          <MobileTab views={['vocab_list', 'vocab_practice', 'vocab_practice_detail']} label="珍宝" icon="💎" activeIcon="💎" />
+          {/* Swapped: History moved to the right of the add button */}
+          <MobileTab views="history" label="馆藏" icon="🏛️" activeIcon="🏛️" />
           <MobileTab views="profile" label="馆长" icon="👤" activeIcon="👤" />
         </div>
       </main>

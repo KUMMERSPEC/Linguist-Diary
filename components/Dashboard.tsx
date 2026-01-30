@@ -1,48 +1,45 @@
 
 import React, { useState } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { DiaryEntry } from '../types';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { DiaryEntry, AdvancedVocab } from '../types';
 
 interface DashboardProps {
   onNewEntry: () => void;
   onStartReview: () => void; 
   entries: DiaryEntry[];
+  allAdvancedVocab: AdvancedVocab[]; 
   recommendedIteration?: DiaryEntry | null;
   onStartIteration?: (entry: DiaryEntry) => void;
-  onSaveFragment: (content: string, language: string) => void;
+  onSaveFragment: (content: string, language: string, type: 'transient' | 'seed') => Promise<void>;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ 
   onNewEntry, 
   onStartReview, 
   entries, 
+  allAdvancedVocab,
   recommendedIteration,
   onStartIteration,
   onSaveFragment
 }) => {
   const [fragmentText, setFragmentText] = useState('');
+  const [fragmentType, setFragmentType] = useState<'transient' | 'seed'>('transient');
+  const [isSavingFragment, setIsSavingFragment] = useState(false);
 
-  const chartData = React.useMemo(() => {
-    const last7Days = Array.from({length: 7}, (_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      d.setHours(0, 0, 0, 0);
-      return { 
-        name: d.toLocaleDateString('zh-CN', { weekday: 'short' }),
-        dateStr: d.toDateString(),
-        entries: 0 
-      };
-    }).reverse();
-
-    entries.forEach(entry => {
-      const entryDate = new Date(entry.timestamp);
-      entryDate.setHours(0, 0, 0, 0);
-      const day = last7Days.find(d => d.dateStr === entryDate.toDateString());
-      if (day) day.entries += 1;
+  const masteryData = React.useMemo(() => {
+    const counts = [0, 0, 0, 0, 0, 0]; 
+    allAdvancedVocab.forEach(v => {
+      const m = Math.min(Math.max(v.mastery || 0, 0), 5);
+      counts[m]++;
     });
 
-    return last7Days;
-  }, [entries]);
+    const labels = ['🥚 初见', '🐣 启蒙', '🐥 熟悉', '🐔 掌握', '✨ 熟稔', '🏆 巅峰'];
+    return counts.map((count, i) => ({
+      name: labels[i],
+      level: i,
+      count: count
+    }));
+  }, [allAdvancedVocab]);
 
   const { columns, monthLabels } = React.useMemo(() => {
     const today = new Date();
@@ -92,8 +89,9 @@ const Dashboard: React.FC<DashboardProps> = ({
   const stats = React.useMemo(() => {
     const total = entries.length;
     const rehearsalCount = entries.filter(e => e.type === 'rehearsal').length;
-    return { total, rehearsalCount };
-  }, [entries]);
+    const vocabCount = allAdvancedVocab.length;
+    return { total, rehearsalCount, vocabCount };
+  }, [entries, allAdvancedVocab]);
 
   const getColor = (count: number) => {
     if (count === 0) return 'bg-slate-100';
@@ -102,15 +100,21 @@ const Dashboard: React.FC<DashboardProps> = ({
     return 'bg-indigo-600';
   };
 
-  const handleCaptureFragment = () => {
-    if (!fragmentText.trim()) return;
-    onSaveFragment(fragmentText, 'English'); 
-    setFragmentText('');
+  const BAR_COLORS = ['#f1f5f9', '#e0e7ff', '#818cf8', '#4f46e5', '#3730a3', '#f59e0b'];
+
+  const handleCaptureFragment = async () => {
+    if (!fragmentText.trim() || isSavingFragment) return;
+    setIsSavingFragment(true);
+    try {
+      await onSaveFragment(fragmentText, 'English', fragmentType); 
+      setFragmentText('');
+    } finally {
+      setIsSavingFragment(false);
+    }
   };
 
   return (
     <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-24 md:pb-12 animate-in fade-in duration-700 space-y-8">
-      {/* 1. 馆长欢迎区 & 核心动作按钮 (Moved to Top) */}
       <section className="space-y-6">
         <header className="px-2 space-y-1">
           <h2 className="text-3xl md:text-4xl font-bold text-slate-900 serif-font tracking-tight">馆长，欢迎回来。</h2>
@@ -144,30 +148,55 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </section>
 
-      {/* 2. 灵感碎片快捕卡片 (Moved here, below the welcome/buttons) */}
       <section className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/50 rounded-bl-[4rem] -mr-8 -mt-8 opacity-40"></div>
-        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">灵感碎片快捕 Fragment Capture</h4>
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">灵感碎片快捕 Fragment Capture</h4>
+          <div className="flex bg-slate-100 p-1 rounded-xl">
+             <button 
+               onClick={() => setFragmentType('transient')}
+               className={`px-3 py-1 rounded-lg text-[9px] font-black transition-all ${fragmentType === 'transient' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}
+             >
+               📜 随笔 (引子)
+             </button>
+             <button 
+               onClick={() => setFragmentType('seed')}
+               className={`px-3 py-1 rounded-lg text-[9px] font-black transition-all ${fragmentType === 'seed' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}
+             >
+               🌱 种子 (AI解析)
+             </button>
+          </div>
+        </div>
         <div className="flex items-center space-x-3">
           <input 
             type="text" 
             value={fragmentText}
             onChange={(e) => setFragmentText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCaptureFragment()}
-            placeholder="捕捉一个瞬间的念头、生词或感悟..." 
+            placeholder={fragmentType === 'transient' ? "捕捉一个想写但还没写的引子..." : "捕捉一个生词或表达种子..."} 
             className="flex-1 bg-slate-50 border-none rounded-2xl px-5 py-3.5 text-sm serif-font text-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+            disabled={isSavingFragment}
           />
           <button 
             onClick={handleCaptureFragment}
-            disabled={!fragmentText.trim()}
-            className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-95 disabled:opacity-50 transition-all"
+            disabled={!fragmentText.trim() || isSavingFragment}
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 disabled:opacity-50 transition-all ${isSavingFragment ? 'bg-indigo-400' : 'bg-indigo-600 text-white'}`}
           >
-            <span className="text-xl">✨</span>
+            {isSavingFragment ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            ) : (
+              <span className="text-xl">✨</span>
+            )}
           </button>
         </div>
+        {isSavingFragment && fragmentType === 'seed' && (
+          <p className="mt-3 text-[9px] font-black text-indigo-400 uppercase tracking-widest animate-pulse px-2">AI 正在为种子打磨意思与例句...</p>
+        )}
+        {isSavingFragment && fragmentType === 'transient' && (
+          <p className="mt-3 text-[9px] font-black text-slate-400 uppercase tracking-widest animate-pulse px-2">正在存入引子...</p>
+        )}
       </section>
 
-      {/* 3. 时光回响推荐卡片 */}
       {recommendedIteration && (
         <section className="animate-in slide-in-from-top-4 duration-1000">
           <div className="relative group bg-amber-50 border border-amber-200 p-6 md:p-10 rounded-[2.5rem] shadow-2xl shadow-amber-100/50 overflow-hidden">
@@ -194,15 +223,14 @@ const Dashboard: React.FC<DashboardProps> = ({
         </section>
       )}
 
-      {/* 4. 统计卡片 */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:border-indigo-100 transition-colors">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">馆藏总数 Total</p>
           <h3 className="text-3xl font-black text-slate-900 serif-font mt-1">{stats.total}</h3>
         </div>
         <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:border-indigo-100 transition-colors">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">演练次数 Rehearsals</p>
-          <h3 className="text-3xl font-black text-slate-900 serif-font mt-1">{stats.rehearsalCount}</h3>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">珍宝总数 Gems</p>
+          <h3 className="text-3xl font-black text-slate-900 serif-font mt-1">{stats.vocabCount}</h3>
         </div>
         <div className="hidden md:block bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">博物馆状态 Status</p>
@@ -216,7 +244,6 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* 5. 年度足迹 */}
       <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between mb-8">
           <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">馆长年度足迹 Annual Footprint</h4>
@@ -259,28 +286,28 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </section>
 
-      {/* 6. 活跃趋势图 */}
       <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm mb-12">
-        <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-8">馆藏增长趋势 Growth Trend</h4>
+        <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-8">馆藏珍宝磨炼进度 Gems Polish Levels</h4>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData}>
-              <defs>
-                <linearGradient id="colorEntries" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
-                  <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
+            <BarChart data={masteryData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} dy={10} />
-              <YAxis hide />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} dy={10} />
+              <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#cbd5e1'}} />
               <Tooltip 
-                contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
-                cursor={{ stroke: '#4f46e5', strokeWidth: 1 }}
+                cursor={{ fill: '#f8fafc' }}
+                contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '11px', fontWeight: 'bold' }}
               />
-              <Area type="monotone" dataKey="entries" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorEntries)" />
-            </AreaChart>
+              <Bar dataKey="count" radius={[8, 8, 0, 0]} barSize={40}>
+                {masteryData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={BAR_COLORS[index]} />
+                ))}
+              </Bar>
+            </BarChart>
           </ResponsiveContainer>
+        </div>
+        <div className="mt-6 flex justify-center">
+           <p className="text-[10px] text-slate-400 italic">基于当前库中 {stats.vocabCount} 件词汇珍宝的掌握情况分布</p>
         </div>
       </section>
     </div>

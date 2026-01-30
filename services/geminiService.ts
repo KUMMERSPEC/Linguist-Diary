@@ -27,6 +27,37 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, initialDelay =
   throw lastError;
 }
 
+/**
+ * Automatically enrich a fragment with meaning and a usage example.
+ */
+export const enrichFragment = async (content: string, language: string): Promise<{ meaning: string, usage: string }> => {
+  const ai = getAiInstance();
+  return withRetry(async () => {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `Fragment: "${content}". Target Language: ${language}.
+      Task: Provide a concise Chinese meaning and a natural usage example in ${language}.
+      RULES:
+      1. 'meaning' MUST be in Chinese (中文).
+      2. 'usage' MUST be in ${language}.
+      3. For Japanese: use '[Kanji](furigana)' format in 'usage' (e.g. "[私](わたし)").
+      4. DO NOT use ruby/furigana in 'meaning'.`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            meaning: { type: Type.STRING },
+            usage: { type: Type.STRING }
+          },
+          required: ["meaning", "usage"]
+        }
+      }
+    });
+    return JSON.parse(response.text) || { meaning: "", usage: "" };
+  }).catch(() => ({ meaning: "AI 自动解析失败", usage: "" }));
+};
+
 export const generateDailyMuses = async (language: string): Promise<{ id: string, title: string, prompt: string, icon: string }[]> => {
   const ai = getAiInstance();
   return withRetry(async () => {
@@ -99,17 +130,21 @@ export const validateVocabUsage = async (
 ): Promise<{ 
   isCorrect: boolean; 
   feedback: string; 
-  betterVersion?: string; 
+  betterVersion?: string;
+  keyPhrases?: { phrase: string, explanation: string }[];
 }> => {
   const ai = getAiInstance();
   return withRetry(async () => {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Word: "${word}" (${meaning}). User Sentence: "${sentence}". Language: ${language}.
+      Task:
       1. Correctness check.
       2. Concise feedback in Chinese (中文).
       3. Suggested version in ${language}.
-      CRITICAL: ONLY use '[Kanji](furigana)' for the 'betterVersion' IF the language is Japanese. NEVER use it in 'feedback'.`,
+      4. Extract 1-3 useful "keyPhrases" (idiomatic collocations/expressions) mentioned in your correction that the user should save for learning.
+      
+      CRITICAL: ONLY use '[Kanji](furigana)' for the 'betterVersion' IF the language is Japanese. NEVER use it in 'feedback' or 'explanation'.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -117,7 +152,18 @@ export const validateVocabUsage = async (
           properties: {
             isCorrect: { type: Type.BOOLEAN },
             feedback: { type: Type.STRING },
-            betterVersion: { type: Type.STRING }
+            betterVersion: { type: Type.STRING },
+            keyPhrases: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  phrase: { type: Type.STRING, description: "The idiomatic expression itself." },
+                  explanation: { type: Type.STRING, description: "Brief meaning in Chinese." }
+                },
+                required: ["phrase", "explanation"]
+              }
+            }
           },
           required: ["isCorrect", "feedback"]
         }
@@ -135,6 +181,13 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
       model: 'gemini-3-flash-preview',
       contents: `Analyze: "${text}". Language: ${language}.
       ${historyContext}
+      
+      BALANCED DIFFING STRATEGY:
+      - For simple lexical errors (e.g., "tomorrow" instead of "yesterday"), wrap ONLY the single word: "<rem>tomorrow</rem><add>yesterday</add>".
+      - For complex grammatical rearrangements or long texts, phrase-level wrapping is acceptable to maintain natural flow and processing speed.
+      - AVOID wrapping entire sentences unless the whole sentence is structurally broken.
+      - ALWAYS keep unchanged words outside of <rem>/<add> tags.
+      
       STRICT VOCABULARY RULES:
       1. FOR JAPANESE: The 'word' property MUST use '[Kanji](furigana)' format (e.g., "[形跡](けいせい)").
       2. FOR JAPANESE: DO NOT use ruby/furigana in 'meaning' or 'usage' properties. Keep them as plain text.

@@ -12,6 +12,7 @@ interface VocabPracticeProps {
   onUpdateMastery: (vocabId: string, word: string, newMastery: number, record?: PracticeRecord) => void; 
   onBackToVocabList: () => void;
   onViewChange: (view: ViewState, vocabId?: string, isPracticeActive?: boolean) => void;
+  onSaveFragment: (content: string, language: string, meaning?: string, usage?: string) => Promise<void>;
   isPracticeActive: boolean;
   queueProgress?: { current: number; total: number }; 
   onNextInQueue?: () => void; 
@@ -23,6 +24,7 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
   onUpdateMastery,
   onBackToVocabList,
   onViewChange,
+  onSaveFragment,
   isPracticeActive: initialIsPracticeActive,
   queueProgress,
   onNextInQueue
@@ -35,8 +37,10 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
     isCorrect: boolean; 
     feedback: string; 
     betterVersion?: string;
+    keyPhrases?: { phrase: string, explanation: string }[];
   } | null>(null);
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
+  const [savedPhrases, setSavedPhrases] = useState<Set<string>>(new Set());
 
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
@@ -48,6 +52,7 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
     setLastFeedback(null);
     setPracticeInput('');
     setShowSuccessAnimation(false);
+    setSavedPhrases(new Set());
   }, [selectedVocabId]);
 
   if (!currentVocab) return (
@@ -140,6 +145,21 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
     } catch (e) { alert("评估失败，请检查网络。"); } finally { setIsValidating(false); }
   };
 
+  const handleSavePhrase = async (phrase: string, explanation: string) => {
+    if (savedPhrases.has(phrase)) return;
+    try {
+      await onSaveFragment(
+        phrase, 
+        currentVocab.language, 
+        `打磨笔记：${explanation}`, 
+        `源自打磨语境：${lastFeedback?.betterVersion || practiceInput}`
+      );
+      setSavedPhrases(prev => new Set(prev).add(phrase));
+    } catch (e) {
+      alert("保存碎片失败。");
+    }
+  };
+
   const handleNext = () => {
     if (onNextInQueue) {
       onNextInQueue();
@@ -151,6 +171,7 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
   const handleRetry = () => {
     setLastFeedback(null);
     setPracticeInput('');
+    setSavedPhrases(new Set());
   };
 
   return (
@@ -238,7 +259,7 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
               {isValidating ? <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : '✨ 提交打磨评估 SUBMIT'}
             </button>
           ) : (
-            <div className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border border-slate-200 shadow-xl space-y-4 animate-in slide-in-from-bottom-4">
+            <div className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border border-slate-200 shadow-xl space-y-5 animate-in slide-in-from-bottom-4">
                <div className="flex items-center justify-between mb-1">
                  <div className="flex items-center space-x-3">
                    <span className="text-xl md:text-2xl">{lastFeedback.isCorrect ? '✅' : '❌'}</span>
@@ -248,11 +269,13 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
                    {lastFeedback.isCorrect ? 'Mastery +1' : 'Mastery -1'}
                  </div>
                </div>
+               
                <p className="text-slate-600 text-xs md:text-sm italic leading-relaxed">“ {lastFeedback.feedback} ”</p>
+               
                {lastFeedback.betterVersion && (
-                 <div className="mt-4 p-4 md:p-5 bg-slate-900 text-white rounded-[1.5rem] md:rounded-3xl relative">
-                   <span className="text-[8px] font-black uppercase text-indigo-400 absolute top-3 left-5">AI 优化建议</span>
-                   <p className="mt-2 serif-font italic text-base md:text-lg leading-relaxed">{renderRuby(lastFeedback.betterVersion)}</p>
+                 <div className="p-4 md:p-5 bg-slate-900 text-white rounded-[1.5rem] md:rounded-3xl relative">
+                   <span className="text-[8px] font-black uppercase text-indigo-400 block mb-2">AI 优化建议</span>
+                   <p className="serif-font italic text-base md:text-lg leading-relaxed mb-1">{renderRuby(lastFeedback.betterVersion)}</p>
                    <button 
                     onClick={(e) => { e.stopPropagation(); handlePlayAudio(lastFeedback.betterVersion!, 'better'); }} 
                     disabled={isAudioLoading && playingAudioId === 'better'}
@@ -264,7 +287,42 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
                    </button>
                  </div>
                )}
-               <div className="flex gap-3 md:gap-4 mt-4">
+
+               {/* Option B: Key Phrases Collection Area */}
+               {lastFeedback.keyPhrases && lastFeedback.keyPhrases.length > 0 && (
+                 <div className="pt-2">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <span className="text-xs">✨</span>
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">入馆推荐 Recommended Gems</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {lastFeedback.keyPhrases.map((kp, idx) => {
+                        const isSaved = savedPhrases.has(kp.phrase);
+                        return (
+                          <button 
+                            key={idx}
+                            onClick={() => handleSavePhrase(kp.phrase, kp.explanation)}
+                            disabled={isSaved}
+                            className={`group flex items-center space-x-2 px-3 py-2 rounded-xl text-[10px] font-bold border transition-all active:scale-95 ${
+                              isSaved 
+                                ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
+                                : 'bg-white border-slate-100 text-slate-600 hover:border-indigo-400 hover:bg-indigo-50/50'
+                            }`}
+                          >
+                            <span className="serif-font">{kp.phrase}</span>
+                            <span className="opacity-30">|</span>
+                            <span className="text-[9px] font-medium opacity-70">{kp.explanation}</span>
+                            <span className={`transition-transform ${isSaved ? 'scale-110' : 'group-hover:rotate-12'}`}>
+                              {isSaved ? '✓' : '💎'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                 </div>
+               )}
+
+               <div className="flex gap-3 md:gap-4 mt-6">
                  <button onClick={handleRetry} className="flex-1 py-3 md:py-4 border border-slate-200 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-colors">重新尝试 RETRY</button>
                  <button onClick={handleNext} className="flex-1 py-3 md:py-4 bg-indigo-600 text-white rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all">
                     {queueProgress && queueProgress.current < queueProgress.total ? '下一个珍宝 NEXT' : '完成练习 DONE'}
