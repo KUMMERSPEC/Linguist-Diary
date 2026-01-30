@@ -104,32 +104,6 @@ const App: React.FC = () => {
   const [editPhoto, setEditPhoto] = useState('');
   const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
 
-  useEffect(() => {
-    if (!auth) {
-      setIsAuthInitializing(false);
-      return;
-    }
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseAuthUser | null) => {
-      if (firebaseUser) {
-        const userPhotoURL = firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`;
-        setUser({
-          uid: firebaseUser.uid,
-          displayName: firebaseUser.displayName || firebaseUser.email || '馆长',
-          photoURL: userPhotoURL,
-          isMock: false,
-          iterationDay: 0
-        });
-      } else {
-        setUser(null);
-        setEntries([]);
-        setAllAdvancedVocab([]);
-        setFragments([]);
-      }
-      setIsAuthInitializing(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
   const loadUserData = useCallback(async (userId: string, isMock: boolean) => {
     setIsLoading(true);
     setError(null);
@@ -192,7 +166,36 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [db]);
+  }, []);
+
+  useEffect(() => {
+    if (!auth) {
+      setIsAuthInitializing(false);
+      return;
+    }
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseAuthUser | null) => {
+      if (firebaseUser) {
+        const userPhotoURL = firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`;
+        const userData = {
+          uid: firebaseUser.uid,
+          displayName: firebaseUser.displayName || firebaseUser.email || '馆长',
+          photoURL: userPhotoURL,
+          isMock: false,
+          iterationDay: 0
+        };
+        setUser(userData);
+        // CRITICAL FIX: Load data on initial auth detection (refresh)
+        loadUserData(firebaseUser.uid, false);
+      } else {
+        setUser(null);
+        setEntries([]);
+        setAllAdvancedVocab([]);
+        setFragments([]);
+      }
+      setIsAuthInitializing(false);
+    });
+    return () => unsubscribe();
+  }, [loadUserData]);
 
   const handleSaveFragment = async (content: string, language: string, type: 'transient' | 'seed', predefinedMeaning?: string, predefinedUsage?: string) => {
     if (!user || !content.trim()) return;
@@ -200,7 +203,6 @@ const App: React.FC = () => {
     let meaning = predefinedMeaning || "";
     let usage = predefinedUsage || "";
 
-    // IMPORTANT: Only seed types get AI enrichment
     if (type === 'seed' && !predefinedMeaning && !predefinedUsage) {
       try {
         const enriched = await enrichFragment(content, language);
