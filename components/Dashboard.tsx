@@ -145,7 +145,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           <p className="text-slate-500 text-sm md:text-base italic">云端同步已就绪，今天想记录些什么？</p>
         </header>
 
-        {/* Daily Spotlight Component */}
+        {/* Daily Spotlight Component - Fixed Rendering */}
         {spotlight && (
           <div className="bg-white border border-slate-100 p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/50 relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-2 h-full bg-indigo-600"></div>
@@ -157,13 +157,17 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <span className="text-amber-500">✨</span>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">今日展映 Curator's Spotlight</span>
               </div>
-              <h3 className="text-2xl md:text-3xl font-black text-slate-900 serif-font leading-relaxed">
-                “ {renderRuby(spotlight.sentence)} ”
-              </h3>
+              <h3 
+                className="text-2xl md:text-3xl font-black text-slate-900 serif-font leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: `“ ${renderRuby(spotlight.sentence)} ”` }}
+              />
               <div className="flex items-center space-x-3 pt-2">
                 <span className="px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-lg uppercase tracking-widest">{spotlight.language}</span>
                 <span className="text-slate-300">/</span>
-                <span className="text-sm font-bold text-slate-800 serif-font">{renderRuby(spotlight.word)}</span>
+                <span 
+                  className="text-sm font-bold text-slate-800 serif-font"
+                  dangerouslySetInnerHTML={{ __html: renderRuby(spotlight.word) }}
+                />
               </div>
             </div>
           </div>

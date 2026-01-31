@@ -234,6 +234,20 @@ const App: React.FC = () => {
     }
   };
 
+  const handlePromoteToSeed = async (id: string) => {
+    if (!user) return;
+    setFragments(prev => prev.map(f => f.id === id ? { ...f, fragmentType: 'seed' } : f));
+    if (!db || user.isMock) {
+      const local = JSON.parse(localStorage.getItem(`linguist_fragments_${user.uid}`) || '[]');
+      localStorage.setItem(`linguist_fragments_${user.uid}`, JSON.stringify(local.map((f: any) => f.id === id ? { ...f, fragmentType: 'seed' } : f)));
+    } else {
+      const fragmentsColRef = collection(db, 'users', user.uid, 'fragments');
+      const q = query(fragmentsColRef, where('id', '==', id));
+      const snap = await getDocs(q);
+      snap.forEach(async (d) => await updateDoc(d.ref, { fragmentType: 'seed' }));
+    }
+  };
+
   const handleDeleteFragment = async (id: string) => {
     if (!user) return;
     setFragments(prev => prev.filter(f => f.id !== id));
@@ -621,7 +635,7 @@ const App: React.FC = () => {
         setSummaryPrompt(summary);
         setView('editor'); 
       }} allGems={allAdvancedVocab} preferredLanguages={preferredLanguages} />}
-      {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} fragments={fragments} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} onDeleteVocab={handleDeleteVocab} onDeleteFragment={handleDeleteFragment} onPromoteFragment={handlePromoteFragment} />}
+      {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} fragments={fragments} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} onDeleteVocab={handleDeleteVocab} onDeleteFragment={handleDeleteFragment} onPromoteFragment={handlePromoteFragment} onPromoteToSeed={handlePromoteToSeed} />}
       {view === 'vocab_practice' && selectedVocabForPracticeId && (
         <VocabPractice 
           selectedVocabId={selectedVocabForPracticeId} 

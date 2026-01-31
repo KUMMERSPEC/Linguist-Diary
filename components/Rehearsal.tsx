@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { RehearsalEvaluation, AdvancedVocab } from '../types';
 import { generatePracticeArtifact, evaluateRetelling, generateDiaryAudio, generateWeavedArtifact } from '../services/geminiService';
@@ -164,7 +165,7 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum, allAdvancedVocab 
   };
 
   return (
-    <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 animate-in fade-in duration-700">
+    <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 animate-in fade-in duration-500">
       <header className="mb-10 max-w-6xl mx-auto flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div className="text-center md:text-left">
           <h2 className="text-3xl md:text-4xl font-black text-slate-900 serif-font tracking-tight">展厅演练 Rehearsal</h2>
@@ -228,7 +229,9 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum, allAdvancedVocab 
                       {weavingGems.length > 0 ? weavingGems.map((gem, idx) => (
                         <div key={idx} className="bg-indigo-50/50 p-6 rounded-3xl border border-indigo-100 flex flex-col items-center text-center space-y-2">
                            <span className="text-2xl">💎</span>
-                           <h4 className="text-lg font-black text-slate-900 serif-font" dangerouslySetInnerHTML={{ __html: renderRuby(gem.word) }}></h4>
+                           <h4 className="text-lg font-black text-slate-900 serif-font">
+                             {renderRuby(gem.word)}
+                           </h4>
                            <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest">Mastery {gem.mastery || 0}</p>
                         </div>
                       )) : (
@@ -403,14 +406,12 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum, allAdvancedVocab 
                    <div className="mt-8 pt-6 border-t border-white/5 flex justify-end">
                       <button 
                         onClick={() => handlePlayAudio(evaluation.suggestedVersion, 'suggested')} 
-                        // Corrected: Replaced 'playingAudioId' with 'isPlaying' to match the component state
                         disabled={isAudioLoading && isPlaying === 'suggested'}
                         className={`flex items-center space-x-2 px-6 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${isPlaying === 'suggested' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-slate-400 hover:text-white'}`}
                       >
                         {isAudioLoading && isPlaying === 'suggested' ? (
                           <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin"></div>
                         ) : (
-                          // Corrected: Replaced 'playingAudioId' with 'isPlaying' to match the component state
                           <span>{isPlaying === 'suggested' ? '⏹ 停止播放' : '🎧 收听打磨版'}</span>
                         )}
                       </button>

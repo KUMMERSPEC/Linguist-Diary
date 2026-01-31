@@ -13,6 +13,7 @@ interface VocabListViewProps {
   onDeleteVocab?: (vocabId: string) => void;
   onDeleteFragment?: (id: string) => void;
   onPromoteFragment?: (id: string) => void;
+  onPromoteToSeed?: (id: string) => void;
 }
 
 const LANGUAGE_FLAGS: Record<string, string> = {
@@ -23,7 +24,7 @@ const LANGUAGE_FLAGS: Record<string, string> = {
   'German': '🇩🇪',
 };
 
-const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragments, onViewChange, onDeleteVocab, onDeleteFragment, onPromoteFragment }) => {
+const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragments, onViewChange, onDeleteVocab, onDeleteFragment, onPromoteFragment, onPromoteToSeed }) => {
   const [activeTab, setActiveTab] = useState<'gems' | 'shards'>('gems');
   const [selectedLangs, setSelectedLangs] = useState<string[]>([]); // Empty means 'All'
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -129,7 +130,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
           </button>
         </div>
 
-        {/* Language Filter Popover - Now aligned to the left */}
+        {/* Language Filter Popover */}
         <div className="relative" ref={filterRef}>
           <button 
             onClick={() => setIsFilterOpen(!isFilterOpen)}
@@ -250,19 +251,30 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
                    )}
                  </div>
 
-                 <div className="mt-6 pt-4 border-t border-slate-50 flex items-center justify-between">
-                   <div className="flex flex-col">
-                     <span className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">Captured {new Date(f.timestamp).toLocaleDateString()}</span>
+                 <div className="mt-6 pt-4 border-t border-slate-50 flex flex-col space-y-3">
+                   <div className="flex items-center justify-between">
+                      <span className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">Captured {new Date(f.timestamp).toLocaleDateString()}</span>
+                      <button onClick={(e) => handlePlayAudio(e, f.content, `frag-content-${f.id}`)} className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${playingAudioId === `frag-content-${f.id}` ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-300 hover:text-indigo-600'}`}>{playingAudioId === `frag-content-${f.id}` ? '⏹' : '🎧'}</button>
+                   </div>
+                   
+                   <div className="flex flex-col space-y-1.5">
+                     {f.fragmentType === 'transient' && (f.meaning || f.usage) && (
+                       <button 
+                         onClick={() => onPromoteToSeed?.(f.id)}
+                         className="w-full text-[9px] font-black text-emerald-600 bg-emerald-50 py-2 rounded-xl uppercase tracking-widest hover:bg-emerald-100 transition-colors border border-emerald-100"
+                       >
+                         🌱 转化为种子
+                       </button>
+                     )}
                      {f.fragmentType === 'seed' && (
                        <button 
                          onClick={() => onPromoteFragment?.(f.id)}
-                         className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mt-1 hover:underline text-left"
+                         className="w-full text-[9px] font-black text-indigo-600 bg-indigo-50 py-2 rounded-xl uppercase tracking-widest hover:bg-indigo-100 transition-colors border border-indigo-100"
                        >
                          💎 升级为珍宝
                        </button>
                      )}
                    </div>
-                   <button onClick={(e) => handlePlayAudio(e, f.content, `frag-content-${f.id}`)} className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${playingAudioId === `frag-content-${f.id}` ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-300 hover:text-indigo-600'}`}>{playingAudioId === `frag-content-${f.id}` ? '⏹' : '🎧'}</button>
                  </div>
               </div>
             )) : (
