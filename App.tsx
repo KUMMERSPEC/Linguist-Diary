@@ -77,8 +77,10 @@ const AVATAR_SEEDS = [
   { seed: 'Buster', label: '极简主义者' },
 ];
 
+const DEFAULT_LANGS = ['English', 'Japanese', 'French', 'Spanish', 'German'];
+
 const App: React.FC = () => {
-  const [user, setUser] = useState<{ uid: string, displayName: string, photoURL: string, isMock: boolean, iterationDay?: number } | null>(null);
+  const [user, setUser] = useState<{ uid: string, displayName: string, photoURL: string, isMock: boolean, iterationDay?: number, preferredLanguages?: string[] } | null>(null);
   const [isAuthInitializing, setIsAuthInitializing] = useState(true); 
   const [view, setView] = useState<ViewState>('dashboard');
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
@@ -104,6 +106,8 @@ const App: React.FC = () => {
   const [editPhoto, setEditPhoto] = useState('');
   const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
 
+  const preferredLanguages = useMemo(() => user?.preferredLanguages || DEFAULT_LANGS, [user]);
+
   const loadUserData = useCallback(async (userId: string, isMock: boolean) => {
     setIsLoading(true);
     setError(null);
@@ -118,7 +122,7 @@ const App: React.FC = () => {
         const localProfile = localStorage.getItem(`linguist_profile_${userId}`);
         if (localProfile) {
           const profile = JSON.parse(localProfile);
-          setUser(prev => prev ? { iterationDay: 0, ...prev, ...profile } : null);
+          setUser(prev => prev ? { iterationDay: 0, preferredLanguages: DEFAULT_LANGS, ...prev, ...profile } : null);
         }
       } else {
         const userDocRef = doc(db, 'users', userId);
@@ -126,7 +130,7 @@ const App: React.FC = () => {
         if (userDocSnap.exists()) {
           const data = userDocSnap.data();
           if (data.profile) {
-             setUser(prev => prev ? { iterationDay: 0, ...prev, ...data.profile } : null);
+             setUser(prev => prev ? { iterationDay: 0, preferredLanguages: DEFAULT_LANGS, ...prev, ...data.profile } : null);
           }
         }
         
@@ -181,10 +185,10 @@ const App: React.FC = () => {
           displayName: firebaseUser.displayName || firebaseUser.email || '馆长',
           photoURL: userPhotoURL,
           isMock: false,
-          iterationDay: 0
+          iterationDay: 0,
+          preferredLanguages: DEFAULT_LANGS
         };
         setUser(userData);
-        // CRITICAL FIX: Load data on initial auth detection (refresh)
         loadUserData(firebaseUser.uid, false);
       } else {
         setUser(null);
@@ -551,6 +555,17 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSetPreferredLanguages = async (langs: string[]) => {
+    if (!user) return;
+    setUser(prev => prev ? { ...prev, preferredLanguages: langs } : null);
+    if (!db || user.isMock) {
+       const profile = JSON.parse(localStorage.getItem(`linguist_profile_${user.uid}`) || '{}');
+       localStorage.setItem(`linguist_profile_${user.uid}`, JSON.stringify({ ...profile, preferredLanguages: langs }));
+    } else {
+       await updateDoc(doc(db, 'users', user.uid), { 'profile.preferredLanguages': langs });
+    }
+  };
+
   const handleViewChange = (v: ViewState, vocabId?: string, isPracticeActive?: boolean) => {
     setView(v);
     if (vocabId) setSelectedVocabForPracticeId(vocabId);
@@ -574,7 +589,7 @@ const App: React.FC = () => {
   };
 
   const handleLogin = (userData: { uid: string, displayName: string, photoURL: string }, isMock: boolean) => {
-    const fullUser = { ...userData, isMock, iterationDay: 0 };
+    const fullUser = { ...userData, isMock, iterationDay: 0, preferredLanguages: DEFAULT_LANGS };
     setUser(fullUser);
     loadUserData(userData.uid, isMock);
   };
@@ -594,18 +609,18 @@ const App: React.FC = () => {
   return (
     <Layout activeView={view} onViewChange={handleViewChange} user={user} onLogout={handleLogout}>
       {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartSmartReview} entries={entries} allAdvancedVocab={allAdvancedVocab} recommendedIteration={recommendedIteration} onStartIteration={handleStartIteration} onSaveFragment={handleSaveFragment} />}
-      {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraftUpdate} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} fragments={fragments} onDeleteFragment={handleDeleteFragment} />}
+      {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraftUpdate} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} fragments={fragments} onDeleteFragment={handleDeleteFragment} preferredLanguages={preferredLanguages} />}
       {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isReviewingExisting={isReviewingExisting} />}
       {view === 'history' && <History entries={entries} isAnalyzingId={analyzingId} onAnalyzeDraft={handleAnalyzeExistingEntry} onUpdateLanguage={handleUpdateEntryLanguage} onSelect={(e) => { setCurrentEntry(e); setIsReviewingExisting(true); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { 
         if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); 
         setEntries(prev => prev.filter(e => e.id !== id));
-      }} onRewrite={(e) => { handleStartIteration(e); }} />}
+      }} onRewrite={(e) => { handleStartIteration(e); }} preferredLanguages={preferredLanguages} />}
       {view === 'chat' && <ChatEditor onFinish={(msgs, lang, summary) => { 
         setChatLanguage(lang); 
         setPrefilledEditorText(''); 
         setSummaryPrompt(summary);
         setView('editor'); 
-      }} allGems={allAdvancedVocab} />}
+      }} allGems={allAdvancedVocab} preferredLanguages={preferredLanguages} />}
       {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} fragments={fragments} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} onDeleteVocab={handleDeleteVocab} onDeleteFragment={handleDeleteFragment} onPromoteFragment={handlePromoteFragment} />}
       {view === 'vocab_practice' && selectedVocabForPracticeId && (
         <VocabPractice 
@@ -628,9 +643,9 @@ const App: React.FC = () => {
       {view === 'vocab_practice_detail' && selectedVocabForPracticeId && (
         <VocabPracticeDetailView selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onBackToPracticeHistory={() => setView('vocab_list')} onDeletePractice={handleDeletePractice} onBatchDeletePractices={handleBatchDeletePractices} />
       )}
-      {view === 'rehearsal' && <Rehearsal onSaveToMuseum={(lang, reh) => { /* logic... */ }} />}
+      {view === 'rehearsal' && <Rehearsal allAdvancedVocab={allAdvancedVocab} onSaveToMuseum={(lang, reh) => { /* logic... */ }} preferredLanguages={preferredLanguages} />}
       {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} />}
-      {view === 'profile' && <ProfileView user={user} editName={editName} setEditName={setEditName} editPhoto={editPhoto} setEditPhoto={setEditPhoto} isAvatarPickerOpen={isAvatarPickerOpen} setIsAvatarPickerOpen={setIsAvatarPickerOpen} avatarSeeds={AVATAR_SEEDS} onSaveProfile={handleSaveProfile} isLoading={isLoading} iterationDay={user.iterationDay ?? 0} onSetIterationDay={handleSetIterationDay} />}
+      {view === 'profile' && <ProfileView user={user} editName={editName} setEditName={setEditName} editPhoto={editPhoto} setEditPhoto={setEditPhoto} isAvatarPickerOpen={isAvatarPickerOpen} setIsAvatarPickerOpen={setIsAvatarPickerOpen} avatarSeeds={AVATAR_SEEDS} onSaveProfile={handleSaveProfile} isLoading={isLoading} iterationDay={user.iterationDay ?? 0} onSetIterationDay={handleSetIterationDay} preferredLanguages={preferredLanguages} onSetPreferredLanguages={handleSetPreferredLanguages} />}
     </Layout>
   );
 };

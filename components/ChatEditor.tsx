@@ -1,11 +1,12 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ChatMessage, AdvancedVocab } from '../types';
 import { getChatFollowUp, generatePracticeTasks, generateChatSummaryPrompt, generateDailyMuses } from '../services/geminiService';
 
 interface ChatEditorProps {
   onFinish: (transcript: ChatMessage[], language: string, summaryPrompt: string) => void;
   allGems: (AdvancedVocab & { language: string })[];
+  preferredLanguages: string[];
 }
 
 interface GemMission {
@@ -29,8 +30,9 @@ const LANGUAGES = [
   { code: 'German', label: 'Deutsch', flag: '🇩🇪', starters: { morning: "Guten Morgen!", day: "Hallo!", evening: "Guten Abend.", night: "Gute Nacht." } },
 ];
 
-const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
-  const [language, setLanguage] = useState(LANGUAGES[0]);
+const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems, preferredLanguages }) => {
+  const filteredLangs = useMemo(() => LANGUAGES.filter(l => preferredLanguages.includes(l.code)), [preferredLanguages]);
+  const [language, setLanguage] = useState(filteredLangs[0] || LANGUAGES[0]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -39,7 +41,7 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
   const [isMobileGemsOpen, setIsMobileGemsOpen] = useState(false); 
   const [muses, setMuses] = useState<MuseCard[]>([]);
   const [isMusesLoading, setIsMusesLoading] = useState(false);
-  const [showMuses, setShowMuses] = useState(false); // Manually toggle muses
+  const [showMuses, setShowMuses] = useState(false); 
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -47,12 +49,6 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
   const [sessionGems, setSessionGems] = useState<AdvancedVocab[]>([]);
   const [gemMissions, setGemMissions] = useState<Record<string, GemMission>>({});
   const [usedGems, setUsedGems] = useState<Set<string>>(new Set());
-
-  const renderRuby = (text: string) => {
-    if (!text) return '';
-    const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
-    return <span dangerouslySetInnerHTML={{ __html: html }} />;
-  };
 
   const stripRuby = (text: string) => {
     if (!text) return '';
@@ -98,7 +94,6 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
     setMessages([{ role: 'ai', content: start.text }]);
     setThemeLabel(start.theme);
     refreshSessionGems();
-    // Reset muses on language change
     setMuses([]);
     setShowMuses(false);
   }, [language]);
@@ -172,6 +167,12 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
     }
   };
 
+  const renderRuby = (text: string) => {
+    if (!text) return '';
+    const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
+    return <span dangerouslySetInnerHTML={{ __html: html }} />;
+  };
+
   const GemsContent = () => (
     <div className="flex flex-col space-y-4 h-full">
       <div className="flex items-center justify-between shrink-0 mb-2">
@@ -235,10 +236,10 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems }) => {
         </>
       )}
 
-      <div className="flex-1 flex flex-col min-w-0 bg-slate-50 relative">
+      <div className="flex-1 flex flex-col min-0 bg-slate-50 relative">
         <header className="bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 py-3 flex items-center justify-between sticky top-0 z-50 shrink-0">
           <div className="flex items-center space-x-3 overflow-x-auto no-scrollbar py-1">
-             {LANGUAGES.map(lang => (
+             {filteredLangs.map(lang => (
                <button
                  key={lang.code}
                  onClick={() => handleLanguageChange(lang)}

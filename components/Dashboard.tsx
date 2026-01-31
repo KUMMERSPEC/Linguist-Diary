@@ -1,7 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { DiaryEntry, AdvancedVocab } from '../types';
+import { renderRuby } from '../utils/textHelpers';
 
 interface DashboardProps {
   onNewEntry: () => void;
@@ -26,7 +27,30 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [fragmentType, setFragmentType] = useState<'transient' | 'seed'>('transient');
   const [isSavingFragment, setIsSavingFragment] = useState(false);
 
-  const masteryData = React.useMemo(() => {
+  // Daily Spotlight: Choose a high-mastery gem or a polished sentence from history
+  const spotlight = useMemo(() => {
+    const polishedGems = allAdvancedVocab.filter(v => (v.mastery || 0) >= 3 && v.practices && v.practices.length > 0);
+    if (polishedGems.length === 0) return null;
+    
+    // Use date as seed for daily consistency
+    const daySeed = new Date().toDateString();
+    let hash = 0;
+    for (let i = 0; i < daySeed.length; i++) {
+      hash = daySeed.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash) % polishedGems.length;
+    const gem = polishedGems[index];
+    
+    // Prefer a practice version if available
+    const practice = gem.practices?.find(p => p.status === 'Perfect' || p.betterVersion);
+    return {
+      word: gem.word,
+      sentence: practice?.betterVersion || practice?.originalAttempt || gem.usage,
+      language: gem.language
+    };
+  }, [allAdvancedVocab]);
+
+  const masteryData = useMemo(() => {
     const counts = [0, 0, 0, 0, 0, 0]; 
     allAdvancedVocab.forEach(v => {
       const m = Math.min(Math.max(v.mastery || 0, 0), 5);
@@ -41,7 +65,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     }));
   }, [allAdvancedVocab]);
 
-  const { columns, monthLabels } = React.useMemo(() => {
+  const { columns, monthLabels } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const counts: { [key: string]: number } = {};
@@ -86,7 +110,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     return { columns: cols, monthLabels: labels };
   }, [entries]);
 
-  const stats = React.useMemo(() => {
+  const stats = useMemo(() => {
     const total = entries.length;
     const rehearsalCount = entries.filter(e => e.type === 'rehearsal').length;
     const vocabCount = allAdvancedVocab.length;
@@ -121,12 +145,36 @@ const Dashboard: React.FC<DashboardProps> = ({
           <p className="text-slate-500 text-sm md:text-base italic">云端同步已就绪，今天想记录些什么？</p>
         </header>
 
+        {/* Daily Spotlight Component */}
+        {spotlight && (
+          <div className="bg-white border border-slate-100 p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/50 relative overflow-hidden group">
+            <div className="absolute top-0 left-0 w-2 h-full bg-indigo-600"></div>
+            <div className="absolute top-0 right-0 p-8 opacity-5">
+              <span className="text-8xl serif-font font-black italic select-none">“</span>
+            </div>
+            <div className="relative z-10 space-y-4">
+              <div className="flex items-center space-x-2">
+                <span className="text-amber-500">✨</span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">今日展映 Curator's Spotlight</span>
+              </div>
+              <h3 className="text-2xl md:text-3xl font-black text-slate-900 serif-font leading-relaxed">
+                “ {renderRuby(spotlight.sentence)} ”
+              </h3>
+              <div className="flex items-center space-x-3 pt-2">
+                <span className="px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-lg uppercase tracking-widest">{spotlight.language}</span>
+                <span className="text-slate-300">/</span>
+                <span className="text-sm font-bold text-slate-800 serif-font">{renderRuby(spotlight.word)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <button 
             onClick={onNewEntry}
             className="group relative bg-indigo-600 p-8 rounded-[2.5rem] text-white flex items-center justify-between shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-[0.98] overflow-hidden"
           >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110 pointer-events-none"></div>
             <div className="text-left relative z-10">
               <h5 className="text-xl font-bold serif-font">开启今日撰写</h5>
               <p className="text-indigo-100 text-[10px] mt-1 opacity-70 uppercase tracking-widest font-black">Daily Language Entry</p>
@@ -138,7 +186,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             onClick={onStartReview} 
             className="group relative bg-slate-900 p-8 rounded-[2.5rem] text-white flex items-center justify-between shadow-2xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-[0.98] overflow-hidden"
           >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110 pointer-events-none"></div>
             <div className="text-left relative z-10">
               <h5 className="text-xl font-bold serif-font">打磨馆藏珍宝</h5>
               <p className="text-slate-400 text-[10px] mt-1 opacity-70 uppercase tracking-widest font-black">Review & Refine</p>
@@ -149,25 +197,25 @@ const Dashboard: React.FC<DashboardProps> = ({
       </section>
 
       <section className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/50 rounded-bl-[4rem] -mr-8 -mt-8 opacity-40"></div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/50 rounded-bl-[4rem] -mr-8 -mt-8 opacity-40 pointer-events-none"></div>
+        <div className="flex items-center justify-between mb-4 relative z-10">
           <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">灵感碎片快捕 Fragment Capture</h4>
           <div className="flex bg-slate-100 p-1 rounded-xl">
              <button 
-               onClick={() => setFragmentType('transient')}
-               className={`px-3 py-1 rounded-lg text-[9px] font-black transition-all ${fragmentType === 'transient' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}
+               onClick={(e) => { e.stopPropagation(); setFragmentType('transient'); }}
+               className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all cursor-pointer ${fragmentType === 'transient' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
              >
                📜 随笔 (引子)
              </button>
              <button 
-               onClick={() => setFragmentType('seed')}
-               className={`px-3 py-1 rounded-lg text-[9px] font-black transition-all ${fragmentType === 'seed' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}
+               onClick={(e) => { e.stopPropagation(); setFragmentType('seed'); }}
+               className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all cursor-pointer ${fragmentType === 'seed' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
              >
                🌱 种子 (AI解析)
              </button>
           </div>
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 relative z-10">
           <input 
             type="text" 
             value={fragmentText}
@@ -189,18 +237,12 @@ const Dashboard: React.FC<DashboardProps> = ({
             )}
           </button>
         </div>
-        {isSavingFragment && fragmentType === 'seed' && (
-          <p className="mt-3 text-[9px] font-black text-indigo-400 uppercase tracking-widest animate-pulse px-2">AI 正在为种子打磨意思与例句...</p>
-        )}
-        {isSavingFragment && fragmentType === 'transient' && (
-          <p className="mt-3 text-[9px] font-black text-slate-400 uppercase tracking-widest animate-pulse px-2">正在存入引子...</p>
-        )}
       </section>
 
       {recommendedIteration && (
         <section className="animate-in slide-in-from-top-4 duration-1000">
           <div className="relative group bg-amber-50 border border-amber-200 p-6 md:p-10 rounded-[2.5rem] shadow-2xl shadow-amber-100/50 overflow-hidden">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-amber-100/50 rounded-bl-full -mr-12 -mt-12 transition-transform group-hover:scale-110 duration-1000"></div>
+            <div className="absolute top-0 right-0 w-48 h-48 bg-amber-100/50 rounded-bl-full -mr-12 -mt-12 transition-transform group-hover:scale-110 duration-1000 pointer-events-none"></div>
             <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="flex-1 space-y-2">
                 <div className="flex items-center space-x-2">
@@ -223,24 +265,33 @@ const Dashboard: React.FC<DashboardProps> = ({
         </section>
       )}
 
+      {/* Stats Cards Section - Updated */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:border-indigo-100 transition-colors">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">馆藏总数 Total</p>
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:border-indigo-100 transition-colors relative group overflow-hidden">
+          <div className="flex justify-between items-start mb-1">
+             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">馆藏记录 Total</p>
+             <div className="flex items-center space-x-1.5 text-[8px] font-black text-emerald-500 bg-emerald-50 px-2 py-1 rounded-full">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                </span>
+                <span>ONLINE</span>
+             </div>
+          </div>
           <h3 className="text-3xl font-black text-slate-900 serif-font mt-1">{stats.total}</h3>
         </div>
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:border-indigo-100 transition-colors">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">珍宝总数 Gems</p>
-          <h3 className="text-3xl font-black text-slate-900 serif-font mt-1">{stats.vocabCount}</h3>
-        </div>
-        <div className="hidden md:block bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">博物馆状态 Status</p>
-          <div className="flex items-center space-x-2 mt-3 text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full w-fit">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
-            </span>
-            <span>已同步云端 Online</span>
+        
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:border-amber-200 transition-colors">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">演练记录 Rehearsals</p>
+          <div className="flex items-baseline space-x-2">
+            <h3 className="text-3xl font-black text-slate-900 serif-font mt-1">{stats.rehearsalCount}</h3>
+            <span className="text-amber-500 text-xs">✨</span>
           </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:border-indigo-100 transition-colors flex flex-col justify-between">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">馆藏珍宝 Gems</p>
+          <h3 className="text-3xl font-black text-indigo-600 serif-font mt-1">{stats.vocabCount}</h3>
         </div>
       </div>
 

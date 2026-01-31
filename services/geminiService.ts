@@ -358,3 +358,27 @@ export const generatePracticeArtifact = async (language: string, keywords: strin
     return response.text || "";
   }).catch(error => { throw new Error("生成失败。"); });
 };
+
+/**
+ * NEW: Weaves specific vocab gems into a coherent story for Rehearsal.
+ */
+export const generateWeavedArtifact = async (language: string, gems: { word: string, meaning: string }[]): Promise<string> => {
+  const ai = getAiInstance();
+  const gemsList = gems.map(g => `- ${g.word} (${g.meaning})`).join('\n');
+  return withRetry(async () => {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `You are a museum curator weaving treasures into a story.
+      Target Language: ${language}.
+      Vocabulary Gems to include:
+      ${gemsList}
+      
+      TASK:
+      Write a logically coherent and naturally phrased short story or informative text (4-6 sentences) in ${language} that naturally incorporates ALL the vocabulary gems above.
+      The context should be sophisticated and professional.
+      
+      STRICT RULE: Pure ${language} only. For Japanese, use natural Kanji/Kana balance.`,
+    });
+    return response.text || "";
+  }).catch(error => { throw new Error("织网生成失败。"); });
+};

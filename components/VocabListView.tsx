@@ -107,13 +107,13 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
 
   return (
     <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 animate-in fade-in duration-700">
-      <header className="mb-10 text-center">
+      <header className="mb-10 text-left">
         <h2 className="text-3xl md:text-5xl font-black text-slate-900 serif-font tracking-tight">馆藏珍宝 <span className="text-indigo-600">Gems & Shards</span></h2>
         <p className="text-slate-400 text-sm md:text-base mt-2 italic">在这里查看每一件被打磨出的语言珍宝。</p>
       </header>
 
-      {/* Primary Navigation: Gems vs Shards */}
-      <div className="flex flex-col items-center mb-10 space-y-4">
+      {/* Primary Navigation: Left-aligned Tabs and Filter */}
+      <div className="flex flex-col items-start mb-10 space-y-4">
         <div className="bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm flex items-center">
           <button 
             onClick={() => setActiveTab('gems')}
@@ -129,7 +129,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
           </button>
         </div>
 
-        {/* Language Filter Popover placed below the main tabs */}
+        {/* Language Filter Popover - Now aligned to the left */}
         <div className="relative" ref={filterRef}>
           <button 
             onClick={() => setIsFilterOpen(!isFilterOpen)}
@@ -147,7 +147,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
           </button>
 
           {isFilterOpen && (
-            <div className="absolute top-full mt-3 left-1/2 -translate-x-1/2 w-64 bg-white rounded-[2rem] shadow-2xl border border-slate-100 p-6 z-[100] animate-in zoom-in-95 slide-in-from-top-2 duration-200">
+            <div className="absolute top-full mt-3 left-0 w-64 bg-white rounded-[2rem] shadow-2xl border border-slate-100 p-6 z-[100] animate-in zoom-in-95 slide-in-from-top-2 duration-200">
               <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-50">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">语言档案库</span>
                 <button onClick={selectAll} className="text-[9px] font-black text-indigo-600 uppercase hover:underline">重置全部</button>
@@ -216,8 +216,8 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
             )) : (
               <div className="col-span-full py-24 text-center flex flex-col items-center space-y-6">
                 <span className="text-6xl grayscale opacity-20">🕯️</span>
-                <div>
-                  <p className="text-slate-900 font-bold serif-font">此视角下尚无珍宝</p>
+                <div className="text-center">
+                  <p className="text-slate-900 font-bold serif-font text-xl">此视角下尚无珍宝</p>
                   <p className="text-slate-400 text-xs mt-1 font-medium italic">请尝试更换筛选条件，或开启新的撰写。</p>
                 </div>
               </div>
@@ -268,8 +268,8 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
             )) : (
               <div className="col-span-full py-24 text-center flex flex-col items-center space-y-6">
                 <span className="text-6xl opacity-20">🍂</span>
-                <div>
-                  <p className="text-slate-900 font-bold serif-font">无相关碎片</p>
+                <div className="text-center">
+                  <p className="text-slate-900 font-bold serif-font text-xl">无相关碎片</p>
                   <p className="text-slate-400 text-xs mt-1 font-medium italic">请尝试更换筛选条件，或去主页捕捉新的灵感吧。</p>
                 </div>
               </div>

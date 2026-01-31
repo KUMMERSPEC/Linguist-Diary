@@ -9,8 +9,9 @@ interface HistoryProps {
   onDelete: (id: string) => void;
   onRewrite: (entry: DiaryEntry) => void;
   onAnalyzeDraft?: (entry: DiaryEntry) => void; 
-  onUpdateLanguage?: (id: string, language: string) => void; // New: allow fixing metadata
+  onUpdateLanguage?: (id: string, language: string) => void; 
   isAnalyzingId?: string | null; 
+  preferredLanguages: string[];
 }
 
 const LANGUAGES = [
@@ -21,22 +22,14 @@ const LANGUAGES = [
   { code: 'German', label: 'Deutsch', flag: '🇩🇪' },
 ];
 
-const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrite, onAnalyzeDraft, onUpdateLanguage, isAnalyzingId }) => {
+const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrite, onAnalyzeDraft, onUpdateLanguage, isAnalyzingId, preferredLanguages }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('All');
   const [fixingEntryId, setFixingEntryId] = useState<string | null>(null);
 
-  const getLatestText = (entry: DiaryEntry) => {
-    return entry.originalText;
-  };
-
-  const getIterationCountDisplay = (entry: DiaryEntry) => {
-    return entry.iterationCount || 0;
-  }
-
   const filteredEntries = useMemo(() => {
     return entries.filter(e => {
-      const latestText = getLatestText(e);
+      const latestText = e.originalText;
       const matchesSearch = (latestText && latestText.toLowerCase().includes(searchQuery.toLowerCase())) || (e.date && e.date.includes(searchQuery));
       const matchesLanguage = selectedLanguage === 'All' || e.language === selectedLanguage;
       return matchesSearch && matchesLanguage;
@@ -54,11 +47,16 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
     return groups;
   }, [filteredEntries]);
 
-  // Fix: filter out falsy/empty languages for the filter dropdown
-  const availableLanguages = useMemo(() => {
-    const langs = Array.from(new Set(entries.map(e => e.language).filter(Boolean)));
-    return ['All', ...langs];
-  }, [entries]);
+  const filterLanguages = useMemo(() => {
+    const existingLangs = Array.from(new Set(entries.map(e => e.language).filter(Boolean)));
+    // Combined existing data languages and preferred languages for the filter
+    const combined = Array.from(new Set([...existingLangs, ...preferredLanguages]));
+    return ['All', ...combined];
+  }, [entries, preferredLanguages]);
+
+  const fixLanguages = useMemo(() => {
+    return LANGUAGES.filter(l => preferredLanguages.includes(l.code));
+  }, [preferredLanguages]);
 
   if (entries.length === 0) return (
     <div className="flex flex-col items-center justify-center h-full text-center space-y-6 animate-in fade-in zoom-in duration-700">
@@ -84,7 +82,7 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
               onChange={(e) => setSelectedLanguage(e.target.value)} 
               className="appearance-none p-3.5 pl-5 pr-12 bg-white border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 transition-all outline-none"
             >
-              {availableLanguages.map(l => <option key={l} value={l}>{l === 'All' ? '🎨 全部语言' : l}</option>)}
+              {filterLanguages.map(l => <option key={l} value={l}>{l === 'All' ? '🎨 全部语言' : l}</option>)}
             </select>
             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-300">▼</div>
           </div>
@@ -112,10 +110,10 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
               {monthEntries.map((entry) => {
-                const iterCount = getIterationCountDisplay(entry);
+                const iterCount = entry.iterationCount || 0;
                 const isRehearsal = entry.type === 'rehearsal';
                 const isDraft = !isRehearsal && !entry.analysis;
-                const displayText = getLatestText(entry);
+                const displayText = entry.originalText;
                 const isAnalyzing = isAnalyzingId === entry.id;
                 const isFixing = fixingEntryId === entry.id;
                 
@@ -143,7 +141,7 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
                               isFixing ? (
                                 <div className="absolute top-0 left-0 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 p-2 flex flex-col space-y-1 animate-in zoom-in duration-300 min-w-[120px]">
                                   <p className="text-[8px] font-black text-slate-400 uppercase p-1">补全语言修复</p>
-                                  {LANGUAGES.map(lang => (
+                                  {fixLanguages.map(lang => (
                                     <button 
                                       key={lang.code} 
                                       onClick={(e) => {

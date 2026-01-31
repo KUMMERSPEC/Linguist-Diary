@@ -12,6 +12,7 @@ interface EditorProps {
   summaryPrompt?: string;
   fragments: InspirationFragment[];
   onDeleteFragment?: (id: string) => void;
+  preferredLanguages: string[];
 }
 
 interface MuseCard {
@@ -29,9 +30,9 @@ const LANGUAGES = [
   { code: 'German', label: 'Deutsch', flag: '🇩🇪' },
 ];
 
-const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, initialText = '', initialLanguage = 'English', summaryPrompt, fragments, onDeleteFragment }) => {
+const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, initialText = '', initialLanguage, summaryPrompt, fragments, onDeleteFragment, preferredLanguages }) => {
   const [text, setText] = useState(initialText);
-  const [language, setLanguage] = useState(initialLanguage);
+  const [language, setLanguage] = useState(initialLanguage || preferredLanguages[0] || 'English');
   const [isFragmentDrawerOpen, setIsFragmentDrawerOpen] = useState(false);
   const [fragmentSearch, setFragmentSearch] = useState('');
   const [usedFragmentIds, setUsedFragmentIds] = useState<Set<string>>(new Set());
@@ -42,7 +43,7 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
 
   useEffect(() => {
     setText(initialText);
-    setLanguage(initialLanguage);
+    if (initialLanguage) setLanguage(initialLanguage);
   }, [initialText, initialLanguage]);
 
   useEffect(() => {
@@ -64,6 +65,10 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
     }
   };
 
+  const filteredLanguages = useMemo(() => {
+    return LANGUAGES.filter(l => preferredLanguages.includes(l.code));
+  }, [preferredLanguages]);
+
   const filteredFragments = useMemo(() => {
     return fragments.filter(f => 
       f.content.toLowerCase().includes(fragmentSearch.toLowerCase()) || 
@@ -74,7 +79,6 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (text.trim().length < 10) return;
-    // Pass only transient fragments that were actually clicked/inserted
     onAnalyze(text, language, Array.from(usedFragmentIds));
   };
 
@@ -118,7 +122,7 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
         
         <div className="flex items-center justify-between border-b border-slate-50 pb-2">
           <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar">
-            {LANGUAGES.map((lang) => (
+            {filteredLanguages.map((lang) => (
               <button
                 key={lang.code}
                 type="button"

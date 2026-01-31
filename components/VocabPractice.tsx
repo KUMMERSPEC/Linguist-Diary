@@ -12,7 +12,7 @@ interface VocabPracticeProps {
   onUpdateMastery: (vocabId: string, word: string, newMastery: number, record?: PracticeRecord) => void; 
   onBackToVocabList: () => void;
   onViewChange: (view: ViewState, vocabId?: string, isPracticeActive?: boolean) => void;
-  onSaveFragment: (content: string, language: string, meaning?: string, usage?: string) => Promise<void>;
+  onSaveFragment: (content: string, language: string, type: 'transient' | 'seed', meaning?: string, usage?: string) => Promise<void>;
   isPracticeActive: boolean;
   queueProgress?: { current: number; total: number }; 
   onNextInQueue?: () => void; 
@@ -148,9 +148,11 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
   const handleSavePhrase = async (phrase: string, explanation: string) => {
     if (savedPhrases.has(phrase)) return;
     try {
+      // Corrected: Passing 'seed' as the third argument to mark as seed fragment
       await onSaveFragment(
         phrase, 
         currentVocab.language, 
+        'seed',
         `打磨笔记：${explanation}`, 
         `源自打磨语境：${lastFeedback?.betterVersion || practiceInput}`
       );
