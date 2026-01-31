@@ -145,34 +145,6 @@ const Dashboard: React.FC<DashboardProps> = ({
           <p className="text-slate-500 text-sm md:text-base italic">云端同步已就绪，今天想记录些什么？</p>
         </header>
 
-        {/* Daily Spotlight Component - Fixed Rendering */}
-        {spotlight && (
-          <div className="bg-white border border-slate-100 p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/50 relative overflow-hidden group">
-            <div className="absolute top-0 left-0 w-2 h-full bg-indigo-600"></div>
-            <div className="absolute top-0 right-0 p-8 opacity-5">
-              <span className="text-8xl serif-font font-black italic select-none">“</span>
-            </div>
-            <div className="relative z-10 space-y-4">
-              <div className="flex items-center space-x-2">
-                <span className="text-amber-500">✨</span>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">今日展映 Curator's Spotlight</span>
-              </div>
-              <h3 
-                className="text-2xl md:text-3xl font-black text-slate-900 serif-font leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: `“ ${renderRuby(spotlight.sentence)} ”` }}
-              />
-              <div className="flex items-center space-x-3 pt-2">
-                <span className="px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-lg uppercase tracking-widest">{spotlight.language}</span>
-                <span className="text-slate-300">/</span>
-                <span 
-                  className="text-sm font-bold text-slate-800 serif-font"
-                  dangerouslySetInnerHTML={{ __html: renderRuby(spotlight.word) }}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <button 
             onClick={onNewEntry}
@@ -198,12 +170,40 @@ const Dashboard: React.FC<DashboardProps> = ({
             <span className="text-3xl group-hover:translate-x-2 transition-transform relative z-10">→</span>
           </button>
         </div>
+
+        {/* Daily Spotlight Component - Now below buttons */}
+        {spotlight && (
+          <div className="bg-white border border-slate-100 p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/50 relative overflow-hidden group">
+            <div className="absolute top-0 left-0 w-2 h-full bg-indigo-600"></div>
+            <div className="absolute top-0 right-0 p-8 opacity-5">
+              <span className="text-8xl serif-font font-black italic select-none">“</span>
+            </div>
+            <div className="relative z-10 space-y-4">
+              <div className="flex items-center space-x-2">
+                <span className="text-amber-500">✨</span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">今日展映 CURATOR'S SPOTLIGHT</span>
+              </div>
+              <h3 
+                className="text-2xl md:text-3xl font-black text-slate-900 serif-font leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: `“ ${renderRuby(spotlight.sentence)} ”` }}
+              />
+              <div className="flex items-center space-x-3 pt-2">
+                <span className="px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-lg uppercase tracking-widest">{spotlight.language}</span>
+                <span className="text-slate-300">/</span>
+                <span 
+                  className="text-sm font-bold text-slate-800 serif-font"
+                  dangerouslySetInnerHTML={{ __html: renderRuby(spotlight.word) }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/50 rounded-bl-[4rem] -mr-8 -mt-8 opacity-40 pointer-events-none"></div>
         <div className="flex items-center justify-between mb-4 relative z-10">
-          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">灵感碎片快捕 Fragment Capture</h4>
+          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">灵感碎片快捕 FRAGMENT CAPTURE</h4>
           <div className="flex bg-slate-100 p-1 rounded-xl">
              <button 
                onClick={(e) => { e.stopPropagation(); setFragmentType('transient'); }}
@@ -251,7 +251,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               <div className="flex-1 space-y-2">
                 <div className="flex items-center space-x-2">
                   <span className="text-2xl">🕰️</span>
-                  <h3 className="text-[10px] font-black text-amber-800 uppercase tracking-[0.3em]">时光回响 Time's Echo</h3>
+                  <h3 className="text-[10px] font-black text-amber-800 uppercase tracking-[0.3em]">时光回响 TIME'S ECHO</h3>
                 </div>
                 <h4 className="text-xl md:text-2xl font-bold text-slate-900 serif-font">馆长，这件往昔作品正待您的新笔触。</h4>
                 <p className="text-amber-900/60 text-xs md:text-sm italic leading-relaxed max-w-2xl">
@@ -269,11 +269,10 @@ const Dashboard: React.FC<DashboardProps> = ({
         </section>
       )}
 
-      {/* Stats Cards Section - Updated */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:border-indigo-100 transition-colors relative group overflow-hidden">
           <div className="flex justify-between items-start mb-1">
-             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">馆藏记录 Total</p>
+             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">馆藏记录 TOTAL</p>
              <div className="flex items-center space-x-1.5 text-[8px] font-black text-emerald-500 bg-emerald-50 px-2 py-1 rounded-full">
                 <span className="relative flex h-1.5 w-1.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -286,7 +285,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
         
         <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:border-amber-200 transition-colors">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">演练记录 Rehearsals</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">演练记录 REHEARSALS</p>
           <div className="flex items-baseline space-x-2">
             <h3 className="text-3xl font-black text-slate-900 serif-font mt-1">{stats.rehearsalCount}</h3>
             <span className="text-amber-500 text-xs">✨</span>
@@ -294,14 +293,14 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:border-indigo-100 transition-colors flex flex-col justify-between">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">馆藏珍宝 Gems</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">馆藏珍宝 GEMS</p>
           <h3 className="text-3xl font-black text-indigo-600 serif-font mt-1">{stats.vocabCount}</h3>
         </div>
       </div>
 
       <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between mb-8">
-          <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">馆长年度足迹 Annual Footprint</h4>
+          <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">馆长年度足迹 ANNUAL FOOTPRINT</h4>
         </div>
         
         <div className="overflow-x-auto no-scrollbar pb-2">
@@ -342,7 +341,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       </section>
 
       <section className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm mb-12">
-        <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-8">馆藏珍宝磨炼进度 Gems Polish Levels</h4>
+        <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-8">馆藏珍宝磨炼进度 GEMS POLISH LEVELS</h4>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={masteryData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
