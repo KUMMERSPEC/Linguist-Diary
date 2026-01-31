@@ -265,7 +265,7 @@ export const generateChatSummaryPrompt = async (messages: ChatMessage[], languag
       3. Mention 1-2 useful words or grammar points from the chat.
       Keep it under 80 words.`,
     });
-    return response.text || "刚才的聊天很有趣，试着把这些零散的想法整理成一篇日记吧！";
+    return response.text || "刚才的聊天很有趣，试着把这些零散的想法整理成一片日记吧！";
   }).catch(() => "试着把刚才聊的内容整理成一篇正式的日记吧。");
 };
 
@@ -343,13 +343,19 @@ export const getChatFollowUp = async (messages: ChatMessage[], language: string)
 
 export const generatePracticeArtifact = async (language: string, keywords: string, difficulty: string, topic: string): Promise<string> => {
   const ai = getAiInstance();
+  
+  // Logic fix for 'Random' topic to ensure it doesn't just discuss 'randomness'
+  const effectiveTopic = topic === '随机' 
+    ? "Pick an arbitrary, interesting real-life or abstract topic (e.g. coffee culture, city life, star gazing, childhood memories, seasonal changes, or local food) that fits the difficulty level." 
+    : `Topic: ${topic}`;
+
   return withRetry(async () => {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Task: Write a cohesive short text (3-5 sentences) in ${language}. 
-      Topic: ${topic}. 
+      ${effectiveTopic}. 
       Difficulty level: ${difficulty}. 
-      Keywords to include: ${keywords}.
+      Keywords to include (if any): ${keywords}.
       
       STRICT RULE: The response MUST be entirely and purely in ${language}. 
       Do NOT mix other languages (like English) in the content. 

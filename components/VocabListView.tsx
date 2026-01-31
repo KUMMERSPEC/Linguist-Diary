@@ -258,7 +258,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
                    </div>
                    
                    <div className="flex flex-col space-y-1.5">
-                     {f.fragmentType === 'transient' && (f.meaning || f.usage) && (
+                     {f.fragmentType === 'transient' && (
                        <button 
                          onClick={() => onPromoteToSeed?.(f.id)}
                          className="w-full text-[9px] font-black text-emerald-600 bg-emerald-50 py-2 rounded-xl uppercase tracking-widest hover:bg-emerald-100 transition-colors border border-emerald-100"

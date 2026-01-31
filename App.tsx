@@ -148,7 +148,7 @@ const App: React.FC = () => {
         const fragmentsSnapshot = await getDocs(fragmentsQuery);
         setFragments(fragmentsSnapshot.docs.map(d => ({
             ...d.data(),
-            id: d.id,
+            id: d.id, // Ensure we use the Document ID as the primary key
             timestamp: (d.data().timestamp as Timestamp).toMillis(),
             fragmentType: d.data().fragmentType || 'transient'
         })) as InspirationFragment[]);
@@ -215,22 +215,23 @@ const App: React.FC = () => {
       } catch (e) { console.error("Failed to enrich", e); }
     }
 
-    const newFragment: InspirationFragment = {
-      id: uuidv4(),
+    const fragmentData = {
       content,
       meaning,
       usage,
       language,
       fragmentType: type,
-      timestamp: Date.now()
     };
 
-    setFragments(prev => [newFragment, ...prev]);
     if (!db || user.isMock) {
+      const newFragment: InspirationFragment = { ...fragmentData, id: uuidv4(), timestamp: Date.now() };
+      setFragments(prev => [newFragment, ...prev]);
       const local = JSON.parse(localStorage.getItem(`linguist_fragments_${user.uid}`) || '[]');
       localStorage.setItem(`linguist_fragments_${user.uid}`, JSON.stringify([newFragment, ...local]));
     } else {
-      await addDoc(collection(db, 'users', user.uid, 'fragments'), { ...newFragment, timestamp: serverTimestamp() });
+      const docRef = await addDoc(collection(db, 'users', user.uid, 'fragments'), { ...fragmentData, timestamp: serverTimestamp() });
+      const newFragment: InspirationFragment = { ...fragmentData, id: docRef.id, timestamp: Date.now() };
+      setFragments(prev => [newFragment, ...prev]);
     }
   };
 
@@ -241,10 +242,7 @@ const App: React.FC = () => {
       const local = JSON.parse(localStorage.getItem(`linguist_fragments_${user.uid}`) || '[]');
       localStorage.setItem(`linguist_fragments_${user.uid}`, JSON.stringify(local.map((f: any) => f.id === id ? { ...f, fragmentType: 'seed' } : f)));
     } else {
-      const fragmentsColRef = collection(db, 'users', user.uid, 'fragments');
-      const q = query(fragmentsColRef, where('id', '==', id));
-      const snap = await getDocs(q);
-      snap.forEach(async (d) => await updateDoc(d.ref, { fragmentType: 'seed' }));
+      await updateDoc(doc(db, 'users', user.uid, 'fragments', id), { fragmentType: 'seed' });
     }
   };
 
@@ -255,10 +253,7 @@ const App: React.FC = () => {
       const local = JSON.parse(localStorage.getItem(`linguist_fragments_${user.uid}`) || '[]');
       localStorage.setItem(`linguist_fragments_${user.uid}`, JSON.stringify(local.filter((f: any) => f.id !== id)));
     } else {
-      const fragmentsColRef = collection(db, 'users', user.uid, 'fragments');
-      const q = query(fragmentsColRef, where('id', '==', id));
-      const snap = await getDocs(q);
-      snap.forEach(async (doc) => await deleteDoc(doc.ref));
+      await deleteDoc(doc(db, 'users', user.uid, 'fragments', id));
     }
   };
 
