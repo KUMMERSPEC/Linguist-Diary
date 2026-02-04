@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AdvancedVocab, PracticeRecord, ViewState } from '../types';
-import { validateVocabUsage, generateDiaryAudio } from '../services/geminiService';
-import { decode, decodeAudioData } from '../utils/audioHelpers';
+import { validateVocabUsage } from '../services/geminiService';
+import { playSmartSpeech } from '../services/audioService';
 import { renderRuby as rubyUtil, stripRuby } from '../utils/textHelpers'; 
 import { v4 as uuidv4 } from 'uuid';
 
@@ -53,6 +53,12 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
     setPracticeInput('');
     setShowSuccessAnimation(false);
     setSavedPhrases(new Set());
+    
+    return () => {
+      if (audioSourceRef.current) {
+        audioSourceRef.current.stop();
+      }
+    };
   }, [selectedVocabId]);
 
   if (!currentVocab) return (
@@ -77,34 +83,23 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
       }
     }
 
-    setPlayingAudioId(id);
-    setIsAudioLoading(true);
-
-    try {
-      const cleanText = stripRuby(text); 
-      const base64Audio = await generateDiaryAudio(cleanText);
-      setIsAudioLoading(false);
-
-      if (!base64Audio) {
-        setPlayingAudioId(null);
-        return;
-      }
-
-      const bytes = decode(base64Audio);
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      const audioBuffer = await decodeAudioData(bytes, audioCtx, 24000, 1);
-      const source = audioCtx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioCtx.destination);
-      source.onended = () => {
+    const cleanText = stripRuby(text); 
+    const source = await playSmartSpeech(
+      cleanText, 
+      currentVocab.language, 
+      id,
+      () => {
+        setPlayingAudioId(id);
+        setIsAudioLoading(true);
+      },
+      () => {
         setPlayingAudioId(null);
         setIsAudioLoading(false);
-      };
-      source.start();
-      audioSourceRef.current = source;
-    } catch (e) { 
-      setIsAudioLoading(false);
-      setPlayingAudioId(null); 
+      }
+    );
+    
+    if (source) {
+      audioSourceRef.current = source as AudioBufferSourceNode;
     }
   };
 
@@ -229,7 +224,9 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
           <div className="space-y-5 md:space-y-6">
             <div>
               <span className="text-[9px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest block mb-2">词汇解析 DEFINITION</span>
-              <p className="text-slate-600 text-xs md:text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: rubyUtil(currentVocab.meaning) }} />
+              <p className="text-slate-600 text-xs md:text-sm leading-relaxed">
+                {stripRuby(currentVocab.meaning)}
+              </p>
             </div>
             <div>
               <span className="text-[9px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest block mb-2">参考范例 EXAMPLE</span>
@@ -309,7 +306,7 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
                                 : 'bg-white border-slate-100 text-slate-600 hover:border-indigo-400 hover:bg-indigo-50/50'
                             }`}
                           >
-                            <span className="serif-font">{kp.phrase}</span>
+                            <span className="serif-font">{renderRuby(kp.phrase)}</span>
                             <span className="opacity-30">|</span>
                             <span className="text-[9px] font-medium opacity-70">{kp.explanation}</span>
                             <span className={`transition-transform ${isSaved ? 'scale-110' : 'group-hover:rotate-12'}`}>

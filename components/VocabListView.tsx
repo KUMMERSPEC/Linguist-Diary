@@ -179,7 +179,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
               <div className="mt-4 pt-3 border-t border-slate-50">
                 <button 
                   onClick={() => setIsFilterOpen(false)}
-                  className="w-full bg-slate-900 text-white py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg"
+                  className="w-full bg-slate-900 text-white py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg"
                 >
                   确 定
                 </button>
@@ -203,11 +203,13 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
                    <span className="text-[8px] font-black text-slate-200 uppercase tracking-[0.2em]">{gem.language}</span>
                  </div>
                  <button onClick={(e) => { e.stopPropagation(); onDeleteVocab?.(gem.id); }} className="absolute top-6 right-8 p-2 text-slate-100 hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100">✕</button>
-                 <div className="flex-1 flex flex-col justify-center mt-4">
-                   <h4 className="text-3xl font-black text-slate-900 serif-font mb-4 tracking-tight" dangerouslySetInnerHTML={{ __html: renderRuby(gem.word) }}></h4>
-                   <p className="text-sm text-slate-500 italic leading-relaxed font-medium" dangerouslySetInnerHTML={{ __html: renderRuby(gem.meaning) }}></p>
+                 <div className="flex-1 flex flex-col justify-center mt-2">
+                   <h4 className="text-3xl font-black text-slate-900 serif-font mb-2 tracking-tight leading-relaxed" dangerouslySetInnerHTML={{ __html: renderRuby(gem.word) }}></h4>
+                   <p className="text-sm text-slate-500 italic leading-relaxed font-medium">
+                     {stripRuby(gem.meaning)}
+                   </p>
                  </div>
-                 <div className="pt-8 flex items-center justify-between mt-auto">
+                 <div className="pt-6 flex items-center justify-between mt-auto">
                     <div className={`text-[10px] font-black uppercase tracking-[0.1em] ${getMasteryTextStyle(gem.mastery)}`}>
                       MASTERY {gem.mastery || 0}
                     </div>
@@ -239,9 +241,9 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
                  </div>
                  
                  <div className="flex-1 space-y-3">
-                   <p className="text-base font-bold text-slate-800 leading-relaxed serif-font">“ {f.content} ”</p>
+                   <p className="text-base font-bold text-slate-800 leading-relaxed serif-font">“ {renderRuby(f.content)} ”</p>
                    {f.meaning && f.meaning.trim() !== '' && (
-                     <p className="text-[11px] text-slate-500 font-medium bg-slate-50 p-2 rounded-xl">意思：{f.meaning}</p>
+                     <p className="text-[11px] text-slate-500 font-medium bg-slate-50 p-2 rounded-xl">意思：{stripRuby(f.meaning)}</p>
                    )}
                    {f.usage && f.usage.trim() !== '' && (
                      <div className="relative group/usage">

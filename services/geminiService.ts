@@ -2,6 +2,7 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { DiaryAnalysis, ChatMessage, RehearsalEvaluation, DiaryEntry } from "../types";
 import { calculateDiff } from "../utils/diffHelper";
+import { weaveRubyMarkdown, stripRuby } from "../utils/textHelpers";
 
 const getAiInstance = () => {
   const apiKey = process.env.API_KEY;
@@ -28,9 +29,11 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2, initialDelay =
   throw lastError;
 }
 
+/**
+ * Optimized for Token Efficiency and Surgical Precision
+ */
 export const analyzeDiaryEntry = async (text: string, language: string, history: DiaryEntry[] = []): Promise<DiaryAnalysis> => {
   const ai = getAiInstance();
-  // Token Saving: Only use overall feedback from last 2 entries for context
   const historyContext = history.slice(0, 2).map(e => `- ${e.date}: ${e.analysis?.overallFeedback}`).join('\n');
   
   return withRetry(async () => {
@@ -38,14 +41,19 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
       model: 'gemini-3-flash-preview',
       contents: `Analyze: "${text}". Lang: ${language}.
       Context: ${historyContext}
+      Task: Correct the text. 
+      IMPORTANT: Maintain the user's original phrasing where it is correct. Only rewrite if necessary for naturalness or grammar. 
+      Provide grammar tips(CN), advanced vocab, readingPairs(N2+).
       
-      Task:
-      1. Correct text.
-      2. If Japanese: NO brackets in 'modifiedText'.
-      3. If Japanese: 'readingPairs' ONLY for N2+ level words. Skip easy words (私,今日,学校,日本,etc).
-      4. Feedbacks/explanations in CHINESE.
-      5. 'advancedVocab.meaning' in ${language}.`,
+      FOR ALL LANGUAGES:
+      - 'advancedVocab.meaning' MUST be a monolingual definition in the target language (${language}) itself. DO NOT use English or Chinese for meaning.
+      
+      FOR JAPANESE:
+      - 'advancedVocab.word' and 'advancedVocab.usage' MUST use the format: [漢字](かんじ).
+      - Ensure 'readingPairs' contains all Kanji from 'advancedVocab'.
+      - 'advancedVocab.meaning' MUST BE PLAIN TEXT without any furigana or parentheses reading.`,
       config: {
+        thinkingConfig: { thinkingBudget: 0 }, 
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -108,14 +116,52 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
     });
     
     const analysis = JSON.parse(response.text) as DiaryAnalysis;
-    analysis.diffedText = calculateDiff(text, analysis.modifiedText);
+    
+    // Post-processing: ensure target-language meanings are clean plain-text
+    if (analysis.readingPairs) {
+      analysis.advancedVocab = analysis.advancedVocab.map(v => ({
+        ...v,
+        word: language === 'Japanese' && !v.word.includes('[') ? weaveRubyMarkdown(v.word, analysis.readingPairs, 'Japanese') : v.word,
+        usage: language === 'Japanese' && !v.usage.includes('[') ? weaveRubyMarkdown(v.usage, analysis.readingPairs, 'Japanese') : v.usage,
+        meaning: stripRuby(v.meaning) // Ensure meaning is ALWAYS clean plain text
+      }));
+    }
+
+    analysis.diffedText = calculateDiff(text, analysis.modifiedText, language);
     return analysis;
+  });
+};
+
+export const evaluateRetelling = async (source: string, retelling: string, language: string): Promise<RehearsalEvaluation> => {
+  const ai = getAiInstance();
+  return withRetry(async () => {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `Compare Source/Retelling in ${language}. Score accuracy/quality. Feedbacks(CN).`,
+      config: {
+        thinkingConfig: { thinkingBudget: 0 },
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            accuracyScore: { type: Type.NUMBER },
+            qualityScore: { type: Type.NUMBER },
+            contentFeedback: { type: Type.STRING },
+            languageFeedback: { type: Type.STRING },
+            suggestedVersion: { type: Type.STRING }
+          },
+          required: ["accuracyScore", "qualityScore", "contentFeedback", "languageFeedback", "suggestedVersion"]
+        }
+      }
+    });
+    const result = JSON.parse(response.text) as RehearsalEvaluation;
+    result.diffedRetelling = calculateDiff(retelling, result.suggestedVersion, language);
+    return result;
   });
 };
 
 export const getChatFollowUp = async (messages: ChatMessage[], language: string): Promise<string> => {
   const ai = getAiInstance();
-  // Token Saving: Sliding window - only send last 6 messages to maintain context
   const recentMessages = messages.slice(-6);
   
   const response = await ai.models.generateContent({
@@ -125,7 +171,8 @@ export const getChatFollowUp = async (messages: ChatMessage[], language: string)
       parts: [{ text: m.content }] 
     })),
     config: {
-      systemInstruction: `You are a language tutor in ${language}. Keep responses short (max 2 sentences) to encourage user to speak more.`
+      thinkingConfig: { thinkingBudget: 0 },
+      systemInstruction: `You are a language tutor in ${language}. Short responses (max 2 sentences).`
     }
   });
   return response.text || "";
@@ -136,9 +183,9 @@ export const validateVocabUsage = async (word: string, meaning: string, sentence
   return withRetry(async () => {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Word: "${word}" (${meaning}). Sentence: "${sentence}". Lang: ${language}.
-      Correct? Feedback (CN). Better version. 1-2 key phrases.`,
+      contents: `Word: "${word}". Sentence: "${sentence}". Correct? Feedback(CN).`,
       config: {
+        thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -168,12 +215,10 @@ export const validateVocabUsage = async (word: string, meaning: string, sentence
 
 export const generatePracticeArtifact = async (language: string, keywords: string, difficultyId: string, topicLabel: string): Promise<string> => {
   const ai = getAiInstance();
-  // Token Saving: Hard-coded length constraints in system instruction
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Topic: ${topicLabel}. Lang: ${language}. Keywords: ${keywords}. Diff: ${difficultyId}.
-    Rules: Pure text. No title. 
-    Length: Beginner < 50w, Intermediate < 80w, Advanced < 120w.`,
+    contents: `Topic: ${topicLabel}. Lang: ${language}. Keywords: ${keywords}. Difficulty: ${difficultyId}. Pure text.`,
+    config: { thinkingConfig: { thinkingBudget: 0 } }
   });
   return response.text.trim();
 };
@@ -182,43 +227,21 @@ export const generateWeavedArtifact = async (language: string, gems: any[]): Pro
   const ai = getAiInstance();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Short paragraph in ${language} using: ${gems.map(g => g.word).join(', ')}. Max 80 words.`,
+    contents: `Paragraph in ${language} using: ${gems.map(g => g.word).join(', ')}.`,
+    config: { thinkingConfig: { thinkingBudget: 0 } }
   });
   return response.text.trim();
-};
-
-export const evaluateRetelling = async (source: string, retelling: string, language: string): Promise<RehearsalEvaluation> => {
-  const ai = getAiInstance();
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `Compare Source and Retelling in ${language}. 
-    Schema: accuracyScore, qualityScore, contentFeedback(CN), languageFeedback(CN), suggestedVersion.`,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          accuracyScore: { type: Type.NUMBER },
-          qualityScore: { type: Type.NUMBER },
-          contentFeedback: { type: Type.STRING },
-          languageFeedback: { type: Type.STRING },
-          suggestedVersion: { type: Type.STRING }
-        },
-        required: ["accuracyScore", "qualityScore", "contentFeedback", "languageFeedback", "suggestedVersion"]
-      }
-    }
-  });
-  const result = JSON.parse(response.text) as RehearsalEvaluation;
-  result.diffedRetelling = calculateDiff(retelling, result.suggestedVersion);
-  return result;
 };
 
 export const generateDailyMuses = async (language: string): Promise<any[]> => {
   const ai = getAiInstance();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `3 diary prompts in ${language}. Return JSON [{id, title, prompt, icon}]`,
-    config: { responseMimeType: "application/json" }
+    contents: `3 prompts in ${language}. JSON [{id, title, prompt, icon}]`,
+    config: { 
+      thinkingConfig: { thinkingBudget: 0 },
+      responseMimeType: "application/json" 
+    }
   });
   return JSON.parse(response.text);
 };
@@ -240,7 +263,8 @@ export const generateChatSummaryPrompt = async (messages: ChatMessage[], languag
   const ai = getAiInstance();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Summarize this chat into a 1-sentence diary prompt: ${messages.slice(-5).map(m => m.content).join(' ')}`,
+    contents: `Summary to 1-sentence prompt: ${messages.slice(-5).map(m => m.content).join(' ')}`,
+    config: { thinkingConfig: { thinkingBudget: 0 } }
   });
   return response.text || "";
 };
@@ -249,8 +273,9 @@ export const enrichFragment = async (content: string, language: string): Promise
   const ai = getAiInstance();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Fragment: "${content}". Lang: ${language}. Meaning (CN). Usage (${language}).`,
+    contents: `Fragment: "${content}". Meaning(CN), Usage(${language}).`,
     config: {
+      thinkingConfig: { thinkingBudget: 0 },
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,

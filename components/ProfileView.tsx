@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
+import { UserProfile } from '../types';
 
 interface ProfileViewProps {
-  user: { displayName: string; photoURL: string; };
+  user: { uid: string } & UserProfile;
   editName: string;
   setEditName: (name: string) => void;
   editPhoto: string;
@@ -16,6 +17,7 @@ interface ProfileViewProps {
   onSetIterationDay: (day: number) => void;
   preferredLanguages: string[];
   onSetPreferredLanguages: (langs: string[]) => void;
+  onActivatePro: (code: string) => Promise<boolean>;
 }
 
 const DAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
@@ -42,10 +44,13 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   iterationDay,
   onSetIterationDay,
   preferredLanguages,
-  onSetPreferredLanguages
+  onSetPreferredLanguages,
+  onActivatePro
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isLearningPrefsOpen, setIsLearningPrefsOpen] = useState(false);
+  const [passcode, setPasscode] = useState('');
+  const [activationStatus, setActivationStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
   const handleStartEdit = () => {
     setEditName(user.displayName);
@@ -66,12 +71,26 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   const toggleLanguage = (code: string) => {
     let next;
     if (preferredLanguages.includes(code)) {
-      if (preferredLanguages.length <= 1) return; // Must have at least one
+      if (preferredLanguages.length <= 1) return;
       next = preferredLanguages.filter(l => l !== code);
     } else {
       next = [...preferredLanguages, code];
     }
     onSetPreferredLanguages(next);
+  };
+
+  const handleActivate = async () => {
+    if (!passcode.trim()) return;
+    setActivationStatus('loading');
+    const success = await onActivatePro(passcode);
+    if (success) {
+      setActivationStatus('success');
+      setPasscode('');
+      setTimeout(() => setActivationStatus('idle'), 3000);
+    } else {
+      setActivationStatus('error');
+      setTimeout(() => setActivationStatus('idle'), 2000);
+    }
   };
 
   return (
@@ -82,13 +101,12 @@ const ProfileView: React.FC<ProfileViewProps> = ({
           <p className="text-slate-400 text-xs md:text-sm font-medium mt-1 uppercase tracking-widest">Curator of the Language Museum</p>
         </div>
         <div className="flex items-center space-x-3 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white px-5 py-2.5 rounded-2xl border border-slate-100 shadow-sm">
-          <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-          <span>云端认证 Online</span>
+          <span className={`w-2 h-2 rounded-full animate-pulse ${user.isPro ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+          <span>{user.isPro ? 'PRO 尊享馆长' : '标准馆长'}</span>
         </div>
       </header>
 
       <div className="flex-1 overflow-y-auto no-scrollbar space-y-6 px-4 md:px-0 pb-12">
-        {/* Main Curator Card */}
         <div className="bg-white p-10 md:p-14 rounded-[3rem] border border-slate-200 shadow-2xl relative group overflow-hidden">
           <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-50 rounded-bl-[8rem] opacity-40 -mr-16 -mt-16 group-hover:scale-110 transition-transform duration-1000"></div>
           
@@ -109,7 +127,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({
               )}
             </div>
 
-            <div className="text-center space-y-2 w-full max-w-sm">
+            <div className="text-center space-y-2 w-full max-sm">
               {isEditing ? (
                 <div className="animate-in fade-in zoom-in duration-300">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">馆长名号 NAME</label>
@@ -117,30 +135,74 @@ const ProfileView: React.FC<ProfileViewProps> = ({
                 </div>
               ) : (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-                  <h3 className="text-3xl md:text-4xl font-black text-slate-900 serif-font tracking-tight">{user.displayName}</h3>
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-2">Chief Curator</div>
+                  <h3 className="text-3xl md:text-4xl font-black text-slate-900 serif-font tracking-tight flex items-center justify-center">
+                    {user.displayName}
+                    {user.isPro && <span className="ml-2 text-xl" title="Pro Membership">✨</span>}
+                  </h3>
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-2">
+                    {user.isPro ? 'PRO SENIOR CURATOR' : 'CHIEF CURATOR'}
+                  </div>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Unified Learning Preferences Entry Point */}
+        {/* Activation Code Section */}
+        <section className="bg-slate-900 p-8 rounded-[2.5rem] border border-slate-800 shadow-xl overflow-hidden relative">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-bl-full -mr-10 -mt-10 pointer-events-none"></div>
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-1">
+              <h4 className="text-xl font-black text-white serif-font">激活码兑换 <span className="text-indigo-400 text-sm">Passcode</span></h4>
+              <p className="text-slate-400 text-[9px] uppercase font-black tracking-widest">开启 Pro 权限，享受不限额度 AI 服务</p>
+            </div>
+            
+            <div className="flex items-center space-x-2 bg-white/5 p-2 rounded-2xl border border-white/10 focus-within:border-indigo-500 transition-all">
+              <input 
+                type="text" 
+                value={passcode}
+                onChange={(e) => setPasscode(e.target.value)}
+                placeholder="输入激活码..."
+                className="bg-transparent border-none focus:ring-0 text-white text-xs px-2 w-32"
+              />
+              <button 
+                onClick={handleActivate}
+                disabled={activationStatus === 'loading' || !passcode.trim()}
+                className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                  activationStatus === 'success' ? 'bg-emerald-500 text-white' : 
+                  activationStatus === 'error' ? 'bg-rose-500 text-white' : 
+                  'bg-indigo-600 text-white hover:bg-indigo-700'
+                }`}
+              >
+                {activationStatus === 'loading' ? '...' : 
+                 activationStatus === 'success' ? '已激活' : 
+                 activationStatus === 'error' ? '错误' : '激活'}
+              </button>
+            </div>
+          </div>
+          {user.isPro && user.proExpiry && (
+            <div className="mt-4 pt-4 border-t border-white/5">
+               <p className="text-[8px] font-black text-indigo-300/60 uppercase tracking-widest">
+                 您的 Pro 权益有效期至: {new Date(user.proExpiry).toLocaleDateString()}
+               </p>
+            </div>
+          )}
+        </section>
+
         <button 
           onClick={() => setIsLearningPrefsOpen(true)}
-          className="w-full bg-indigo-600 p-8 rounded-[2.5rem] text-white flex items-center justify-between shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all group overflow-hidden relative"
+          className="w-full bg-white p-8 rounded-[2.5rem] text-slate-900 border border-slate-100 flex items-center justify-between shadow-lg hover:shadow-xl transition-all group overflow-hidden relative"
         >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110 pointer-events-none"></div>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110 pointer-events-none"></div>
           <div className="flex items-center space-x-5 relative z-10">
-            <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center text-2xl">⚙️</div>
+            <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center text-2xl">⚙️</div>
             <div className="text-left">
               <h4 className="text-xl font-black serif-font">学习选项设定</h4>
-              <p className="text-indigo-100/70 text-[10px] uppercase font-black tracking-widest mt-1">Learning Preferences</p>
+              <p className="text-slate-400 text-[10px] uppercase font-black tracking-widest mt-1">Learning Preferences</p>
             </div>
           </div>
           <div className="flex flex-col items-end relative z-10">
-            <span className="text-2xl group-hover:translate-x-2 transition-transform">→</span>
-            <span className="text-[9px] font-bold opacity-60 mt-1 uppercase">语种 & 迭代策略</span>
+            <span className="text-2xl text-indigo-600 group-hover:translate-x-2 transition-transform">→</span>
           </div>
         </button>
 
@@ -168,7 +230,6 @@ const ProfileView: React.FC<ProfileViewProps> = ({
         </footer>
       )}
 
-      {/* Learning Preferences Overlay/Modal */}
       {isLearningPrefsOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">
            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsLearningPrefsOpen(false)}></div>
@@ -186,11 +247,9 @@ const ProfileView: React.FC<ProfileViewProps> = ({
               </header>
 
               <div className="flex-1 overflow-y-auto no-scrollbar p-8 space-y-10">
-                {/* 1. Language Section */}
                 <section>
                   <div className="flex items-center justify-between mb-6">
                     <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">馆藏语种分馆分派 GEMS ARCHIVE BRANCHES</h4>
-                    <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">{preferredLanguages.length} 激活中</span>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                     {ALL_LANG_ARRAY.map((lang) => {
@@ -211,12 +270,8 @@ const ProfileView: React.FC<ProfileViewProps> = ({
                       );
                     })}
                   </div>
-                  <p className="mt-4 text-[9px] text-slate-400 italic bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    💡 您至少需保留一个分馆以维持收藏馆运营。
-                  </p>
                 </section>
 
-                {/* 2. Iteration Section */}
                 <section>
                   <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-6">时光回响迭代策略 TIME'S ECHO STRATEGY</h4>
                   <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
@@ -235,9 +290,6 @@ const ProfileView: React.FC<ProfileViewProps> = ({
                             ))}
                           </div>
                        </div>
-                       <p className="text-[10px] text-indigo-500 leading-relaxed italic border-t border-indigo-100 pt-4">
-                         “ 系统将在每周的这一天，为您自动从馆藏中挑选一篇值得精进的旧作，助您见证语言能力的觉醒。 ”
-                       </p>
                     </div>
                   </div>
                 </section>
@@ -248,7 +300,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({
                   onClick={() => setIsLearningPrefsOpen(false)}
                   className="w-full bg-slate-900 text-white py-4 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl active:scale-[0.98] transition-all"
                  >
-                   保存并应用设置 UPDATE PREFERENCES
+                   完成设置 CLOSE
                  </button>
               </footer>
            </div>

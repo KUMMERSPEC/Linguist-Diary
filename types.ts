@@ -36,7 +36,7 @@ export interface DiaryAnalysis {
   advancedVocab: AdvancedVocab[];
   transitionSuggestions: TransitionSuggestion[];
   overallFeedback: string;
-  readingPairs?: ReadingPair[]; // Stable array structure for API
+  readingPairs?: ReadingPair[]; 
 }
 
 export interface PracticeRecord {
@@ -65,6 +65,17 @@ export type ViewState = 'dashboard' | 'editor' | 'review' | 'history' | 'chat' |
 export interface ChatMessage {
   role: 'ai' | 'user';
   content: string;
+}
+
+export interface UserProfile {
+  displayName: string;
+  photoURL: string;
+  iterationDay?: number;
+  preferredLanguages?: string[];
+  isPro?: boolean;
+  proExpiry?: number;
+  dailyUsageCount?: number;
+  lastUsageDate?: string;
 }
 
 export interface DiaryEntry {

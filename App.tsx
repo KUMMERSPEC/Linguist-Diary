@@ -36,7 +36,7 @@ import Rehearsal from './components/Rehearsal';
 import RehearsalReport from './components/RehearsalReport';
 import ProfileView from './components/ProfileView';
 
-import { ViewState, DiaryEntry, ChatMessage, RehearsalEvaluation, DiaryIteration, AdvancedVocab, PracticeRecord, InspirationFragment } from './types';
+import { ViewState, DiaryEntry, ChatMessage, RehearsalEvaluation, DiaryIteration, AdvancedVocab, PracticeRecord, InspirationFragment, UserProfile } from './types';
 import { analyzeDiaryEntry, enrichFragment } from './services/geminiService';
 import { stripRuby } from './utils/textHelpers';
 
@@ -78,9 +78,10 @@ const AVATAR_SEEDS = [
 ];
 
 const DEFAULT_LANGS = ['English', 'Japanese', 'French', 'Spanish', 'German'];
+const FREE_DAILY_LIMIT = 2; // Non-pro daily limit for diary analysis
 
 const App: React.FC = () => {
-  const [user, setUser] = useState<{ uid: string, displayName: string, photoURL: string, isMock: boolean, iterationDay?: number, preferredLanguages?: string[] } | null>(null);
+  const [user, setUser] = useState<{ uid: string, isMock: boolean } & UserProfile | null>(null);
   const [isAuthInitializing, setIsAuthInitializing] = useState(true); 
   const [view, setView] = useState<ViewState>('dashboard');
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
@@ -94,6 +95,7 @@ const App: React.FC = () => {
   const [prefilledEditorText, setPrefilledEditorText] = useState('');
   const [summaryPrompt, setSummaryPrompt] = useState<string>('');
   const [isReviewingExisting, setIsReviewingExisting] = useState(false); 
+  const [showProModal, setShowProModal] = useState(false);
 
   const [allAdvancedVocab, setAllAdvancedVocab] = useState<AdvancedVocab[]>([]); 
   const [selectedVocabForPracticeId, setSelectedVocabForPracticeId] = useState<string | null>(null);
@@ -122,7 +124,7 @@ const App: React.FC = () => {
         const localProfile = localStorage.getItem(`linguist_profile_${userId}`);
         if (localProfile) {
           const profile = JSON.parse(localProfile);
-          setUser(prev => prev ? { iterationDay: 0, preferredLanguages: DEFAULT_LANGS, ...prev, ...profile } : null);
+          setUser(prev => prev ? { iterationDay: 0, preferredLanguages: DEFAULT_LANGS, isPro: false, dailyUsageCount: 0, ...prev, ...profile } : null);
         }
       } else {
         const userDocRef = doc(db, 'users', userId);
@@ -130,7 +132,7 @@ const App: React.FC = () => {
         if (userDocSnap.exists()) {
           const data = userDocSnap.data();
           if (data.profile) {
-             setUser(prev => prev ? { iterationDay: 0, preferredLanguages: DEFAULT_LANGS, ...prev, ...data.profile } : null);
+             setUser(prev => prev ? { iterationDay: 0, preferredLanguages: DEFAULT_LANGS, isPro: false, dailyUsageCount: 0, ...prev, ...data.profile } : null);
           }
         }
         
@@ -148,7 +150,7 @@ const App: React.FC = () => {
         const fragmentsSnapshot = await getDocs(fragmentsQuery);
         setFragments(fragmentsSnapshot.docs.map(d => ({
             ...d.data(),
-            id: d.id, // Ensure we use the Document ID as the primary key
+            id: d.id, 
             timestamp: (d.data().timestamp as Timestamp).toMillis(),
             fragmentType: d.data().fragmentType || 'transient'
         })) as InspirationFragment[]);
@@ -180,13 +182,15 @@ const App: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseAuthUser | null) => {
       if (firebaseUser) {
         const userPhotoURL = firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`;
-        const userData = {
+        const userData: UserProfile & { uid: string, isMock: boolean } = {
           uid: firebaseUser.uid,
           displayName: firebaseUser.displayName || firebaseUser.email || '馆长',
           photoURL: userPhotoURL,
           isMock: false,
           iterationDay: 0,
-          preferredLanguages: DEFAULT_LANGS
+          preferredLanguages: DEFAULT_LANGS,
+          isPro: false,
+          dailyUsageCount: 0
         };
         setUser(userData);
         loadUserData(firebaseUser.uid, false);
@@ -201,23 +205,111 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, [loadUserData]);
 
+  const checkQuota = useCallback(() => {
+    if (!user) return false;
+    if (user.isPro) return true;
+    
+    const today = new Date().toDateString();
+    if (user.lastUsageDate !== today) {
+      // Reset count for new day
+      updateUserQuota(0, today);
+      return true;
+    }
+    
+    if ((user.dailyUsageCount || 0) >= FREE_DAILY_LIMIT) {
+      setShowProModal(true);
+      return false;
+    }
+    return true;
+  }, [user]);
+
+  const incrementQuota = useCallback(() => {
+    if (!user || user.isPro) return;
+    const nextCount = (user.dailyUsageCount || 0) + 1;
+    updateUserQuota(nextCount, new Date().toDateString());
+  }, [user]);
+
+  const updateUserQuota = async (count: number, date: string) => {
+    if (!user) return;
+    const update = { dailyUsageCount: count, lastUsageDate: date };
+    setUser(prev => prev ? { ...prev, ...update } : null);
+    if (!db || user.isMock) {
+       const profile = JSON.parse(localStorage.getItem(`linguist_profile_${user.uid}`) || '{}');
+       localStorage.setItem(`linguist_profile_${user.uid}`, JSON.stringify({ ...profile, ...update }));
+    } else {
+       await updateDoc(doc(db, 'users', user.uid), { profile: { ...user, ...update } });
+    }
+  };
+
+  /**
+   * 核心功能：通过 Firebase Firestore 验证激活码并更新用户 Pro 状态
+   */
+  const handleActivatePro = async (inputCode: string): Promise<boolean> => {
+    if (!user) return false;
+
+    // 如果是 Mock 环境或数据库不可用，回退到静态码 (用于演示)
+    if (!db || user.isMock) {
+      const STATIC_CODES = ['MUSEUM2025', 'LINGUIST_PRO'];
+      if (STATIC_CODES.includes(inputCode.toUpperCase())) {
+        const proData = { isPro: true, proExpiry: Date.now() + 30 * 24 * 60 * 60 * 1000 };
+        setUser(prev => prev ? { ...prev, ...proData } : null);
+        const profile = JSON.parse(localStorage.getItem(`linguist_profile_${user.uid}`) || '{}');
+        localStorage.setItem(`linguist_profile_${user.uid}`, JSON.stringify({ ...profile, ...proData }));
+        return true;
+      }
+      return false;
+    }
+
+    try {
+      // 1. 在 activationCodes 集合中查找匹配的 code
+      const q = query(
+        collection(db, 'activationCodes'), 
+        where('code', '==', inputCode.trim()),
+        where('status', '==', 'active')
+      );
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) return false;
+
+      const codeDoc = querySnapshot.docs[0];
+      const codeData = codeDoc.data();
+      
+      // 2. 根据 membershipType 确定时长
+      let durationDays = 30;
+      if (codeData.membershipType === 'pro_365d') durationDays = 365;
+      else if (codeData.membershipType === 'pro_7d') durationDays = 7;
+
+      const proExpiry = Date.now() + durationDays * 24 * 60 * 60 * 1000;
+      const proData = { isPro: true, proExpiry };
+
+      // 3. 使用 Batch 原子化更新码状态和用户状态
+      const batch = writeBatch(db);
+      
+      // 更新码状态
+      batch.update(codeDoc.ref, { 
+        status: 'used', 
+        usedBy: user.uid,
+        usedAt: serverTimestamp() 
+      });
+      
+      // 更新用户 Profile
+      const userRef = doc(db, 'users', user.uid);
+      batch.set(userRef, { profile: { ...user, ...proData } }, { merge: true });
+
+      await batch.commit();
+
+      // 4. 更新本地状态
+      setUser(prev => prev ? { ...prev, ...proData } : null);
+      return true;
+    } catch (e) {
+      console.error("Activation failed:", e);
+      return false;
+    }
+  };
+
   const handleSaveFragment = async (content: string, language: string, type: 'transient' | 'seed', predefinedMeaning?: string, predefinedUsage?: string) => {
     if (!user || !content.trim()) return;
-    
-    let meaning = predefinedMeaning || "";
-    let usage = predefinedUsage || "";
-
-    // OPTIMIZED: Removed automatic call to enrichFragment to save tokens.
-    // Fragments are now saved with minimal info unless manually enriched in the Vocab View.
-
-    const fragmentData = {
-      content,
-      meaning,
-      usage,
-      language,
-      fragmentType: type,
-    };
-
+    const fragmentData = { content, meaning: predefinedMeaning || "", usage: predefinedUsage || "", language, fragmentType: type };
     if (!db || user.isMock) {
       const newFragment: InspirationFragment = { ...fragmentData, id: uuidv4(), timestamp: Date.now() };
       setFragments(prev => [newFragment, ...prev]);
@@ -256,7 +348,6 @@ const App: React.FC = () => {
     if (!user) return;
     const fragment = fragments.find(f => f.id === fragmentId);
     if (!fragment) return;
-
     const vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'> = {
       word: fragment.content,
       meaning: fragment.meaning || "未命名珍宝",
@@ -265,18 +356,17 @@ const App: React.FC = () => {
       language: fragment.language,
       timestamp: Date.now()
     };
-
     await handleSaveManualVocab(vocab);
     await handleDeleteFragment(fragmentId);
   };
 
   const handleAnalyze = async (text: string, language: string, usedFragmentIds: string[]) => {
     if (!user) return;
+    if (!checkQuota()) return;
+
     setIsLoading(true);
     setError(null);
     try {
-      // Optimized: analyzeDiaryEntry itself now handles context slicing, 
-      // but we still only pass recent items here.
       const historyContext = entries.filter(e => e.language === language && e.analysis).slice(0, 3);
       const analysis = await analyzeDiaryEntry(text, language, historyContext);
       const clientTimestamp = Date.now();
@@ -289,6 +379,8 @@ const App: React.FC = () => {
         analysis,
         iterationCount: 0
       };
+
+      incrementQuota();
 
       const vocabItemsToSave = analysis.advancedVocab.filter(v => {
         const normalizedNewWord = stripRuby(v.word).trim().toLowerCase();
@@ -345,24 +437,10 @@ const App: React.FC = () => {
   const handleSaveManualVocab = async (vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>) => {
     if (!user) return;
     const normalizedNewWord = stripRuby(vocab.word).trim().toLowerCase();
-    const isExisting = allAdvancedVocab.some(v => 
-      stripRuby(v.word).trim().toLowerCase() === normalizedNewWord && v.language === vocab.language
-    );
-    if (isExisting) {
-      alert("该词汇已在馆藏中。");
-      return;
-    }
-
-    const newVocab: AdvancedVocab = {
-      ...vocab,
-      id: uuidv4(),
-      mastery: 0,
-      practices: [],
-      timestamp: Date.now()
-    };
-
+    const isExisting = allAdvancedVocab.some(v => stripRuby(v.word).trim().toLowerCase() === normalizedNewWord && v.language === vocab.language);
+    if (isExisting) { alert("该词汇已在馆藏中。"); return; }
+    const newVocab: AdvancedVocab = { ...vocab, id: uuidv4(), mastery: 0, practices: [], timestamp: Date.now() };
     setAllAdvancedVocab(prev => [newVocab, ...prev]);
-
     if (!db || user.isMock) {
       const currentVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
       localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify([newVocab, ...currentVocab]));
@@ -376,15 +454,7 @@ const App: React.FC = () => {
     if (!user) return;
     setIsLoading(true);
     try {
-      const draft: Omit<DiaryEntry, 'id'> = {
-        timestamp: Date.now(),
-        date: new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
-        originalText: text,
-        language,
-        type: 'diary',
-        iterationCount: 0
-      };
-
+      const draft: Omit<DiaryEntry, 'id'> = { timestamp: Date.now(), date: new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }), originalText: text, language, type: 'diary', iterationCount: 0 };
       if (!db || user.isMock) {
         const finalDraft = { ...draft, id: uuidv4() } as DiaryEntry;
         const updatedEntries = [finalDraft, ...entries];
@@ -396,23 +466,18 @@ const App: React.FC = () => {
         setEntries(prev => [finalDraft, ...prev]);
       }
       setView('history');
-    } catch (e) {
-      setError("保存草稿失败。");
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (e) { setError("保存草稿失败。"); } finally { setIsLoading(false); }
   };
 
   const handleAnalyzeExistingEntry = async (entry: DiaryEntry) => {
     if (!user) return;
+    if (!checkQuota()) return;
     setAnalyzingId(entry.id);
     try {
-      // Optimized context slicing
       const historyContext = entries.filter(e => e.language === entry.language && e.analysis && e.id !== entry.id).slice(0, 3);
       const analysis = await analyzeDiaryEntry(entry.originalText, entry.language, historyContext);
-      
+      incrementQuota();
       const updatedEntry = { ...entry, analysis };
-      
       if (!db || user.isMock) {
         const updatedEntries = entries.map(e => e.id === entry.id ? updatedEntry : e);
         setEntries(updatedEntries);
@@ -424,11 +489,7 @@ const App: React.FC = () => {
       setCurrentEntry(updatedEntry);
       setIsReviewingExisting(true);
       setView('review');
-    } catch (e) {
-      setError("分析失败。");
-    } finally {
-      setAnalyzingId(null);
-    }
+    } catch (e) { setError("分析失败。"); } finally { setAnalyzingId(null); }
   };
 
   const handleUpdateEntryLanguage = async (id: string, language: string) => {
@@ -454,7 +515,6 @@ const App: React.FC = () => {
     if (!entries.length || user?.iterationDay === undefined) return null;
     const today = new Date();
     if (today.getDay() !== user.iterationDay) return null;
-    
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     const candidate = entries.find(e => e.timestamp < weekAgo && (e.iterationCount || 0) < 3);
     return candidate || null;
@@ -462,10 +522,7 @@ const App: React.FC = () => {
 
   const handleStartSmartReview = () => {
     const needingReview = allAdvancedVocab.filter(v => (v.mastery || 0) < 4);
-    if (needingReview.length === 0) {
-      alert("所有馆藏珍宝均已达到巅峰。");
-      return;
-    }
+    if (needingReview.length === 0) { alert("所有馆藏珍宝均已达到巅峰。"); return; }
     const queue = needingReview.sort(() => 0.5 - Math.random()).slice(0, 10).map(v => v.id);
     setPracticeQueue(queue);
     setQueueIndex(0);
@@ -476,9 +533,7 @@ const App: React.FC = () => {
 
   const handleUpdateMastery = async (vocabId: string, word: string, newMastery: number, record?: PracticeRecord) => {
     if (!user) return;
-    
     setAllAdvancedVocab(prev => prev.map(v => v.id === vocabId ? { ...v, mastery: newMastery, practices: record ? [record, ...(v.practices || [])] : v.practices } : v));
-
     if (!db || user.isMock) {
       const localVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
       const updated = localVocab.map((v: any) => v.id === vocabId ? { ...v, mastery: newMastery, practices: record ? [record, ...(v.practices || [])] : v.practices } : v);
@@ -486,9 +541,7 @@ const App: React.FC = () => {
     } else {
       const vocabDocRef = doc(db, 'users', user.uid, 'advancedVocab', vocabId);
       await updateDoc(vocabDocRef, { mastery: newMastery });
-      if (record) {
-        await addDoc(collection(vocabDocRef, 'practices'), { ...record, timestamp: serverTimestamp() });
-      }
+      if (record) { await addDoc(collection(vocabDocRef, 'practices'), { ...record, timestamp: serverTimestamp() }); }
     }
   };
 
@@ -498,37 +551,7 @@ const App: React.FC = () => {
     if (!db || user.isMock) {
       const localVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
       localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(localVocab.filter((v: any) => v.id !== vocabId)));
-    } else {
-      await deleteDoc(doc(db, 'users', user.uid, 'advancedVocab', vocabId));
-    }
-  };
-
-  const handleDeletePractice = async (vocabId: string, practiceId: string) => {
-    if (!user) return;
-    setAllAdvancedVocab(prev => prev.map(v => v.id === vocabId ? { ...v, practices: v.practices?.filter(p => p.id !== practiceId) } : v));
-    if (!db || user.isMock) {
-      const localVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
-      const updated = localVocab.map((v: any) => v.id === vocabId ? { ...v, practices: v.practices?.filter((p: any) => p.id !== practiceId) } : v);
-      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
-    } else {
-      await deleteDoc(doc(db, 'users', user.uid, 'advancedVocab', vocabId, 'practices', practiceId));
-    }
-  };
-
-  const handleBatchDeletePractices = async (vocabId: string, practiceIds: string[]) => {
-    if (!user) return;
-    setAllAdvancedVocab(prev => prev.map(v => v.id === vocabId ? { ...v, practices: v.practices?.filter(p => !practiceIds.includes(p.id)) } : v));
-    if (!db || user.isMock) {
-       const localVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
-       const updated = localVocab.map((v: any) => v.id === vocabId ? { ...v, practices: v.practices?.filter((p: any) => !practiceIds.includes(p.id)) } : v);
-       localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
-    } else {
-       const batch = writeBatch(db);
-       practiceIds.forEach(pId => {
-         batch.delete(doc(db!, 'users', user.uid, 'advancedVocab', vocabId, 'practices', pId));
-       });
-       await batch.commit();
-    }
+    } else { await deleteDoc(doc(db, 'users', user.uid, 'advancedVocab', vocabId)); }
   };
 
   const handleSaveProfile = async () => {
@@ -537,18 +560,14 @@ const App: React.FC = () => {
     try {
       const profile = { displayName: editName, photoURL: editPhoto };
       if (!db || user.isMock) {
-        localStorage.setItem(`linguist_profile_${user.uid}`, JSON.stringify(profile));
+        localStorage.setItem(`linguist_profile_${user.uid}`, JSON.stringify({ ...user, ...profile }));
         setUser(prev => prev ? { ...prev, ...profile } : null);
       } else {
         await updateProfile(auth.currentUser!, profile);
-        await updateDoc(doc(db, 'users', user.uid), { profile });
+        await updateDoc(doc(db, 'users', user.uid), { profile: { ...user, ...profile } });
         setUser(prev => prev ? { ...prev, ...profile } : null);
       }
-    } catch (e) {
-      setError("更新档案失败。");
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (e) { setError("更新档案失败。"); } finally { setIsLoading(false); }
   };
 
   const handleSetIterationDay = async (day: number) => {
@@ -557,9 +576,7 @@ const App: React.FC = () => {
     if (!db || user.isMock) {
        const profile = JSON.parse(localStorage.getItem(`linguist_profile_${user.uid}`) || '{}');
        localStorage.setItem(`linguist_profile_${user.uid}`, JSON.stringify({ ...profile, iterationDay: day }));
-    } else {
-       await updateDoc(doc(db, 'users', user.uid), { 'profile.iterationDay': day });
-    }
+    } else { await updateDoc(doc(db, 'users', user.uid), { 'profile.iterationDay': day }); }
   };
 
   const handleSetPreferredLanguages = async (langs: string[]) => {
@@ -568,41 +585,30 @@ const App: React.FC = () => {
     if (!db || user.isMock) {
        const profile = JSON.parse(localStorage.getItem(`linguist_profile_${user.uid}`) || '{}');
        localStorage.setItem(`linguist_profile_${user.uid}`, JSON.stringify({ ...profile, preferredLanguages: langs }));
-    } else {
-       await updateDoc(doc(db, 'users', user.uid), { 'profile.preferredLanguages': langs });
-    }
+    } else { await updateDoc(doc(db, 'users', user.uid), { 'profile.preferredLanguages': langs }); }
   };
 
   const handleViewChange = (v: ViewState, vocabId?: string, isPracticeActive?: boolean) => {
     setView(v);
     if (vocabId) setSelectedVocabForPracticeId(vocabId);
     if (isPracticeActive !== undefined) setIsPracticeActive(isPracticeActive);
-    if (v !== 'editor') {
-      setPrefilledEditorText('');
-      setSummaryPrompt('');
-    }
+    if (v !== 'editor') { setPrefilledEditorText(''); setSummaryPrompt(''); }
   };
 
   const handleLogout = async () => {
-    if (auth && !user?.isMock) {
-      await signOut(auth);
-    }
+    if (auth && !user?.isMock) { await signOut(auth); }
     setUser(null);
     setView('dashboard');
   };
 
-  const handleSaveDraftUpdate = async (text: string, language: string) => {
-    handleSaveDraft(text, language);
-  };
-
   const handleLogin = (userData: { uid: string, displayName: string, photoURL: string }, isMock: boolean) => {
-    const fullUser = { ...userData, isMock, iterationDay: 0, preferredLanguages: DEFAULT_LANGS };
+    const fullUser = { ...userData, isMock, iterationDay: 0, preferredLanguages: DEFAULT_LANGS, isPro: false, dailyUsageCount: 0 };
     setUser(fullUser);
     loadUserData(userData.uid, isMock);
   };
 
   if (isAuthInitializing) return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 space-y-6">
+    <div className="min-screen bg-slate-50 flex flex-col items-center justify-center p-6 space-y-6">
        <div className="w-16 h-16 bg-indigo-600 rounded-3xl flex items-center justify-center text-3xl animate-bounce shadow-xl">🖋️</div>
        <div className="text-center">
          <h2 className="text-xl font-black text-slate-900 serif-font">Linguist Diary</h2>
@@ -613,46 +619,105 @@ const App: React.FC = () => {
 
   if (!user) return <AuthView auth={auth} isFirebaseValid={isFirebaseValid} onLogin={handleLogin} />;
 
+  const ProUpgradeModal = () => {
+    const [modalCode, setModalCode] = useState('');
+    const [isActivating, setIsActivating] = useState(false);
+
+    const handleModalActivate = async () => {
+      if (!modalCode.trim()) return;
+      setIsActivating(true);
+      const success = await handleActivatePro(modalCode);
+      setIsActivating(false);
+      if (success) {
+        setShowProModal(false);
+        setModalCode('');
+      } else {
+        alert("无效激活码。");
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setShowProModal(false)}></div>
+        <div className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-500">
+           <div className="bg-slate-900 p-8 text-center relative overflow-hidden">
+             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+             <div className="w-16 h-16 bg-indigo-600 rounded-2xl mx-auto flex items-center justify-center text-3xl mb-4 shadow-xl">✨</div>
+             <h3 className="text-xl font-black text-white serif-font">馆长，今日灵感配额已满</h3>
+             <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mt-2">DAILY QUOTA EXCEEDED</p>
+           </div>
+           <div className="p-8 space-y-6">
+             <div className="space-y-4">
+                <p className="text-xs text-slate-500 leading-relaxed text-center">
+                  作为标准馆长，您每天拥有 <b>{FREE_DAILY_LIMIT} 次</b> 智能校对机会。升级至 Pro 馆长，解锁无限灵感。
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-indigo-50/50 p-3 rounded-2xl border border-indigo-100 flex items-center space-x-2">
+                    <span className="text-indigo-600">♾️</span>
+                    <span className="text-[9px] font-black uppercase text-slate-600">无限校对次数</span>
+                  </div>
+                  <div className="bg-indigo-50/50 p-3 rounded-2xl border border-indigo-100 flex items-center space-x-2">
+                    <span className="text-indigo-600">🧠</span>
+                    <span className="text-[9px] font-black uppercase text-slate-600">深度逻辑分析</span>
+                  </div>
+                </div>
+             </div>
+
+             <div className="space-y-3">
+               <div className="flex items-center space-x-2 bg-slate-50 border border-slate-100 p-2 rounded-2xl focus-within:ring-4 focus-within:ring-indigo-500/5 transition-all">
+                  <input 
+                    type="text" 
+                    value={modalCode}
+                    onChange={(e) => setModalCode(e.target.value)}
+                    placeholder="输入 Pro 激活码..." 
+                    className="flex-1 bg-transparent border-none focus:ring-0 text-xs px-2 font-bold"
+                  />
+                  <button 
+                    onClick={handleModalActivate}
+                    disabled={isActivating || !modalCode.trim()}
+                    className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {isActivating ? '...' : '立即激活'}
+                  </button>
+               </div>
+               <button 
+                 onClick={() => { setShowProModal(false); setView('profile'); }}
+                 className="w-full py-3 text-[10px] font-black uppercase text-indigo-600 tracking-widest hover:underline"
+               >
+                 查看订阅计划详情 →
+               </button>
+               <button 
+                 onClick={() => setShowProModal(false)}
+                 className="w-full py-3 border border-slate-100 rounded-2xl text-[10px] font-black uppercase text-slate-400 tracking-widest hover:bg-slate-50"
+               >
+                 稍后再说 MAYBE LATER
+               </button>
+             </div>
+           </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Layout activeView={view} onViewChange={handleViewChange} user={user} onLogout={handleLogout}>
       {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartSmartReview} entries={entries} allAdvancedVocab={allAdvancedVocab} recommendedIteration={recommendedIteration} onStartIteration={handleStartIteration} onSaveFragment={handleSaveFragment} />}
-      {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraftUpdate} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} fragments={fragments} onDeleteFragment={handleDeleteFragment} preferredLanguages={preferredLanguages} />}
-      {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isReviewingExisting={isReviewingExisting} />}
-      {view === 'history' && <History entries={entries} isAnalyzingId={analyzingId} onAnalyzeDraft={handleAnalyzeExistingEntry} onUpdateLanguage={handleUpdateEntryLanguage} onSelect={(e) => { setCurrentEntry(e); setIsReviewingExisting(true); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { 
-        if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); 
-        setEntries(prev => prev.filter(e => e.id !== id));
-      }} onRewrite={(e) => { handleStartIteration(e); }} preferredLanguages={preferredLanguages} />}
-      {view === 'chat' && <ChatEditor onFinish={(msgs, lang, summary) => { 
-        setChatLanguage(lang); 
-        setPrefilledEditorText(''); 
-        setSummaryPrompt(summary);
-        setView('editor'); 
-      }} allGems={allAdvancedVocab} preferredLanguages={preferredLanguages} />}
+      {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraft} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} fragments={fragments} onDeleteFragment={handleDeleteFragment} preferredLanguages={preferredLanguages} />}
+      {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isExistingEntry={isReviewingExisting} />}
+      {view === 'history' && <History entries={entries} isAnalyzingId={analyzingId} onAnalyzeDraft={handleAnalyzeExistingEntry} onUpdateLanguage={handleUpdateEntryLanguage} onSelect={(e) => { setCurrentEntry(e); setIsReviewingExisting(true); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); setEntries(prev => prev.filter(e => e.id !== id)); }} onRewrite={(e) => { handleStartIteration(e); }} preferredLanguages={preferredLanguages} />}
+      {view === 'chat' && <ChatEditor onFinish={(msgs, lang, summary) => { setChatLanguage(lang); setPrefilledEditorText(''); setSummaryPrompt(summary); setView('editor'); }} allGems={allAdvancedVocab} preferredLanguages={preferredLanguages} />}
       {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} fragments={fragments} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} onDeleteVocab={handleDeleteVocab} onDeleteFragment={handleDeleteFragment} onPromoteFragment={handlePromoteFragment} onPromoteToSeed={handlePromoteToSeed} />}
       {view === 'vocab_practice' && selectedVocabForPracticeId && (
-        <VocabPractice 
-          selectedVocabId={selectedVocabForPracticeId} 
-          allAdvancedVocab={allAdvancedVocab} 
-          onUpdateMastery={handleUpdateMastery} 
-          onBackToVocabList={() => setView('vocab_list')} 
-          onViewChange={handleViewChange} 
-          onSaveFragment={handleSaveFragment}
-          isPracticeActive={isPracticeActive}
-          queueProgress={practiceQueue.length > 0 ? { current: queueIndex + 1, total: practiceQueue.length } : undefined}
-          onNextInQueue={() => {
-            if (queueIndex < practiceQueue.length - 1) {
-              setQueueIndex(queueIndex + 1);
-              setSelectedVocabForPracticeId(practiceQueue[queueIndex + 1]);
-            } else { setView('vocab_list'); }
-          }}
-        />
+        <VocabPractice selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onUpdateMastery={handleUpdateMastery} onBackToVocabList={() => setView('vocab_list')} onViewChange={handleViewChange} onSaveFragment={handleSaveFragment} isPracticeActive={isPracticeActive} queueProgress={practiceQueue.length > 0 ? { current: queueIndex + 1, total: practiceQueue.length } : undefined} onNextInQueue={() => { if (queueIndex < practiceQueue.length - 1) { setQueueIndex(queueIndex + 1); setSelectedVocabForPracticeId(practiceQueue[queueIndex + 1]); } else { setView('vocab_list'); } }} />
       )}
       {view === 'vocab_practice_detail' && selectedVocabForPracticeId && (
-        <VocabPracticeDetailView selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onBackToPracticeHistory={() => setView('vocab_list')} onDeletePractice={handleDeletePractice} onBatchDeletePractices={handleBatchDeletePractices} />
+        <VocabPracticeDetailView selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onBackToPracticeHistory={() => setView('vocab_list')} />
       )}
-      {view === 'rehearsal' && <Rehearsal allAdvancedVocab={allAdvancedVocab} onSaveToMuseum={(lang, reh) => { /* logic... */ }} preferredLanguages={preferredLanguages} />}
+      {view === 'rehearsal' && <Rehearsal allAdvancedVocab={allAdvancedVocab} preferredLanguages={preferredLanguages} />}
       {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} />}
-      {view === 'profile' && <ProfileView user={user} editName={editName} setEditName={setEditName} editPhoto={editPhoto} setEditPhoto={setEditPhoto} isAvatarPickerOpen={isAvatarPickerOpen} setIsAvatarPickerOpen={setIsAvatarPickerOpen} avatarSeeds={AVATAR_SEEDS} onSaveProfile={handleSaveProfile} isLoading={isLoading} iterationDay={user.iterationDay ?? 0} onSetIterationDay={handleSetIterationDay} preferredLanguages={preferredLanguages} onSetPreferredLanguages={handleSetPreferredLanguages} />}
+      {view === 'profile' && <ProfileView user={user} editName={editName} setEditName={setEditName} editPhoto={editPhoto} setEditPhoto={setEditPhoto} isAvatarPickerOpen={isAvatarPickerOpen} setIsAvatarPickerOpen={setIsAvatarPickerOpen} avatarSeeds={AVATAR_SEEDS} onSaveProfile={handleSaveProfile} isLoading={isLoading} iterationDay={user.iterationDay ?? 0} onSetIterationDay={handleSetIterationDay} preferredLanguages={preferredLanguages} onSetPreferredLanguages={handleSetPreferredLanguages} onActivatePro={handleActivatePro} />}
+      
+      {showProModal && <ProUpgradeModal />}
     </Layout>
   );
 };

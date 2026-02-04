@@ -1,88 +1,89 @@
 
 /**
- * A high-performance word-level diffing utility.
- * Specifically optimized for CJK languages and Ruby syntax [Kanji](furigana).
- * Uses a windowed anchor search to avoid O(N^2) performance hits on long texts.
+ * Surgical character-level diffing utility.
+ * Optimized for CJK languages by using LCS (Longest Common Subsequence).
+ * Treats [Kanji](reading) as atomic units to prevent breaking furigana.
  */
-export function calculateDiff(oldStr: string, newStr: string): string {
+export function calculateDiff(oldStr: string, newStr: string, language: string = 'English'): string {
   if (!oldStr) return `<add>${newStr || ''}</add>`;
   if (!newStr) return `<rem>${oldStr || ''}</rem>`;
 
-  /**
-   * Tokenizer rules:
-   * 1. Match Ruby patterns [text](ruby) as one token.
-   * 2. Match whitespace sequences.
-   * 3. Match individual CJK characters (Kanji, Hiragana, Katakana).
-   * 4. Match sequences of non-whitespace punctuation/symbols.
-   */
-  const tokenize = (s: string) => 
-    s.split(/(\s+|\[.*?\]\(.*?\)|[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff]|[^\s\w\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff]+)/g)
-     .filter(Boolean);
-
-  /**
-   * Helper to strip Ruby markup to get the base text.
-   * e.g., "[家](いえ)" -> "家"
-   */
-  const getBase = (token: string) => token.replace(/\[(.*?)\]\(.*?\)/g, '$1');
-
-  const oldTokens = tokenize(oldStr);
-  const newTokens = tokenize(newStr);
-
-  let i = 0; // Pointer for oldTokens
-  let j = 0; // Pointer for newTokens
-  let result = '';
-
-  const SEARCH_WINDOW = 20;
-
-  while (i < oldTokens.length || j < newTokens.length) {
-    // Case 1: Base words match exactly (e.g., "家" vs "[家](いえ)")
-    // We treat this as a MATCH to avoid redundant highlighting.
-    // We use the NEW token to ensure furigana is shown, but without tags.
-    if (i < oldTokens.length && j < newTokens.length && getBase(oldTokens[i]) === getBase(newTokens[j])) {
-      result += newTokens[j];
-      i++;
-      j++;
-    } else {
-      // Case 2: Mismatch - search for the next matching anchor point within a window
-      let found = false;
-      
-      for (let oi = 0; oi < SEARCH_WINDOW && i + oi < oldTokens.length; oi++) {
-        for (let ni = 0; ni < SEARCH_WINDOW && j + ni < newTokens.length; ni++) {
-          // Use getBase for alignment search too
-          if (getBase(oldTokens[i + oi]) === getBase(newTokens[j + ni])) {
-            if (oi > 0) result += `<rem>${oldTokens.slice(i, i + oi).join('')}</rem>`;
-            if (ni > 0) result += `<add>${newTokens.slice(j, j + ni).join('')}</add>`;
-            
-            i += oi;
-            j += ni;
-            found = true;
-            break;
-          }
+  // Helper to tokenize into characters, keeping Ruby tags [漢](かん) as single tokens
+  const tokenize = (text: string) => {
+    const tokens: string[] = [];
+    let i = 0;
+    while (i < text.length) {
+      if (text[i] === '[') {
+        const match = text.slice(i).match(/^\[.*?\]\(.*?\)/);
+        if (match) {
+          tokens.push(match[0]);
+          i += match[0].length;
+          continue;
         }
-        if (found) break;
       }
+      tokens.push(text[i]);
+      i++;
+    }
+    return tokens;
+  };
 
-      if (!found) {
-        // Case 3: No anchor found. 
-        if (i < oldTokens.length && j < newTokens.length) {
-          result += `<rem>${oldTokens[i]}</rem><add>${newTokens[j]}</add>`;
-          i++;
-          j++;
-        } else if (i < oldTokens.length) {
-          result += `<rem>${oldTokens[i]}</rem>`;
-          i++;
-        } else if (j < newTokens.length) {
-          result += `<add>${newTokens[j]}</add>`;
-          j++;
-        }
+  const a = tokenize(oldStr);
+  const b = tokenize(newStr);
+  const n = a.length;
+  const m = b.length;
+
+  // LCS using dynamic programming
+  const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      if (a[i - 1] === b[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
       }
     }
   }
 
-  // Final cleanup: merge consecutive tags and handle empty tags
-  return result
-    .replace(/<\/add><add>/g, '')
-    .replace(/<\/rem><rem>/g, '')
-    .replace(/<add><\/add>/g, '')
-    .replace(/<rem><\/rem>/g, '');
+  // Backtracking to find the edit path
+  let res: { type: 'add' | 'rem' | 'eq', val: string }[] = [];
+  let i = n, j = m;
+
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
+      res.unshift({ type: 'eq', val: a[i - 1] });
+      i--; j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      res.unshift({ type: 'add', val: b[j - 1] });
+      j--;
+    } else {
+      res.unshift({ type: 'rem', val: a[i - 1] });
+      i--;
+    }
+  }
+
+  // Formatting and merging consecutive same-type segments
+  let finalHtml = '';
+  let lastType: 'add' | 'rem' | 'eq' | null = null;
+  let buffer = '';
+
+  const flush = () => {
+    if (!buffer) return;
+    if (lastType === 'add') finalHtml += `<add>${buffer}</add>`;
+    else if (lastType === 'rem') finalHtml += `<rem>${buffer}</rem>`;
+    else finalHtml += buffer;
+    buffer = '';
+  };
+
+  for (const token of res) {
+    if (token.type !== lastType) {
+      flush();
+      lastType = token.type;
+    }
+    buffer += token.val;
+  }
+  flush();
+
+  // Final cleanup: remove potential empty tags
+  return finalHtml.replace(/<(add|rem)><\/\1>/g, '');
 }

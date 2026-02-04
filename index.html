@@ -20,65 +20,63 @@
             font-family: 'Playfair Display', serif;
         }
         
-        /* Ruby 假名标注优化 - 修复错位与对齐 */
+        /* Ruby 假名标注优化 - 增加行高确保显示 */
         ruby {
             ruby-position: over;
             ruby-align: center;
-            padding: 0 0.05em;
-            /* 移除之前可能导致错位的 inline-block，还原自然对齐 */
+            padding: 0 0.1em;
+            line-height: 2.2; /* 预留假名空间 */
         }
         
         rt {
-            font-size: 0.5em; /* 略微放大，提升可读性 */
-            font-weight: 600;
-            color: #94a3b8;
-            letter-spacing: 0.02em;
-            line-height: 1.2;
-            white-space: nowrap; /* 关键：防止长假名折行导致错位 */
-            /* 基础微调，确保不紧贴汉字 */
-            transform: translateY(-0.1em);
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            font-size: 0.5em;
+            font-weight: 700;
+            color: #64748b; /* 更深的颜色确保可读性 */
+            letter-spacing: 0.05em;
+            line-height: 1;
+            white-space: nowrap;
+            transform: translateY(-0.15em);
             user-select: none;
             pointer-events: none;
         }
 
-        /* 鼠标悬停时的“升起”效果 */
-        ruby:hover rt {
-            color: #6366f1;
-            transform: translateY(-0.5em) scale(1.1);
-            text-shadow: 0 4px 6px -1px rgb(99 102 241 / 0.1);
+        /* 极致精准的差异标记样式 */
+        .diff-add {
+            background-color: #dcfce7; /* green-100 */
+            color: #166534; /* green-800 */
+            padding: 0 2px;
+            border-radius: 4px;
+            text-decoration: none;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            margin: 0 1px;
+        }
+        
+        .diff-rem {
+            background-color: #fee2e2; /* red-100 */
+            color: #991b1b; /* red-800 */
+            text-decoration: line-through;
+            text-decoration-color: #f87171; /* red-400 */
+            text-decoration-thickness: 1.5px;
+            padding: 0 2px;
+            border-radius: 4px;
+            opacity: 0.8;
+            margin: 0 1px;
         }
 
-        /* 稿纸背景样式 - 严格对齐 leading-[3rem] */
+        /* 稿纸背景样式 */
         .manuscript-grid {
-            background-image: linear-gradient(#e2e8f0 1px, transparent 1px);
-            background-size: 100% 3rem; 
+            background-image: linear-gradient(#f1f5f9 1px, transparent 1px);
+            background-size: 100% 3.5rem; 
             background-attachment: local;
         }
-        /* 隐藏滚动条但保留滚动功能 */
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #e2e8f0;
-            border-radius: 20px;
-            border: 2px solid #f8fafc;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #cbd5e1;
-        }
+        
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 20px; border: 2px solid #f8fafc; }
+        ::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
 
-        /* 音频波纹动画 */
         @keyframes audio-bar {
             0%, 100% { height: 4px; }
             50% { height: 16px; }
@@ -87,9 +85,7 @@
         .animate-audio-bar-2 { animation: audio-bar 0.8s infinite ease-in-out; animation-delay: 0.1s; }
         .animate-audio-bar-3 { animation: audio-bar 0.7s infinite ease-in-out; animation-delay: 0.2s; }
         
-        .perspective-1000 {
-            perspective: 1000px;
-        }
+        .perspective-1000 { perspective: 1000px; }
     </style>
 <script type="importmap">
 {
