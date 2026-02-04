@@ -6,24 +6,9 @@ export interface Correction {
   category: 'Grammar' | 'Vocabulary' | 'Style' | 'Spelling';
 }
 
-export interface SynonymStep {
-  word: string;
-  level: string;
-  nuance: string;
-}
-
-export interface PracticeRecord {
-  id: string;
-  sentence: string; 
-  originalAttempt?: string; 
-  feedback: string;
-  betterVersion?: string;
-  timestamp: number;
-  status: 'Perfect' | 'Polished'; 
-  vocabId: string;
-  context?: string;
-  appropriatenessScore?: number; // 0-100
-  synonymLadder?: SynonymStep[];
+export interface ReadingPair {
+  kanji: string;
+  reading: string;
 }
 
 export interface AdvancedVocab {
@@ -34,23 +19,9 @@ export interface AdvancedVocab {
   level: 'Intermediate' | 'Advanced' | 'Native';
   mastery?: number; 
   language: string;
-  practiceCount?: number;
   practices?: PracticeRecord[];
-  timestamp: number; // Added to match history sorting
-}
-
-export interface InspirationFragment {
-  id: string;
-  content: string;
-  meaning?: string;
-  usage?: string;
   timestamp: number;
-  language: string;
-  tags?: string[];
-  fragmentType: 'transient' | 'seed'; // New: transient = use once; seed = study
 }
-
-export type ExtendedVocab = AdvancedVocab & { date: string, entryId: string, language: string };
 
 export interface TransitionSuggestion {
   word: string;
@@ -65,24 +36,35 @@ export interface DiaryAnalysis {
   advancedVocab: AdvancedVocab[];
   transitionSuggestions: TransitionSuggestion[];
   overallFeedback: string;
+  readingPairs?: ReadingPair[]; // Stable array structure for API
 }
 
-export interface RehearsalEvaluation {
-  accuracyScore: number;
-  qualityScore: number;
-  contentFeedback: string;
-  languageFeedback: string;
-  suggestedVersion: string;
-  diffedRetelling: string;
-  sourceText?: string;
-  userRetelling?: string;
-}
-
-export interface DiaryIteration {
+export interface PracticeRecord {
   id: string;
-  text: string;
+  sentence: string; 
+  originalAttempt?: string; 
+  feedback: string;
+  betterVersion?: string;
   timestamp: number;
-  analysis: DiaryAnalysis;
+  status: 'Perfect' | 'Polished'; 
+  vocabId: string;
+}
+
+export interface InspirationFragment {
+  id: string;
+  content: string;
+  meaning?: string;
+  usage?: string;
+  timestamp: number;
+  language: string;
+  fragmentType: 'transient' | 'seed';
+}
+
+export type ViewState = 'dashboard' | 'editor' | 'review' | 'history' | 'chat' | 'vocab_list' | 'vocab_practice' | 'vocab_practice_detail' | 'rehearsal' | 'rehearsal_report' | 'profile';
+
+export interface ChatMessage {
+  role: 'ai' | 'user';
+  content: string;
 }
 
 export interface DiaryEntry {
@@ -97,9 +79,20 @@ export interface DiaryEntry {
   iterationCount?: number;
 }
 
-export interface ChatMessage {
-  role: 'ai' | 'user';
-  content: string;
+export interface DiaryIteration {
+  id: string;
+  text: string;
+  timestamp: number;
+  analysis: DiaryAnalysis;
 }
 
-export type ViewState = 'dashboard' | 'editor' | 'review' | 'history' | 'chat' | 'vocab_list' | 'vocab_practice' | 'vocab_practice_detail' | 'practice_history' | 'rehearsal' | 'rehearsal_report' | 'profile';
+export interface RehearsalEvaluation {
+  accuracyScore: number;
+  qualityScore: number;
+  contentFeedback: string;
+  languageFeedback: string;
+  suggestedVersion: string;
+  diffedRetelling: string;
+  sourceText?: string;
+  userRetelling?: string;
+}

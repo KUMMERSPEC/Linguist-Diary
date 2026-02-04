@@ -52,7 +52,6 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum, allAdvancedVocab 
 
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
-  // Pick suitable gems for weaving mode
   const weavingGems = useMemo(() => {
     if (mode !== 'weave') return [];
     return allAdvancedVocab
@@ -60,6 +59,14 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum, allAdvancedVocab 
       .sort((a, b) => (b.mastery || 0) - (a.mastery || 0)) 
       .slice(0, 3);
   }, [mode, allAdvancedVocab, language]);
+
+  // Utility to clean Markdown if AI doesn't follow instructions
+  const cleanMarkdown = (text: string) => {
+    return text
+      .replace(/[#*`~]/g, '') // Remove simple markdown symbols
+      .replace(/\n\n+/g, '\n') // Remove excessive newlines
+      .trim();
+  };
 
   const renderRuby = (text: string) => {
     if (!text) return '';
@@ -100,7 +107,7 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum, allAdvancedVocab 
       } else {
         art = await generatePracticeArtifact(language.code, keywords, difficulty.id, topic.label);
       }
-      setSourceText(art);
+      setSourceText(cleanMarkdown(art));
       setShowSource(true);
     } catch (e) {
       alert("生成失败，请重试。");

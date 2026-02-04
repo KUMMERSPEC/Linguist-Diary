@@ -135,7 +135,7 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
         id: uuidv4(),
         sentence: currentVocab.usage,
         originalAttempt: practiceInput,
-        feedback: result.feedback,
+        feedback: result.feedback || "AI 已评估该句子。",
         betterVersion: result.betterVersion,
         timestamp: Date.now(),
         status,
@@ -148,7 +148,6 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
   const handleSavePhrase = async (phrase: string, explanation: string) => {
     if (savedPhrases.has(phrase)) return;
     try {
-      // Corrected: Passing 'seed' as the third argument to mark as seed fragment
       await onSaveFragment(
         phrase, 
         currentVocab.language, 
@@ -267,12 +266,12 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
                    <span className="text-xl md:text-2xl">{lastFeedback.isCorrect ? '✅' : '❌'}</span>
                    <h4 className="text-base md:text-lg font-bold text-slate-900 serif-font">{lastFeedback.isCorrect ? '完美的表达！' : '还需要打磨...'}</h4>
                  </div>
-                 <div className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-widest ${lastFeedback.isCorrect ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                   {lastFeedback.isCorrect ? 'Mastery +1' : 'Mastery -1'}
+                 <div className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-sm border ${lastFeedback.isCorrect ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-rose-50 text-rose-600 border-rose-200'}`}>
+                   {lastFeedback.isCorrect ? 'MASTERY +1' : 'MASTERY -1'}
                  </div>
                </div>
                
-               <p className="text-slate-600 text-xs md:text-sm italic leading-relaxed">“ {lastFeedback.feedback} ”</p>
+               <p className="text-slate-600 text-xs md:text-sm italic leading-relaxed px-1">“ {lastFeedback.feedback || "AI 已评估该句子，并给出了优化建议。"} ”</p>
                
                {lastFeedback.betterVersion && (
                  <div className="p-4 md:p-5 bg-slate-900 text-white rounded-[1.5rem] md:rounded-3xl relative">
@@ -290,7 +289,6 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
                  </div>
                )}
 
-               {/* Option B: Key Phrases Collection Area */}
                {lastFeedback.keyPhrases && lastFeedback.keyPhrases.length > 0 && (
                  <div className="pt-2">
                     <div className="flex items-center space-x-2 mb-3">

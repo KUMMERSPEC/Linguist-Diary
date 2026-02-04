@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ChatMessage, AdvancedVocab } from '../types';
-import { getChatFollowUp, generatePracticeTasks, generateChatSummaryPrompt, generateDailyMuses } from '../services/geminiService';
+import { getChatFollowUp, generateChatSummaryPrompt, generateDailyMuses } from '../services/geminiService';
 
 interface ChatEditorProps {
   onFinish: (transcript: ChatMessage[], language: string, summaryPrompt: string) => void;
@@ -56,11 +56,26 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems, preferredLan
   };
 
   const loadMuses = useCallback(async () => {
-    if (!showMuses || muses.length > 0) return;
+    if (!showMuses) return;
+    
+    const today = new Date().toDateString();
+    const cacheKey = `muses_${language.code}_${today}`;
+    const cached = localStorage.getItem(cacheKey);
+    
+    if (cached) {
+      try {
+        setMuses(JSON.parse(cached));
+        return;
+      } catch (e) {
+        localStorage.removeItem(cacheKey);
+      }
+    }
+
     setIsMusesLoading(true);
     try {
       const dailyMuses = await generateDailyMuses(language.label);
       setMuses(dailyMuses);
+      localStorage.setItem(cacheKey, JSON.stringify(dailyMuses));
     } catch (e) { console.error(e); } finally { setIsMusesLoading(false); }
   }, [language, showMuses]);
 
@@ -76,17 +91,10 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems, preferredLan
     const selected = shuffled.slice(0, 5);
     setSessionGems(selected);
     setUsedGems(new Set());
+    
     const initialMissions: Record<string, GemMission> = {};
-    selected.forEach(g => { initialMissions[g.word] = { word: g.word, isLoading: true }; });
+    selected.forEach(g => { initialMissions[g.word] = { word: g.word, isLoading: false }; });
     setGemMissions(initialMissions);
-    selected.forEach(async (gem) => {
-      try {
-        const tasks = await generatePracticeTasks(gem.word, gem.meaning, language.code);
-        setGemMissions(prev => ({ ...prev, [gem.word]: { word: gem.word, mission: tasks[0], isLoading: false } }));
-      } catch (e) {
-        setGemMissions(prev => ({ ...prev, [gem.word]: { word: gem.word, isLoading: false } }));
-      }
-    });
   }, [allGems, language]);
 
   useEffect(() => {
@@ -185,7 +193,6 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems, preferredLan
       <div className="flex-1 space-y-4 overflow-y-auto no-scrollbar pb-10">
          {sessionGems.length > 0 ? sessionGems.map((gem, idx) => {
            const isLit = usedGems.has(gem.word);
-           const mission = gemMissions[gem.word];
            return (
              <div key={idx} className={`p-4 rounded-[1.8rem] border transition-all duration-200 ${isLit ? 'bg-amber-50 border-amber-200 shadow-md' : 'bg-white border-slate-100'}`}>
                <div className="flex items-center justify-between mb-2">
@@ -193,14 +200,8 @@ const ChatEditor: React.FC<ChatEditorProps> = ({ onFinish, allGems, preferredLan
                  {isLit && <span className="text-amber-500 text-sm animate-bounce">✨</span>}
                </div>
                {!isLit && (
-                 <div className="mt-2 space-y-1">
+                 <div className="mt-2">
                     <p className="text-[10px] text-slate-400 leading-relaxed italic">{stripRuby(gem.meaning)}</p>
-                    {mission?.mission && (
-                      <div className="mt-2 flex items-center space-x-2 bg-indigo-50/50 p-2 rounded-xl border border-indigo-100/50">
-                        <span className="text-xs">{mission.mission.icon}</span>
-                        <span className="text-[9px] font-bold text-indigo-600 leading-tight">{mission.mission.label}</span>
-                      </div>
-                    )}
                  </div>
                )}
              </div>

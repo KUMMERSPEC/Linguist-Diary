@@ -207,13 +207,8 @@ const App: React.FC = () => {
     let meaning = predefinedMeaning || "";
     let usage = predefinedUsage || "";
 
-    if (type === 'seed' && !predefinedMeaning && !predefinedUsage) {
-      try {
-        const enriched = await enrichFragment(content, language);
-        meaning = enriched.meaning;
-        usage = enriched.usage;
-      } catch (e) { console.error("Failed to enrich", e); }
-    }
+    // OPTIMIZED: Removed automatic call to enrichFragment to save tokens.
+    // Fragments are now saved with minimal info unless manually enriched in the Vocab View.
 
     const fragmentData = {
       content,
@@ -280,7 +275,9 @@ const App: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const historyContext = entries.filter(e => e.language === language && e.analysis).slice(0, 5);
+      // Optimized: analyzeDiaryEntry itself now handles context slicing, 
+      // but we still only pass recent items here.
+      const historyContext = entries.filter(e => e.language === language && e.analysis).slice(0, 3);
       const analysis = await analyzeDiaryEntry(text, language, historyContext);
       const clientTimestamp = Date.now();
       const newEntrySkeleton: Omit<DiaryEntry, 'id'> = {
@@ -410,7 +407,8 @@ const App: React.FC = () => {
     if (!user) return;
     setAnalyzingId(entry.id);
     try {
-      const historyContext = entries.filter(e => e.language === entry.language && e.analysis && e.id !== entry.id).slice(0, 5);
+      // Optimized context slicing
+      const historyContext = entries.filter(e => e.language === entry.language && e.analysis && e.id !== entry.id).slice(0, 3);
       const analysis = await analyzeDiaryEntry(entry.originalText, entry.language, historyContext);
       
       const updatedEntry = { ...entry, analysis };

@@ -1,6 +1,7 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { DiaryAnalysis, ChatMessage, RehearsalEvaluation, DiaryEntry } from "../types";
+import { calculateDiff } from "../utils/diffHelper";
 
 const getAiInstance = () => {
   const apiKey = process.env.API_KEY;
@@ -14,7 +15,7 @@ const isRetryableError = (error: any): boolean => {
   return (status === 500 || status === 429 || status === "UNKNOWN" || message.includes("xhr error") || message.includes("fetch"));
 };
 
-async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, initialDelay = 1000): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2, initialDelay = 1000): Promise<T> {
   let lastError: any;
   for (let i = 0; i < maxRetries; i++) {
     try { return await fn(); } catch (error: any) {
@@ -27,185 +28,41 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, initialDelay =
   throw lastError;
 }
 
-/**
- * Automatically enrich a fragment with meaning and a usage example.
- */
-export const enrichFragment = async (content: string, language: string): Promise<{ meaning: string, usage: string }> => {
-  const ai = getAiInstance();
-  return withRetry(async () => {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Fragment: "${content}". Target Language: ${language}.
-      Task: Provide a concise Chinese meaning and a natural usage example in ${language}.
-      RULES:
-      1. 'meaning' MUST be in Chinese (中文).
-      2. 'usage' MUST be in ${language}.
-      3. For Japanese: use '[Kanji](furigana)' format in 'usage' (e.g. "[私](わたし)").
-      4. DO NOT use ruby/furigana in 'meaning'.`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            meaning: { type: Type.STRING },
-            usage: { type: Type.STRING }
-          },
-          required: ["meaning", "usage"]
-        }
-      }
-    });
-    return JSON.parse(response.text) || { meaning: "", usage: "" };
-  }).catch(() => ({ meaning: "AI 自动解析失败", usage: "" }));
-};
-
-export const generateDailyMuses = async (language: string): Promise<{ id: string, title: string, prompt: string, icon: string }[]> => {
-  const ai = getAiInstance();
-  return withRetry(async () => {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Current Language: ${language}.
-      Generate 3 creative writing/chat prompts (Muses) for a diary application.
-      The prompts should be diverse: 1 philosophical, 1 daily/simple, 1 imaginative/future.
-      Output ONLY JSON in Chinese (中文) for title/prompt: [{ id, title, prompt, icon }]`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              title: { type: Type.STRING },
-              prompt: { type: Type.STRING },
-              icon: { type: Type.STRING }
-            },
-            required: ["id", "title", "prompt", "icon"]
-          }
-        }
-      }
-    });
-    return JSON.parse(response.text) || [];
-  }).catch(() => [
-    { id: '1', title: '今日心情', prompt: '用三个词形容你今天的情绪。', icon: '🎭' },
-    { id: '2', title: '美味瞬间', prompt: '描述今天让你印象最深的一顿饭。', icon: '🍜' },
-    { id: '3', title: '未来幻想', prompt: '如果你能穿越到50年后，第一眼想看什么？', icon: '🚀' },
-  ]);
-};
-
-export const generatePracticeTasks = async (word: string, meaning: string, language: string): Promise<{ id: string, label: string, icon: string }[]> => {
-  const ai = getAiInstance();
-  return withRetry(async () => {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Word: "${word}" (${meaning}), Language: ${language}.
-      Generate 1 simple conversation mission in Chinese to help use this word in chat.
-      Output ONLY JSON: [{ id, label, icon }]`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              label: { type: Type.STRING },
-              icon: { type: Type.STRING }
-            },
-            required: ["id", "label", "icon"]
-          }
-        }
-      }
-    });
-    return JSON.parse(response.text) || [];
-  }).catch(() => [
-    { id: '1', label: `在对话中尝试运用这个词`, icon: '💬' },
-  ]);
-};
-
-export const validateVocabUsage = async (
-  word: string, 
-  meaning: string, 
-  sentence: string, 
-  language: string
-): Promise<{ 
-  isCorrect: boolean; 
-  feedback: string; 
-  betterVersion?: string;
-  keyPhrases?: { phrase: string, explanation: string }[];
-}> => {
-  const ai = getAiInstance();
-  return withRetry(async () => {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Word: "${word}" (${meaning}). User Sentence: "${sentence}". Language: ${language}.
-      Task:
-      1. Correctness check.
-      2. Concise feedback in Chinese (中文).
-      3. Suggested version in ${language}.
-      4. Extract 1-3 useful "keyPhrases" (idiomatic collocations/expressions) mentioned in your correction that the user should save for learning.
-      
-      CRITICAL: ONLY use '[Kanji](furigana)' for the 'betterVersion' IF the language is Japanese. NEVER use it in 'feedback' or 'explanation'.`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            isCorrect: { type: Type.BOOLEAN },
-            feedback: { type: Type.STRING },
-            betterVersion: { type: Type.STRING },
-            keyPhrases: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  phrase: { type: Type.STRING, description: "The idiomatic expression itself." },
-                  explanation: { type: Type.STRING, description: "Brief meaning in Chinese." }
-                },
-                required: ["phrase", "explanation"]
-              }
-            }
-          },
-          required: ["isCorrect", "feedback"]
-        }
-      }
-    });
-    return JSON.parse(response.text || "{}");
-  }).catch(error => { throw new Error("AI 处理失败，请稍后重试。"); });
-};
-
 export const analyzeDiaryEntry = async (text: string, language: string, history: DiaryEntry[] = []): Promise<DiaryAnalysis> => {
   const ai = getAiInstance();
-  const historyContext = history.length > 0 ? `\n[RECENT_CONTEXT]\n${history.map(h => `- ${h.date}: ${h.analysis?.overallFeedback}`).join('\n')}` : "";
+  // Token Saving: Only use overall feedback from last 2 entries for context
+  const historyContext = history.slice(0, 2).map(e => `- ${e.date}: ${e.analysis?.overallFeedback}`).join('\n');
+  
   return withRetry(async () => {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Analyze: "${text}". Language: ${language}.
-      ${historyContext}
+      contents: `Analyze: "${text}". Lang: ${language}.
+      Context: ${historyContext}
       
-      BALANCED DIFFING STRATEGY:
-      - For simple lexical errors (e.g., "tomorrow" instead of "yesterday"), wrap ONLY the single word: "<rem>tomorrow</rem><add>yesterday</add>".
-      - For complex grammatical rearrangements or long texts, phrase-level wrapping is acceptable to maintain natural flow and processing speed.
-      - AVOID wrapping entire sentences unless the whole sentence is structurally broken.
-      - ALWAYS keep unchanged words outside of <rem>/<add> tags.
-      
-      STRICT VOCABULARY RULES:
-      1. FOR JAPANESE: The 'word' property MUST use '[Kanji](furigana)' format (e.g., "[形跡](けいせい)").
-      2. FOR JAPANESE: DO NOT use ruby/furigana in 'meaning' or 'usage' properties. Keep them as plain text.
-      3. NATIVE DEFINITION: The 'meaning' property MUST be in the target language (${language}), NOT Chinese. (e.g., explain an English word in English).
-      4. NATIVE EXAMPLE: The 'usage' property MUST be in the target language (${language}).
-      
-      STRICT FORMAT RULES:
-      1. 'overallFeedback' and 'corrections.explanation' MUST be in Chinese (中文).
-      2. ONLY 'modifiedText' and 'diffedText' should use '[Kanji](furigana)' if the language is Japanese.
-      3. Use <add>/<rem> for diffs. DO NOT use brackets.`,
+      Task:
+      1. Correct text.
+      2. If Japanese: NO brackets in 'modifiedText'.
+      3. If Japanese: 'readingPairs' ONLY for N2+ level words. Skip easy words (私,今日,学校,日本,etc).
+      4. Feedbacks/explanations in CHINESE.
+      5. 'advancedVocab.meaning' in ${language}.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
             modifiedText: { type: Type.STRING },
-            diffedText: { type: Type.STRING },
             overallFeedback: { type: Type.STRING },
+            readingPairs: { 
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  kanji: { type: Type.STRING },
+                  reading: { type: Type.STRING }
+                },
+                required: ["kanji", "reading"]
+              }
+            },
             corrections: {
               type: Type.ARRAY,
               items: {
@@ -245,146 +102,165 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
               }
             }
           },
-          required: ["modifiedText", "diffedText", "corrections", "advancedVocab", "transitionSuggestions", "overallFeedback"]
+          required: ["modifiedText", "corrections", "advancedVocab", "transitionSuggestions", "overallFeedback"]
         }
       }
     });
-    return JSON.parse(response.text) as DiaryAnalysis;
-  }).catch(error => { throw new Error("AI 分析失败，请检查 API 配置。"); });
+    
+    const analysis = JSON.parse(response.text) as DiaryAnalysis;
+    analysis.diffedText = calculateDiff(text, analysis.modifiedText);
+    return analysis;
+  });
 };
 
-export const generateChatSummaryPrompt = async (messages: ChatMessage[], language: string): Promise<string> => {
+export const getChatFollowUp = async (messages: ChatMessage[], language: string): Promise<string> => {
+  const ai = getAiInstance();
+  // Token Saving: Sliding window - only send last 6 messages to maintain context
+  const recentMessages = messages.slice(-6);
+  
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: recentMessages.map(m => ({ 
+      role: m.role === 'ai' ? 'model' : 'user', 
+      parts: [{ text: m.content }] 
+    })),
+    config: {
+      systemInstruction: `You are a language tutor in ${language}. Keep responses short (max 2 sentences) to encourage user to speak more.`
+    }
+  });
+  return response.text || "";
+};
+
+export const validateVocabUsage = async (word: string, meaning: string, sentence: string, language: string): Promise<any> => {
   const ai = getAiInstance();
   return withRetry(async () => {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Dialogue History:\n${messages.map(m => `${m.role}: ${m.content}`).join('\n')}\n\nTask: Generate a warm and encouraging writing prompt in Chinese for the museum curator. 
-      The prompt should:
-      1. Summarize what they just talked about in ${language}.
-      2. Suggest they rewrite the core content as a diary entry.
-      3. Mention 1-2 useful words or grammar points from the chat.
-      Keep it under 80 words.`,
-    });
-    return response.text || "刚才的聊天很有趣，试着把这些零散的想法整理成一片日记吧！";
-  }).catch(() => "试着把刚才聊的内容整理成一篇正式的日记吧。");
-};
-
-export const evaluateRetelling = async (source: string, retelling: string, language: string): Promise<RehearsalEvaluation> => {
-  const ai = getAiInstance();
-  return withRetry(async () => {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `You are a strict but helpful curator.
-      SOURCE ARTIFACT: "${source}"
-      USER RETELLING: "${retelling}"
-      LANGUAGE: ${language}
-      
-      TASK:
-      1. 'suggestedVersion': A polished version of the USER'S RETELLING (fix grammar, style, and accuracy relative to source). DO NOT just copy the SOURCE ARTIFACT.
-      2. 'diffedRetelling': Compare USER RETELLING with your 'suggestedVersion'. Use <add>polished words</add> and <rem>original user errors</rem>.
-      3. 'accuracyScore': How well they recalled the SOURCE (0-100).
-      4. 'qualityScore': The linguistic quality of their RETELLING (0-100).
-      5. 'contentFeedback' & 'languageFeedback': Concise feedback in Chinese (中文).
-      
-      CRITICAL: For Japanese, use '[Kanji](furigana)' in 'suggestedVersion' and 'diffedRetelling'.`,
+      contents: `Word: "${word}" (${meaning}). Sentence: "${sentence}". Lang: ${language}.
+      Correct? Feedback (CN). Better version. 1-2 key phrases.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            accuracyScore: { type: Type.NUMBER },
-            qualityScore: { type: Type.NUMBER },
-            contentFeedback: { type: Type.STRING },
-            languageFeedback: { type: Type.STRING },
-            suggestedVersion: { type: Type.STRING },
-            diffedRetelling: { type: Type.STRING }
+            isCorrect: { type: Type.BOOLEAN },
+            feedback: { type: Type.STRING },
+            betterVersion: { type: Type.STRING },
+            keyPhrases: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  phrase: { type: Type.STRING },
+                  explanation: { type: Type.STRING }
+                },
+                required: ["phrase", "explanation"]
+              }
+            }
           },
-          required: ["accuracyScore", "qualityScore", "contentFeedback", "languageFeedback", "suggestedVersion", "diffedRetelling"]
+          required: ["isCorrect", "feedback", "betterVersion"]
         }
       }
     });
-    return JSON.parse(response.text) as RehearsalEvaluation;
-  }).catch(error => { throw new Error("评估失败。"); });
+    return JSON.parse(response.text);
+  });
+};
+
+export const generatePracticeArtifact = async (language: string, keywords: string, difficultyId: string, topicLabel: string): Promise<string> => {
+  const ai = getAiInstance();
+  // Token Saving: Hard-coded length constraints in system instruction
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Topic: ${topicLabel}. Lang: ${language}. Keywords: ${keywords}. Diff: ${difficultyId}.
+    Rules: Pure text. No title. 
+    Length: Beginner < 50w, Intermediate < 80w, Advanced < 120w.`,
+  });
+  return response.text.trim();
+};
+
+export const generateWeavedArtifact = async (language: string, gems: any[]): Promise<string> => {
+  const ai = getAiInstance();
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Short paragraph in ${language} using: ${gems.map(g => g.word).join(', ')}. Max 80 words.`,
+  });
+  return response.text.trim();
+};
+
+export const evaluateRetelling = async (source: string, retelling: string, language: string): Promise<RehearsalEvaluation> => {
+  const ai = getAiInstance();
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Compare Source and Retelling in ${language}. 
+    Schema: accuracyScore, qualityScore, contentFeedback(CN), languageFeedback(CN), suggestedVersion.`,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          accuracyScore: { type: Type.NUMBER },
+          qualityScore: { type: Type.NUMBER },
+          contentFeedback: { type: Type.STRING },
+          languageFeedback: { type: Type.STRING },
+          suggestedVersion: { type: Type.STRING }
+        },
+        required: ["accuracyScore", "qualityScore", "contentFeedback", "languageFeedback", "suggestedVersion"]
+      }
+    }
+  });
+  const result = JSON.parse(response.text) as RehearsalEvaluation;
+  result.diffedRetelling = calculateDiff(retelling, result.suggestedVersion);
+  return result;
+};
+
+export const generateDailyMuses = async (language: string): Promise<any[]> => {
+  const ai = getAiInstance();
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `3 diary prompts in ${language}. Return JSON [{id, title, prompt, icon}]`,
+    config: { responseMimeType: "application/json" }
+  });
+  return JSON.parse(response.text);
 };
 
 export const generateDiaryAudio = async (text: string): Promise<string> => {
   const ai = getAiInstance();
-  return withRetry(async () => {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `Say: ${text}` }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
-      },
-    });
-    return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
-  }).catch(error => { throw new Error("TTS 失败。"); });
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash-preview-tts",
+    contents: [{ parts: [{ text: `Say: ${text}` }] }],
+    config: {
+      responseModalities: [Modality.AUDIO],
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
+    },
+  });
+  return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
 };
 
-export const getChatFollowUp = async (messages: ChatMessage[], language: string): Promise<string> => {
+export const generateChatSummaryPrompt = async (messages: ChatMessage[], language: string): Promise<string> => {
   const ai = getAiInstance();
-  return withRetry(async () => {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: messages.map(m => ({ role: m.role === 'ai' ? 'model' : 'user', parts: [{ text: m.content }] })),
-      config: { 
-        systemInstruction: `You are a friendly language mentor in ${language}. 
-        STRICT RULES:
-        1. Keep responses CONCISE (max 2-3 sentences).
-        2. Focus on the conversation, not formal teaching.
-        3. Do NOT provide "Corrections" or "Vocabulary Tips" in the chat bubble.
-        4. Ask only one natural follow-up question.` 
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Summarize this chat into a 1-sentence diary prompt: ${messages.slice(-5).map(m => m.content).join(' ')}`,
+  });
+  return response.text || "";
+};
+
+export const enrichFragment = async (content: string, language: string): Promise<{ meaning: string, usage: string }> => {
+  const ai = getAiInstance();
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Fragment: "${content}". Lang: ${language}. Meaning (CN). Usage (${language}).`,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          meaning: { type: Type.STRING },
+          usage: { type: Type.STRING }
+        },
+        required: ["meaning", "usage"]
       }
-    });
-    return response.text || "";
-  }).catch(error => { throw new Error("无法获取回复。"); });
-};
-
-export const generatePracticeArtifact = async (language: string, keywords: string, difficulty: string, topic: string): Promise<string> => {
-  const ai = getAiInstance();
-  
-  // Logic fix for 'Random' topic to ensure it doesn't just discuss 'randomness'
-  const effectiveTopic = topic === '随机' 
-    ? "Pick an arbitrary, interesting real-life or abstract topic (e.g. coffee culture, city life, star gazing, childhood memories, seasonal changes, or local food) that fits the difficulty level." 
-    : `Topic: ${topic}`;
-
-  return withRetry(async () => {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Task: Write a cohesive short text (3-5 sentences) in ${language}. 
-      ${effectiveTopic}. 
-      Difficulty level: ${difficulty}. 
-      Keywords to include (if any): ${keywords}.
-      
-      STRICT RULE: The response MUST be entirely and purely in ${language}. 
-      Do NOT mix other languages (like English) in the content. 
-      For Japanese: Use natural phrasing and avoid mixing English unless it's a loanword commonly written in Katakana.`,
-    });
-    return response.text || "";
-  }).catch(error => { throw new Error("生成失败。"); });
-};
-
-/**
- * NEW: Weaves specific vocab gems into a coherent story for Rehearsal.
- */
-export const generateWeavedArtifact = async (language: string, gems: { word: string, meaning: string }[]): Promise<string> => {
-  const ai = getAiInstance();
-  const gemsList = gems.map(g => `- ${g.word} (${g.meaning})`).join('\n');
-  return withRetry(async () => {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `You are a museum curator weaving treasures into a story.
-      Target Language: ${language}.
-      Vocabulary Gems to include:
-      ${gemsList}
-      
-      TASK:
-      Write a logically coherent and naturally phrased short story or informative text (4-6 sentences) in ${language} that naturally incorporates ALL the vocabulary gems above.
-      The context should be sophisticated and professional.
-      
-      STRICT RULE: Pure ${language} only. For Japanese, use natural Kanji/Kana balance.`,
-    });
-    return response.text || "";
-  }).catch(error => { throw new Error("织网生成失败。"); });
+    }
+  });
+  return JSON.parse(response.text);
 };

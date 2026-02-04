@@ -47,17 +47,34 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
   }, [initialText, initialLanguage]);
 
   useEffect(() => {
-    if (showMuses && muses.length === 0) {
+    if (showMuses) {
       loadMuses();
     }
   }, [language, showMuses]);
 
   const loadMuses = async () => {
     if (isMusesLoading) return;
+    
+    // Check Cache First to save tokens
+    const today = new Date().toDateString();
+    const cacheKey = `muses_${language}_${today}`;
+    const cached = localStorage.getItem(cacheKey);
+    
+    if (cached) {
+      try {
+        setMuses(JSON.parse(cached));
+        return;
+      } catch (e) {
+        localStorage.removeItem(cacheKey);
+      }
+    }
+
     setIsMusesLoading(true);
     try {
       const data = await generateDailyMuses(language);
       setMuses(data);
+      // Cache the result for the rest of the day
+      localStorage.setItem(cacheKey, JSON.stringify(data));
     } catch (e) {
       console.error(e);
     } finally {
