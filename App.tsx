@@ -241,13 +241,9 @@ const App: React.FC = () => {
     }
   };
 
-  /**
-   * 核心功能：通过 Firebase Firestore 验证激活码并更新用户 Pro 状态
-   */
   const handleActivatePro = async (inputCode: string): Promise<boolean> => {
     if (!user) return false;
 
-    // 如果是 Mock 环境或数据库不可用，回退到静态码 (用于演示)
     if (!db || user.isMock) {
       const STATIC_CODES = ['MUSEUM2025', 'LINGUIST_PRO'];
       if (STATIC_CODES.includes(inputCode.toUpperCase())) {
@@ -261,7 +257,6 @@ const App: React.FC = () => {
     }
 
     try {
-      // 1. 在 activationCodes 集合中查找匹配的 code
       const q = query(
         collection(db, 'activationCodes'), 
         where('code', '==', inputCode.trim()),
@@ -274,7 +269,6 @@ const App: React.FC = () => {
       const codeDoc = querySnapshot.docs[0];
       const codeData = codeDoc.data();
       
-      // 2. 根据 membershipType 确定时长
       let durationDays = 30;
       if (codeData.membershipType === 'pro_365d') durationDays = 365;
       else if (codeData.membershipType === 'pro_7d') durationDays = 7;
@@ -282,23 +276,18 @@ const App: React.FC = () => {
       const proExpiry = Date.now() + durationDays * 24 * 60 * 60 * 1000;
       const proData = { isPro: true, proExpiry };
 
-      // 3. 使用 Batch 原子化更新码状态和用户状态
       const batch = writeBatch(db);
       
-      // 更新码状态
       batch.update(codeDoc.ref, { 
         status: 'used', 
         usedBy: user.uid,
         usedAt: serverTimestamp() 
       });
       
-      // 更新用户 Profile
       const userRef = doc(db, 'users', user.uid);
       batch.set(userRef, { profile: { ...user, ...proData } }, { merge: true });
 
       await batch.commit();
-
-      // 4. 更新本地状态
       setUser(prev => prev ? { ...prev, ...proData } : null);
       return true;
     } catch (e) {
@@ -344,20 +333,47 @@ const App: React.FC = () => {
     }
   };
 
+  /**
+   * 优化后的升级函数：增加 AI 智能补全逻辑
+   */
   const handlePromoteFragment = async (fragmentId: string) => {
     if (!user) return;
     const fragment = fragments.find(f => f.id === fragmentId);
     if (!fragment) return;
-    const vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'> = {
-      word: fragment.content,
-      meaning: fragment.meaning || "未命名珍宝",
-      usage: fragment.usage || "暂无例句",
-      level: 'Intermediate',
-      language: fragment.language,
-      timestamp: Date.now()
-    };
-    await handleSaveManualVocab(vocab);
-    await handleDeleteFragment(fragmentId);
+
+    setIsLoading(true); // 进入修缮模式
+    try {
+      let finalMeaning = fragment.meaning;
+      let finalUsage = fragment.usage;
+
+      // 如果释义或例句为空，自动调用 AI 进行智能“修缮”
+      if (!finalMeaning || !finalUsage || finalMeaning.trim() === "" || finalUsage.trim() === "") {
+        try {
+          const enrichment = await enrichFragment(fragment.content, fragment.language);
+          finalMeaning = finalMeaning || enrichment.meaning;
+          finalUsage = finalUsage || enrichment.usage;
+        } catch (aiError) {
+          console.warn("AI enrichment failed, using fallbacks:", aiError);
+        }
+      }
+
+      const vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'> = {
+        word: fragment.content,
+        meaning: finalMeaning || "未命名珍宝",
+        usage: finalUsage || "暂无例句",
+        level: 'Intermediate',
+        language: fragment.language,
+        timestamp: Date.now()
+      };
+
+      await handleSaveManualVocab(vocab);
+      await handleDeleteFragment(fragmentId);
+    } catch (e) {
+      console.error("Promotion failed:", e);
+      alert("词汇入库失败，请重试。");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleAnalyze = async (text: string, language: string, usedFragmentIds: string[]) => {
@@ -516,7 +532,7 @@ const App: React.FC = () => {
     const today = new Date();
     if (today.getDay() !== user.iterationDay) return null;
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const candidate = entries.find(e => e.timestamp < weekAgo && (e.iterationCount || 0) < 3);
+    const candidate = entries.find(e => e.type === 'diary' && e.analysis && e.timestamp < weekAgo && (e.iterationCount || 0) < 3);
     return candidate || null;
   }, [entries, user]);
 
@@ -704,6 +720,7 @@ const App: React.FC = () => {
       {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartSmartReview} entries={entries} allAdvancedVocab={allAdvancedVocab} recommendedIteration={recommendedIteration} onStartIteration={handleStartIteration} onSaveFragment={handleSaveFragment} />}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraft} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} fragments={fragments} onDeleteFragment={handleDeleteFragment} preferredLanguages={preferredLanguages} />}
       {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isExistingEntry={isReviewingExisting} />}
+      {/* // FIX: Updated function name from handleUpdateLanguage to handleUpdateEntryLanguage */}
       {view === 'history' && <History entries={entries} isAnalyzingId={analyzingId} onAnalyzeDraft={handleAnalyzeExistingEntry} onUpdateLanguage={handleUpdateEntryLanguage} onSelect={(e) => { setCurrentEntry(e); setIsReviewingExisting(true); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); setEntries(prev => prev.filter(e => e.id !== id)); }} onRewrite={(e) => { handleStartIteration(e); }} preferredLanguages={preferredLanguages} />}
       {view === 'chat' && <ChatEditor onFinish={(msgs, lang, summary) => { setChatLanguage(lang); setPrefilledEditorText(''); setSummaryPrompt(summary); setView('editor'); }} allGems={allAdvancedVocab} preferredLanguages={preferredLanguages} />}
       {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} fragments={fragments} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} onDeleteVocab={handleDeleteVocab} onDeleteFragment={handleDeleteFragment} onPromoteFragment={handlePromoteFragment} onPromoteToSeed={handlePromoteToSeed} />}

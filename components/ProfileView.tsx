@@ -18,6 +18,8 @@ interface ProfileViewProps {
   preferredLanguages: string[];
   onSetPreferredLanguages: (langs: string[]) => void;
   onActivatePro: (code: string) => Promise<boolean>;
+  globalChallenge: import('../types').GlobalChallenge | null;
+  onUpdateGlobalChallenge: (updated: import('../types').GlobalChallenge) => Promise<void>;
 }
 
 const DAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
@@ -45,12 +47,20 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   onSetIterationDay,
   preferredLanguages,
   onSetPreferredLanguages,
-  onActivatePro
+  onActivatePro,
+  globalChallenge,
+  onUpdateGlobalChallenge
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isLearningPrefsOpen, setIsLearningPrefsOpen] = useState(false);
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [passcode, setPasscode] = useState('');
   const [activationStatus, setActivationStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [showInputForPro, setShowInputForPro] = useState(false);
+
+  const [adminThemes, setAdminThemes] = useState(globalChallenge?.themes.join('\n') || '');
+  const [adminFee, setAdminFee] = useState(globalChallenge?.entryFee.toString() || '9.9');
+  const [adminMonth, setAdminMonth] = useState(globalChallenge?.month || '');
 
   const handleStartEdit = () => {
     setEditName(user.displayName);
@@ -66,6 +76,19 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   const handleSave = async () => {
     await onSaveProfile();
     setIsEditing(false);
+  };
+
+  const handleSaveAdminChallenge = async () => {
+    if (!globalChallenge) return;
+    const updated = {
+      ...globalChallenge,
+      themes: adminThemes.split('\n').filter(t => t.trim()),
+      entryFee: parseFloat(adminFee),
+      month: adminMonth
+    };
+    await onUpdateGlobalChallenge(updated);
+    setIsAdminOpen(false);
+    alert("挑战配置已更新");
   };
 
   const toggleLanguage = (code: string) => {
@@ -86,6 +109,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({
     if (success) {
       setActivationStatus('success');
       setPasscode('');
+      setShowInputForPro(false);
       setTimeout(() => setActivationStatus('idle'), 3000);
     } else {
       setActivationStatus('error');
@@ -148,46 +172,85 @@ const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
         </div>
 
-        {/* Activation Code Section */}
-        <section className="bg-slate-900 p-8 rounded-[2.5rem] border border-slate-800 shadow-xl overflow-hidden relative">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-bl-full -mr-10 -mt-10 pointer-events-none"></div>
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="space-y-1">
-              <h4 className="text-xl font-black text-white serif-font">激活码兑换 <span className="text-indigo-400 text-sm">Passcode</span></h4>
-              <p className="text-slate-400 text-[9px] uppercase font-black tracking-widest">开启 Pro 权限，享受不限额度 AI 服务</p>
+        {/* 核心改动：Pro 与普通状态的激活码区域切换 */}
+        {user.isPro && !showInputForPro ? (
+          /* PRO 馆长专属卡片 */
+          <section className="bg-slate-900 p-8 rounded-[2.5rem] border border-slate-800 shadow-xl overflow-hidden relative group animate-in zoom-in-95 duration-500">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/10 rounded-bl-full -mr-16 -mt-16 blur-3xl group-hover:bg-indigo-500/10 transition-colors duration-1000"></div>
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="flex items-center space-x-5">
+                <div className="w-14 h-14 bg-gradient-to-br from-amber-400 to-indigo-600 rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-indigo-500/20 animate-pulse">
+                  ✨
+                </div>
+                <div>
+                  <h4 className="text-xl font-black text-white serif-font">尊享馆长权益已生效</h4>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <span className="text-amber-500 text-[9px] font-black uppercase tracking-widest">PRO STATUS ACTIVE</span>
+                    <span className="w-1 h-1 bg-slate-700 rounded-full"></span>
+                    <span className="text-indigo-400 text-[9px] font-black uppercase tracking-widest">无限配额解锁</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex flex-col md:items-end">
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">权益有效期至</span>
+                <span className="text-white text-lg font-black tracking-tight serif-font">
+                  {user.proExpiry ? new Date(user.proExpiry).toLocaleDateString() : '永久有效'}
+                </span>
+                <button 
+                  onClick={() => setShowInputForPro(true)}
+                  className="mt-2 text-[8px] font-black text-indigo-400/60 uppercase tracking-widest hover:text-indigo-400 transition-colors"
+                >
+                  我有新的激活码 / 续费 →
+                </button>
+              </div>
             </div>
-            
-            <div className="flex items-center space-x-2 bg-white/5 p-2 rounded-2xl border border-white/10 focus-within:border-indigo-500 transition-all">
-              <input 
-                type="text" 
-                value={passcode}
-                onChange={(e) => setPasscode(e.target.value)}
-                placeholder="输入激活码..."
-                className="bg-transparent border-none focus:ring-0 text-white text-xs px-2 w-32"
-              />
+          </section>
+        ) : (
+          /* 普通激活/输入激活码界面 */
+          <section className="bg-slate-900 p-8 rounded-[2.5rem] border border-slate-800 shadow-xl overflow-hidden relative animate-in slide-in-from-bottom-4 duration-500">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-bl-full -mr-10 -mt-10 pointer-events-none"></div>
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-1">
+                <h4 className="text-xl font-black text-white serif-font">激活码兑换 <span className="text-indigo-400 text-sm">Passcode</span></h4>
+                <p className="text-slate-400 text-[9px] uppercase font-black tracking-widest">
+                  {showInputForPro ? '追加订阅时长以延续馆长特权' : '开启 Pro 权限，享受不限额度 AI 服务'}
+                </p>
+              </div>
+              
+              <div className="flex items-center space-x-2 bg-white/5 p-2 rounded-2xl border border-white/10 focus-within:border-indigo-500 transition-all">
+                <input 
+                  type="text" 
+                  value={passcode}
+                  onChange={(e) => setPasscode(e.target.value)}
+                  placeholder="输入激活码..."
+                  className="bg-transparent border-none focus:ring-0 text-white text-xs px-2 w-32"
+                />
+                <button 
+                  onClick={handleActivate}
+                  disabled={activationStatus === 'loading' || !passcode.trim()}
+                  className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                    activationStatus === 'success' ? 'bg-emerald-500 text-white' : 
+                    activationStatus === 'error' ? 'bg-rose-500 text-white' : 
+                    'bg-indigo-600 text-white hover:bg-indigo-700'
+                  }`}
+                >
+                  {activationStatus === 'loading' ? '...' : 
+                  activationStatus === 'success' ? '已激活' : 
+                  activationStatus === 'error' ? '错误' : '激活'}
+                </button>
+              </div>
+            </div>
+            {showInputForPro && (
               <button 
-                onClick={handleActivate}
-                disabled={activationStatus === 'loading' || !passcode.trim()}
-                className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
-                  activationStatus === 'success' ? 'bg-emerald-500 text-white' : 
-                  activationStatus === 'error' ? 'bg-rose-500 text-white' : 
-                  'bg-indigo-600 text-white hover:bg-indigo-700'
-                }`}
+                onClick={() => setShowInputForPro(false)}
+                className="mt-4 text-[8px] font-black text-slate-500 uppercase tracking-widest hover:text-slate-300 transition-colors"
               >
-                {activationStatus === 'loading' ? '...' : 
-                 activationStatus === 'success' ? '已激活' : 
-                 activationStatus === 'error' ? '错误' : '激活'}
+                取消返回
               </button>
-            </div>
-          </div>
-          {user.isPro && user.proExpiry && (
-            <div className="mt-4 pt-4 border-t border-white/5">
-               <p className="text-[8px] font-black text-indigo-300/60 uppercase tracking-widest">
-                 您的 Pro 权益有效期至: {new Date(user.proExpiry).toLocaleDateString()}
-               </p>
-            </div>
-          )}
-        </section>
+            )}
+          </section>
+        )}
 
         <button 
           onClick={() => setIsLearningPrefsOpen(true)}
@@ -205,6 +268,21 @@ const ProfileView: React.FC<ProfileViewProps> = ({
             <span className="text-2xl text-indigo-600 group-hover:translate-x-2 transition-transform">→</span>
           </div>
         </button>
+
+        {/* Admin Section - Only visible if user clicks a specific area or for demo */}
+        <div className="pt-10 flex justify-center">
+          <button 
+            onClick={() => {
+              setIsAdminOpen(true);
+              setAdminThemes(globalChallenge?.themes.join('\n') || '');
+              setAdminFee(globalChallenge?.entryFee.toString() || '9.9');
+              setAdminMonth(globalChallenge?.month || '');
+            }}
+            className="text-[8px] font-black text-slate-300 uppercase tracking-[0.3em] hover:text-indigo-400 transition-colors"
+          >
+            ADMIN: MANAGE CHALLENGES
+          </button>
+        </div>
 
         {isEditing && isAvatarPickerOpen && (
           <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -301,6 +379,74 @@ const ProfileView: React.FC<ProfileViewProps> = ({
                   className="w-full bg-slate-900 text-white py-4 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl active:scale-[0.98] transition-all"
                  >
                    完成设置 CLOSE
+                 </button>
+              </footer>
+           </div>
+        </div>
+      )}
+
+      {isAdminOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">
+           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-xl" onClick={() => setIsAdminOpen(false)}></div>
+           
+           <div className="relative w-full max-w-2xl bg-white rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 max-h-full">
+              <header className="p-8 border-b border-slate-50 flex items-center justify-between shrink-0">
+                 <div className="flex items-center space-x-4">
+                   <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center text-xl shadow-inner">🛠️</div>
+                   <div>
+                     <h3 className="text-xl font-black serif-font text-slate-900">挑战管理后台</h3>
+                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Challenge Admin Console</p>
+                   </div>
+                 </div>
+                 <button onClick={() => setIsAdminOpen(false)} className="w-10 h-10 rounded-full hover:bg-slate-50 flex items-center justify-center text-slate-300 transition-colors">✕</button>
+              </header>
+
+              <div className="flex-1 overflow-y-auto no-scrollbar p-8 space-y-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">挑战月份 MONTH</label>
+                  <input 
+                    type="text" 
+                    value={adminMonth}
+                    onChange={(e) => setAdminMonth(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl text-sm font-bold outline-none focus:border-indigo-500"
+                    placeholder="例如: 2024年6月"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">报名费用 ENTRY FEE (¥)</label>
+                  <input 
+                    type="number" 
+                    value={adminFee}
+                    onChange={(e) => setAdminFee(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl text-sm font-bold outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">每日主题 THEMES (每行一个)</label>
+                  <textarea 
+                    value={adminThemes}
+                    onChange={(e) => setAdminThemes(e.target.value)}
+                    className="w-full h-64 bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl text-xs font-medium outline-none focus:border-indigo-500 no-scrollbar"
+                    placeholder="第一天: ...&#10;第二天: ..."
+                  />
+                  <p className="text-[8px] text-slate-400 italic">提示：请确保至少输入 30 行以覆盖完整挑战周期。</p>
+                </div>
+              </div>
+
+              <footer className="p-8 border-t border-slate-50 shrink-0 bg-slate-50/30 flex gap-4">
+                 <button 
+                  onClick={() => setIsAdminOpen(false)}
+                  className="flex-1 bg-white border border-slate-200 text-slate-400 py-4 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] transition-all"
+                 >
+                   取消 CANCEL
+                 </button>
+                 <button 
+                  onClick={handleSaveAdminChallenge}
+                  className="flex-2 bg-indigo-600 text-white py-4 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] shadow-xl shadow-indigo-100 active:scale-[0.98] transition-all"
+                 >
+                   发布挑战 PUBLISH
                  </button>
               </footer>
            </div>

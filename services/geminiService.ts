@@ -115,7 +115,9 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
       }
     });
     
-    const analysis = JSON.parse(response.text) as DiaryAnalysis;
+    const textResponse = response.text;
+    if (!textResponse) throw new Error("AI response text is empty.");
+    const analysis = JSON.parse(textResponse) as DiaryAnalysis;
     
     // Post-processing: ensure target-language meanings are clean plain-text
     if (analysis.readingPairs) {
@@ -154,7 +156,9 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
         }
       }
     });
-    const result = JSON.parse(response.text) as RehearsalEvaluation;
+    const textResponse = response.text;
+    if (!textResponse) throw new Error("AI response text is empty.");
+    const result = JSON.parse(textResponse) as RehearsalEvaluation;
     result.diffedRetelling = calculateDiff(retelling, result.suggestedVersion, language);
     return result;
   });
@@ -209,7 +213,9 @@ export const validateVocabUsage = async (word: string, meaning: string, sentence
         }
       }
     });
-    return JSON.parse(response.text);
+    const textResponse = response.text;
+    if (!textResponse) throw new Error("AI response text is empty.");
+    return JSON.parse(textResponse);
   });
 };
 
@@ -220,7 +226,8 @@ export const generatePracticeArtifact = async (language: string, keywords: strin
     contents: `Topic: ${topicLabel}. Lang: ${language}. Keywords: ${keywords}. Difficulty: ${difficultyId}. Pure text.`,
     config: { thinkingConfig: { thinkingBudget: 0 } }
   });
-  return response.text.trim();
+  const textResponse = response.text;
+  return textResponse ? textResponse.trim() : "";
 };
 
 export const generateWeavedArtifact = async (language: string, gems: any[]): Promise<string> => {
@@ -230,7 +237,8 @@ export const generateWeavedArtifact = async (language: string, gems: any[]): Pro
     contents: `Paragraph in ${language} using: ${gems.map(g => g.word).join(', ')}.`,
     config: { thinkingConfig: { thinkingBudget: 0 } }
   });
-  return response.text.trim();
+  const textResponse = response.text;
+  return textResponse ? textResponse.trim() : "";
 };
 
 export const generateDailyMuses = async (language: string): Promise<any[]> => {
@@ -243,7 +251,9 @@ export const generateDailyMuses = async (language: string): Promise<any[]> => {
       responseMimeType: "application/json" 
     }
   });
-  return JSON.parse(response.text);
+  const textResponse = response.text;
+  if (!textResponse) return [];
+  return JSON.parse(textResponse);
 };
 
 export const generateDiaryAudio = async (text: string): Promise<string> => {
@@ -287,5 +297,7 @@ export const enrichFragment = async (content: string, language: string): Promise
       }
     }
   });
-  return JSON.parse(response.text);
+  const textResponse = response.text;
+  if (!textResponse) throw new Error("AI response text is empty.");
+  return JSON.parse(textResponse);
 };

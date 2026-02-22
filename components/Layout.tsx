@@ -61,6 +61,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
 
         <nav className="flex-1 space-y-2 overflow-y-auto no-scrollbar">
           <NavItem view="dashboard" label="主页 / Dashboard" icon="🏠" />
+          <NavItem view="challenge" label="30天挑战 / Challenge" icon="🏆" />
           <NavItem view="editor" label="撰写 / Editor" icon="✍️" />
           <NavItem view="chat" label="启发对话 / Guided Chat" icon="💬" />
           <NavItem view={['rehearsal', 'rehearsal_report']} label="展厅演练 / Rehearsal" icon="🎤" />
