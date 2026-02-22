@@ -537,9 +537,38 @@ const App: React.FC = () => {
   }, [entries, user]);
 
   const handleStartSmartReview = () => {
-    const needingReview = allAdvancedVocab.filter(v => (v.mastery || 0) < 4);
+    const needingReview = allAdvancedVocab.filter(v => (v.mastery || 0) < 5);
     if (needingReview.length === 0) { alert("所有馆藏珍宝均已达到巅峰。"); return; }
-    const queue = needingReview.sort(() => 0.5 - Math.random()).slice(0, 10).map(v => v.id);
+    
+    // Priority 1: Mastery level 0
+    // Priority 2: Forgetting curve (longest time since last review)
+    const sorted = [...needingReview].sort((a, b) => {
+      const masteryA = a.mastery || 0;
+      const masteryB = b.mastery || 0;
+
+      // Mastery 0 is top priority
+      if (masteryA === 0 && masteryB !== 0) return -1;
+      if (masteryB === 0 && masteryA !== 0) return 1;
+
+      // If mastery is same (or both non-zero), use forgetting curve
+      const getLastReviewTime = (vocab: AdvancedVocab) => {
+        if (vocab.practices && vocab.practices.length > 0) {
+          return Math.max(...vocab.practices.map(p => p.timestamp));
+        }
+        return vocab.timestamp; // Use creation time if never practiced
+      };
+
+      const timeA = getLastReviewTime(a);
+      const timeB = getLastReviewTime(b);
+
+      // We want the one with the OLDEST review time first (longest interval)
+      if (timeA !== timeB) return timeA - timeB;
+      
+      // Final tie-breaker: mastery level (lower first)
+      return masteryA - masteryB;
+    });
+
+    const queue = sorted.slice(0, 10).map(v => v.id);
     setPracticeQueue(queue);
     setQueueIndex(0);
     setSelectedVocabForPracticeId(queue[0]);

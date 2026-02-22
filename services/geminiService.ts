@@ -43,10 +43,12 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
       Context: ${historyContext}
       Task: Correct the text. 
       IMPORTANT: Maintain the user's original phrasing where it is correct. Only rewrite if necessary for naturalness or grammar. 
-      Provide grammar tips(CN), advanced vocab, readingPairs(N2+).
+      Provide grammar tips(${language}), advanced vocab, readingPairs(N2+).
       
       FOR ALL LANGUAGES:
       - 'advancedVocab.meaning' MUST be a monolingual definition in the target language (${language}) itself. DO NOT use English or Chinese for meaning.
+      - 'corrections.explanation' MUST be in the target language (${language}).
+      - 'transitionSuggestions.explanation' MUST be in the target language (${language}).
       
       FOR JAPANESE:
       - 'advancedVocab.word' and 'advancedVocab.usage' MUST use the format: [漢字](かんじ).
@@ -115,9 +117,7 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
       }
     });
     
-    const textResponse = response.text;
-    if (!textResponse) throw new Error("AI response text is empty.");
-    const analysis = JSON.parse(textResponse) as DiaryAnalysis;
+    const analysis = JSON.parse(response.text) as DiaryAnalysis;
     
     // Post-processing: ensure target-language meanings are clean plain-text
     if (analysis.readingPairs) {
@@ -139,7 +139,7 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
   return withRetry(async () => {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Compare Source/Retelling in ${language}. Score accuracy/quality. Feedbacks(CN).`,
+      contents: `Compare Source/Retelling in ${language}. Score accuracy/quality. Feedbacks(${language}).`,
       config: {
         thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: "application/json",
@@ -156,9 +156,7 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
         }
       }
     });
-    const textResponse = response.text;
-    if (!textResponse) throw new Error("AI response text is empty.");
-    const result = JSON.parse(textResponse) as RehearsalEvaluation;
+    const result = JSON.parse(response.text) as RehearsalEvaluation;
     result.diffedRetelling = calculateDiff(retelling, result.suggestedVersion, language);
     return result;
   });
@@ -187,7 +185,7 @@ export const validateVocabUsage = async (word: string, meaning: string, sentence
   return withRetry(async () => {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Word: "${word}". Sentence: "${sentence}". Correct? Feedback(CN).`,
+      contents: `Word: "${word}". Sentence: "${sentence}". Correct? Feedback(${language}).`,
       config: {
         thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: "application/json",
@@ -213,9 +211,7 @@ export const validateVocabUsage = async (word: string, meaning: string, sentence
         }
       }
     });
-    const textResponse = response.text;
-    if (!textResponse) throw new Error("AI response text is empty.");
-    return JSON.parse(textResponse);
+    return JSON.parse(response.text);
   });
 };
 
@@ -226,8 +222,7 @@ export const generatePracticeArtifact = async (language: string, keywords: strin
     contents: `Topic: ${topicLabel}. Lang: ${language}. Keywords: ${keywords}. Difficulty: ${difficultyId}. Pure text.`,
     config: { thinkingConfig: { thinkingBudget: 0 } }
   });
-  const textResponse = response.text;
-  return textResponse ? textResponse.trim() : "";
+  return response.text.trim();
 };
 
 export const generateWeavedArtifact = async (language: string, gems: any[]): Promise<string> => {
@@ -237,8 +232,7 @@ export const generateWeavedArtifact = async (language: string, gems: any[]): Pro
     contents: `Paragraph in ${language} using: ${gems.map(g => g.word).join(', ')}.`,
     config: { thinkingConfig: { thinkingBudget: 0 } }
   });
-  const textResponse = response.text;
-  return textResponse ? textResponse.trim() : "";
+  return response.text.trim();
 };
 
 export const generateDailyMuses = async (language: string): Promise<any[]> => {
@@ -251,9 +245,7 @@ export const generateDailyMuses = async (language: string): Promise<any[]> => {
       responseMimeType: "application/json" 
     }
   });
-  const textResponse = response.text;
-  if (!textResponse) return [];
-  return JSON.parse(textResponse);
+  return JSON.parse(response.text);
 };
 
 export const generateDiaryAudio = async (text: string): Promise<string> => {
@@ -297,7 +289,5 @@ export const enrichFragment = async (content: string, language: string): Promise
       }
     }
   });
-  const textResponse = response.text;
-  if (!textResponse) throw new Error("AI response text is empty.");
-  return JSON.parse(textResponse);
+  return JSON.parse(response.text);
 };
