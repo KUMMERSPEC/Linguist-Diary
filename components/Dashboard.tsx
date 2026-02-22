@@ -7,7 +7,6 @@ import { renderRuby } from '../utils/textHelpers';
 interface DashboardProps {
   onNewEntry: () => void;
   onStartReview: () => void; 
-  onViewChallenge: () => void;
   entries: DiaryEntry[];
   allAdvancedVocab: AdvancedVocab[]; 
   recommendedIteration?: DiaryEntry | null;
@@ -19,7 +18,6 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ 
   onNewEntry, 
   onStartReview, 
-  onViewChallenge,
   entries, 
   allAdvancedVocab,
   recommendedIteration,
@@ -151,7 +149,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           <p className="text-slate-500 text-xs md:text-sm italic">云端同步已就绪，今天想记录些什么？</p>
         </header>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
           <button 
             onClick={onNewEntry}
             className="group relative bg-indigo-600 p-5 md:p-6 rounded-[1.8rem] md:rounded-[2.2rem] text-white flex items-center justify-between shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-[0.98] overflow-hidden"
@@ -174,18 +172,6 @@ const Dashboard: React.FC<DashboardProps> = ({
               <p className="text-slate-400 text-[9px] mt-0.5 opacity-70 uppercase tracking-widest font-black">Review & Refine</p>
             </div>
             <span className="text-2xl group-hover:translate-x-1.5 transition-transform relative z-10">→</span>
-          </button>
-
-          <button 
-            onClick={onViewChallenge} 
-            className="group relative bg-white border-2 border-indigo-600 p-5 md:p-6 rounded-[1.8rem] md:rounded-[2.2rem] text-indigo-600 flex items-center justify-between shadow-xl shadow-indigo-50 hover:bg-indigo-50 transition-all active:scale-[0.98] overflow-hidden"
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-600/5 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110 pointer-events-none"></div>
-            <div className="text-left relative z-10">
-              <h5 className="text-lg font-bold serif-font">30天挑战</h5>
-              <p className="text-indigo-400 text-[9px] mt-0.5 opacity-70 uppercase tracking-widest font-black">30-Day Challenge</p>
-            </div>
-            <span className="text-2xl group-hover:translate-x-1.5 transition-transform relative z-10">🏆</span>
           </button>
         </div>
 

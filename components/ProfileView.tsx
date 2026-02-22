@@ -18,8 +18,6 @@ interface ProfileViewProps {
   preferredLanguages: string[];
   onSetPreferredLanguages: (langs: string[]) => void;
   onActivatePro: (code: string) => Promise<boolean>;
-  globalChallenge: import('../types').GlobalChallenge | null;
-  onUpdateGlobalChallenge: (updated: import('../types').GlobalChallenge) => Promise<void>;
 }
 
 const DAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
@@ -47,9 +45,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   onSetIterationDay,
   preferredLanguages,
   onSetPreferredLanguages,
-  onActivatePro,
-  globalChallenge,
-  onUpdateGlobalChallenge
+  onActivatePro
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isLearningPrefsOpen, setIsLearningPrefsOpen] = useState(false);
@@ -57,10 +53,6 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   const [passcode, setPasscode] = useState('');
   const [activationStatus, setActivationStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [showInputForPro, setShowInputForPro] = useState(false);
-
-  const [adminThemes, setAdminThemes] = useState(globalChallenge?.themes.join('\n') || '');
-  const [adminFee, setAdminFee] = useState(globalChallenge?.entryFee.toString() || '9.9');
-  const [adminMonth, setAdminMonth] = useState(globalChallenge?.month || '');
 
   const handleStartEdit = () => {
     setEditName(user.displayName);
@@ -76,19 +68,6 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   const handleSave = async () => {
     await onSaveProfile();
     setIsEditing(false);
-  };
-
-  const handleSaveAdminChallenge = async () => {
-    if (!globalChallenge) return;
-    const updated = {
-      ...globalChallenge,
-      themes: adminThemes.split('\n').filter(t => t.trim()),
-      entryFee: parseFloat(adminFee),
-      month: adminMonth
-    };
-    await onUpdateGlobalChallenge(updated);
-    setIsAdminOpen(false);
-    alert("挑战配置已更新");
   };
 
   const toggleLanguage = (code: string) => {
@@ -269,21 +248,6 @@ const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
         </button>
 
-        {/* Admin Section - Only visible if user clicks a specific area or for demo */}
-        <div className="pt-10 flex justify-center">
-          <button 
-            onClick={() => {
-              setIsAdminOpen(true);
-              setAdminThemes(globalChallenge?.themes.join('\n') || '');
-              setAdminFee(globalChallenge?.entryFee.toString() || '9.9');
-              setAdminMonth(globalChallenge?.month || '');
-            }}
-            className="text-[8px] font-black text-slate-300 uppercase tracking-[0.3em] hover:text-indigo-400 transition-colors"
-          >
-            ADMIN: MANAGE CHALLENGES
-          </button>
-        </div>
-
         {isEditing && isAvatarPickerOpen && (
           <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 text-center">选择馆长化身 SELECT AVATAR</h3>
@@ -401,57 +365,6 @@ const ProfileView: React.FC<ProfileViewProps> = ({
                  <button onClick={() => setIsAdminOpen(false)} className="w-10 h-10 rounded-full hover:bg-slate-50 flex items-center justify-center text-slate-300 transition-colors">✕</button>
               </header>
 
-              <div className="flex-1 overflow-y-auto no-scrollbar p-8 space-y-8">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">挑战月份 MONTH</label>
-                  <input 
-                    type="text" 
-                    value={adminMonth}
-                    onChange={(e) => setAdminMonth(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl text-sm font-bold outline-none focus:border-indigo-500"
-                    placeholder="例如: 2024年6月"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">报名费用 ENTRY FEE (¥)</label>
-                  <input 
-                    type="number" 
-                    value={adminFee}
-                    onChange={(e) => setAdminFee(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl text-sm font-bold outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">每日主题 THEMES (每行一个)</label>
-                  <textarea 
-                    value={adminThemes}
-                    onChange={(e) => setAdminThemes(e.target.value)}
-                    className="w-full h-64 bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl text-xs font-medium outline-none focus:border-indigo-500 no-scrollbar"
-                    placeholder="第一天: ...&#10;第二天: ..."
-                  />
-                  <p className="text-[8px] text-slate-400 italic">提示：请确保至少输入 30 行以覆盖完整挑战周期。</p>
-                </div>
-              </div>
-
-              <footer className="p-8 border-t border-slate-50 shrink-0 bg-slate-50/30 flex gap-4">
-                 <button 
-                  onClick={() => setIsAdminOpen(false)}
-                  className="flex-1 bg-white border border-slate-200 text-slate-400 py-4 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] transition-all"
-                 >
-                   取消 CANCEL
-                 </button>
-                 <button 
-                  onClick={handleSaveAdminChallenge}
-                  className="flex-2 bg-indigo-600 text-white py-4 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] shadow-xl shadow-indigo-100 active:scale-[0.98] transition-all"
-                 >
-                   发布挑战 PUBLISH
-                 </button>
-              </footer>
-           </div>
-        </div>
-      )}
     </div>
   );
 };
