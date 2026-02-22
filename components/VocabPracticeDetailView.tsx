@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AdvancedVocab, PracticeRecord } from '../types';
 import { generateDiaryAudio } from '../services/geminiService';
+import { db } from '../firebase';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { decode, decodeAudioData } from '../utils/audioHelpers';
 import { renderRuby as rubyUtil } from '../utils/textHelpers';
 
@@ -23,11 +25,41 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [isManageMode, setIsManageMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [localPractices, setLocalPractices] = useState<PracticeRecord[]>([]);
+  const [isLoadingPractices, setIsLoadingPractices] = useState(false);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   const currentVocab = useMemo(() => {
     return allAdvancedVocab.find(v => `${v.word}-${v.language}` === selectedVocabId || v.id === selectedVocabId);
   }, [selectedVocabId, allAdvancedVocab]);
+
+  useEffect(() => {
+    const fetchPractices = async () => {
+      if (!currentVocab || !db) return;
+      
+      if (currentVocab.practices && currentVocab.practices.length > 0) {
+        setLocalPractices(currentVocab.practices);
+        return;
+      }
+
+      setIsLoadingPractices(true);
+      try {
+        const userId = localStorage.getItem('last_user_id'); 
+        if (!userId) return;
+
+        const practicesColRef = collection(db, 'users', userId, 'advancedVocab', currentVocab.id, 'practices');
+        const practicesSnapshot = await getDocs(query(practicesColRef, orderBy('timestamp', 'desc')));
+        const practices = practicesSnapshot.docs.map(pDoc => ({ ...pDoc.data(), id: pDoc.id })) as PracticeRecord[];
+        setLocalPractices(practices);
+      } catch (e) {
+        console.error("Failed to fetch practices:", e);
+      } finally {
+        setIsLoadingPractices(false);
+      }
+    };
+
+    fetchPractices();
+  }, [currentVocab]);
 
   if (!currentVocab) {
     return (
@@ -114,8 +146,9 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
   };
 
   const sortedPractices = useMemo(() => {
-    return currentVocab.practices ? [...currentVocab.practices].sort((a, b) => b.timestamp - a.timestamp) : [];
-  }, [currentVocab.practices]);
+    if (localPractices.length > 0) return [...localPractices].sort((a, b) => b.timestamp - a.timestamp);
+    return currentVocab?.practices ? [...currentVocab.practices].sort((a, b) => b.timestamp - a.timestamp) : [];
+  }, [localPractices, currentVocab?.practices]);
 
   return (
     <div className="flex flex-col h-full animate-in fade-in duration-500 overflow-hidden w-full relative p-4 md:p-8">
@@ -176,7 +209,12 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
             <div className="flex-1 h-[1px] bg-slate-100"></div>
           </div>
 
-          {sortedPractices.length > 0 ? (
+          {isLoadingPractices ? (
+            <div className="py-20 text-center">
+              <div className="w-8 h-8 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">正在调取打磨足迹...</p>
+            </div>
+          ) : sortedPractices.length > 0 ? (
             <div className="space-y-6 relative">
               <div className="absolute left-5 top-2 bottom-2 w-[1px] bg-slate-100 hidden md:block"></div>
 

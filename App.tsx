@@ -1,13 +1,10 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, User as FirebaseAuthUser, updateProfile, signOut } from 'firebase/auth';
+import { app, db, auth, isFirebaseValid } from './firebase';
 import { 
-  getFirestore, 
   doc, 
   setDoc, 
   getDoc, 
-  Firestore, 
   collection, 
   addDoc, 
   updateDoc, 
@@ -20,6 +17,7 @@ import {
   Timestamp,
   writeBatch,
 } from 'firebase/firestore';
+import { onAuthStateChanged, User as FirebaseAuthUser, updateProfile, signOut } from 'firebase/auth';
 import { v4 as uuidv4 } from 'uuid';
 
 import Layout from './components/Layout';
@@ -37,34 +35,9 @@ import RehearsalReport from './components/RehearsalReport';
 import ProfileView from './components/ProfileView';
 
 import { ViewState, DiaryEntry, ChatMessage, RehearsalEvaluation, DiaryIteration, AdvancedVocab, PracticeRecord, InspirationFragment, UserProfile } from './types';
-import { analyzeDiaryEntry, enrichFragment } from './services/geminiService';
-import { stripRuby } from './utils/textHelpers';
-
-const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY || "",
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN || "",
-  projectId: process.env.FIREBASE_PROJECT_ID || "",
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "",
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "",
-  appId: process.env.FIREBASE_APP_ID || ""
-};
-
-let app: FirebaseApp | null = null;
-let db: Firestore | null = null;
-let auth: any = null;
-let isFirebaseValid = false;
-
-if (firebaseConfig.apiKey && firebaseConfig.apiKey.length > 10) {
-  try {
-    const existingApps = getApps();
-    app = existingApps.length === 0 ? initializeApp(firebaseConfig) : existingApps[0];
-    auth = getAuth(app);
-    db = getFirestore(app);
-    isFirebaseValid = true;
-  } catch (e) {
-    console.error("Firebase Auth initialization failed:", e);
-  }
-}
+import { analyzeDiaryEntry, analyzeDiaryEntryStream, enrichFragment } from './services/geminiService';
+import { stripRuby, weaveRubyMarkdown } from './utils/textHelpers';
+import { calculateDiff } from './utils/diffHelper';
 
 const AVATAR_SEEDS = [
   { seed: 'Felix', label: '沉稳博学者' },
@@ -96,6 +69,7 @@ const App: React.FC = () => {
   const [summaryPrompt, setSummaryPrompt] = useState<string>('');
   const [isReviewingExisting, setIsReviewingExisting] = useState(false); 
   const [showProModal, setShowProModal] = useState(false);
+  const [partialAnalysis, setPartialAnalysis] = useState<string>('');
 
   const [allAdvancedVocab, setAllAdvancedVocab] = useState<AdvancedVocab[]>([]); 
   const [selectedVocabForPracticeId, setSelectedVocabForPracticeId] = useState<string | null>(null);
@@ -157,14 +131,12 @@ const App: React.FC = () => {
 
         const advancedVocabColRef = collection(db, 'users', userId, 'advancedVocab');
         const vocabSnapshot = await getDocs(advancedVocabColRef);
-        const vocabWithPractices = await Promise.all(vocabSnapshot.docs.map(async (vDoc) => {
-          const vocabData = vDoc.data() as AdvancedVocab;
-          const practicesColRef = collection(vDoc.ref, 'practices');
-          const practicesSnapshot = await getDocs(query(practicesColRef, orderBy('timestamp', 'desc')));
-          const practices = practicesSnapshot.docs.map(pDoc => ({ ...pDoc.data(), id: pDoc.id })) as PracticeRecord[];
-          return { ...vocabData, id: vDoc.id, practices, timestamp: (vDoc.data().timestamp as Timestamp)?.toMillis() || Date.now() };
-        }));
-        setAllAdvancedVocab(vocabWithPractices);
+        const vocabItems = vocabSnapshot.docs.map(vDoc => ({
+          ...vDoc.data(),
+          id: vDoc.id,
+          timestamp: (vDoc.data().timestamp as Timestamp)?.toMillis() || Date.now()
+        })) as AdvancedVocab[];
+        setAllAdvancedVocab(vocabItems);
       }
     } catch (e) {
       console.error("Error loading user data:", e);
@@ -193,6 +165,7 @@ const App: React.FC = () => {
           dailyUsageCount: 0
         };
         setUser(userData);
+        localStorage.setItem('last_user_id', firebaseUser.uid);
         loadUserData(firebaseUser.uid, false);
       } else {
         setUser(null);
@@ -382,9 +355,35 @@ const App: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
+    setPartialAnalysis('');
+    
     try {
       const historyContext = entries.filter(e => e.language === language && e.analysis).slice(0, 3);
-      const analysis = await analyzeDiaryEntry(text, language, historyContext);
+      
+      // Use streaming analysis
+      const stream = analyzeDiaryEntryStream(text, language, historyContext);
+      let accumulatedText = '';
+      
+      for await (const chunk of stream) {
+        accumulatedText += chunk;
+        setPartialAnalysis(accumulatedText);
+      }
+
+      // Final parse
+      const analysis = JSON.parse(accumulatedText);
+      
+      // Post-processing (same as in analyzeDiaryEntry but we do it here for the stream result)
+      // Note: In a real app, we might want to move this logic into a shared helper
+      if (analysis.readingPairs) {
+        analysis.advancedVocab = analysis.advancedVocab.map((v: any) => ({
+          ...v,
+          word: language === 'Japanese' && !v.word.includes('[') ? weaveRubyMarkdown(v.word, analysis.readingPairs, 'Japanese') : v.word,
+          usage: language === 'Japanese' && !v.usage.includes('[') ? weaveRubyMarkdown(v.usage, analysis.readingPairs, 'Japanese') : v.usage,
+          meaning: stripRuby(v.meaning)
+        }));
+        analysis.diffedText = calculateDiff(text, analysis.modifiedText, language);
+      }
+
       const clientTimestamp = Date.now();
       const newEntrySkeleton: Omit<DiaryEntry, 'id'> = {
         timestamp: clientTimestamp,
@@ -551,15 +550,8 @@ const App: React.FC = () => {
       if (masteryB === 0 && masteryA !== 0) return 1;
 
       // If mastery is same (or both non-zero), use forgetting curve
-      const getLastReviewTime = (vocab: AdvancedVocab) => {
-        if (vocab.practices && vocab.practices.length > 0) {
-          return Math.max(...vocab.practices.map(p => p.timestamp));
-        }
-        return vocab.timestamp; // Use creation time if never practiced
-      };
-
-      const timeA = getLastReviewTime(a);
-      const timeB = getLastReviewTime(b);
+      const timeA = a.lastReviewTimestamp || a.timestamp;
+      const timeB = b.lastReviewTimestamp || b.timestamp;
 
       // We want the one with the OLDEST review time first (longest interval)
       if (timeA !== timeB) return timeA - timeB;
@@ -578,14 +570,29 @@ const App: React.FC = () => {
 
   const handleUpdateMastery = async (vocabId: string, word: string, newMastery: number, record?: PracticeRecord) => {
     if (!user) return;
-    setAllAdvancedVocab(prev => prev.map(v => v.id === vocabId ? { ...v, mastery: newMastery, practices: record ? [record, ...(v.practices || [])] : v.practices } : v));
+    const now = Date.now();
+    setAllAdvancedVocab(prev => prev.map(v => v.id === vocabId ? { 
+      ...v, 
+      mastery: newMastery, 
+      lastReviewTimestamp: now,
+      practices: record ? [record, ...(v.practices || [])] : v.practices 
+    } : v));
+    
     if (!db || user.isMock) {
       const localVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
-      const updated = localVocab.map((v: any) => v.id === vocabId ? { ...v, mastery: newMastery, practices: record ? [record, ...(v.practices || [])] : v.practices } : v);
+      const updated = localVocab.map((v: any) => v.id === vocabId ? { 
+        ...v, 
+        mastery: newMastery, 
+        lastReviewTimestamp: now,
+        practices: record ? [record, ...(v.practices || [])] : v.practices 
+      } : v);
       localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
     } else {
       const vocabDocRef = doc(db, 'users', user.uid, 'advancedVocab', vocabId);
-      await updateDoc(vocabDocRef, { mastery: newMastery });
+      await updateDoc(vocabDocRef, { 
+        mastery: newMastery,
+        lastReviewTimestamp: now
+      });
       if (record) { await addDoc(collection(vocabDocRef, 'practices'), { ...record, timestamp: serverTimestamp() }); }
     }
   };
@@ -747,14 +754,33 @@ const App: React.FC = () => {
   return (
     <Layout activeView={view} onViewChange={handleViewChange} user={user} onLogout={handleLogout}>
       {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartSmartReview} entries={entries} allAdvancedVocab={allAdvancedVocab} recommendedIteration={recommendedIteration} onStartIteration={handleStartIteration} onSaveFragment={handleSaveFragment} />}
-      {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraft} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} fragments={fragments} onDeleteFragment={handleDeleteFragment} preferredLanguages={preferredLanguages} />}
+      {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraft} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} fragments={fragments} onDeleteFragment={handleDeleteFragment} preferredLanguages={preferredLanguages} partialAnalysis={partialAnalysis} />}
       {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isExistingEntry={isReviewingExisting} />}
       {/* // FIX: Updated function name from handleUpdateLanguage to handleUpdateEntryLanguage */}
       {view === 'history' && <History entries={entries} isAnalyzingId={analyzingId} onAnalyzeDraft={handleAnalyzeExistingEntry} onUpdateLanguage={handleUpdateEntryLanguage} onSelect={(e) => { setCurrentEntry(e); setIsReviewingExisting(true); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); setEntries(prev => prev.filter(e => e.id !== id)); }} onRewrite={(e) => { handleStartIteration(e); }} preferredLanguages={preferredLanguages} />}
       {view === 'chat' && <ChatEditor onFinish={(msgs, lang, summary) => { setChatLanguage(lang); setPrefilledEditorText(''); setSummaryPrompt(summary); setView('editor'); }} allGems={allAdvancedVocab} preferredLanguages={preferredLanguages} />}
       {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} fragments={fragments} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} onDeleteVocab={handleDeleteVocab} onDeleteFragment={handleDeleteFragment} onPromoteFragment={handlePromoteFragment} onPromoteToSeed={handlePromoteToSeed} />}
       {view === 'vocab_practice' && selectedVocabForPracticeId && (
-        <VocabPractice selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onUpdateMastery={handleUpdateMastery} onBackToVocabList={() => setView('vocab_list')} onViewChange={handleViewChange} onSaveFragment={handleSaveFragment} isPracticeActive={isPracticeActive} queueProgress={practiceQueue.length > 0 ? { current: queueIndex + 1, total: practiceQueue.length } : undefined} onNextInQueue={() => { if (queueIndex < practiceQueue.length - 1) { setQueueIndex(queueIndex + 1); setSelectedVocabForPracticeId(practiceQueue[queueIndex + 1]); } else { setView('vocab_list'); } }} />
+        <VocabPractice 
+          selectedVocabId={selectedVocabForPracticeId} 
+          allAdvancedVocab={allAdvancedVocab} 
+          onUpdateMastery={handleUpdateMastery} 
+          onBackToVocabList={() => { setView('vocab_list'); setIsPracticeActive(false); }} 
+          onViewChange={handleViewChange} 
+          onSaveFragment={handleSaveFragment} 
+          isPracticeActive={isPracticeActive} 
+          queueProgress={practiceQueue.length > 0 ? { current: queueIndex + 1, total: practiceQueue.length } : undefined} 
+          onNextInQueue={() => { 
+            if (queueIndex < practiceQueue.length - 1) { 
+              setQueueIndex(queueIndex + 1); 
+              setSelectedVocabForPracticeId(practiceQueue[queueIndex + 1]); 
+            } else { 
+              setView('vocab_list'); 
+              setIsPracticeActive(false);
+            } 
+          }} 
+          nextVocabId={queueIndex < practiceQueue.length - 1 ? practiceQueue[queueIndex + 1] : undefined}
+        />
       )}
       {view === 'vocab_practice_detail' && selectedVocabForPracticeId && (
         <VocabPracticeDetailView selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onBackToPracticeHistory={() => setView('vocab_list')} />

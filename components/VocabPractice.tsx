@@ -1,10 +1,20 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AdvancedVocab, PracticeRecord, ViewState } from '../types';
-import { validateVocabUsage } from '../services/geminiService';
+import { validateVocabUsageStream, generateDiaryAudio } from '../services/geminiService';
 import { playSmartSpeech } from '../services/audioService';
 import { renderRuby as rubyUtil, stripRuby } from '../utils/textHelpers'; 
 import { v4 as uuidv4 } from 'uuid';
+
+const LOADING_MESSAGES = [
+  "正在为你打磨最地道的表达...",
+  "正在查阅馆藏辞海...",
+  "正在对比母语者的表达习惯...",
+  "正在雕琢句子的每一个细节...",
+  "正在为你寻找更优雅的措辞...",
+  "馆长正在审阅你的珍宝造句...",
+  "正在注入地道的语言灵魂..."
+];
 
 interface VocabPracticeProps {
   selectedVocabId: string;
@@ -16,6 +26,7 @@ interface VocabPracticeProps {
   isPracticeActive: boolean;
   queueProgress?: { current: number; total: number }; 
   onNextInQueue?: () => void; 
+  nextVocabId?: string;
 }
 
 const VocabPractice: React.FC<VocabPracticeProps> = ({
@@ -27,7 +38,8 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
   onSaveFragment,
   isPracticeActive: initialIsPracticeActive,
   queueProgress,
-  onNextInQueue
+  onNextInQueue,
+  nextVocabId
 }) => {
   const [practiceInput, setPracticeInput] = useState('');
   const [isValidating, setIsValidating] = useState(false);
@@ -41,6 +53,10 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
   } | null>(null);
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   const [savedPhrases, setSavedPhrases] = useState<Set<string>>(new Set());
+  const [loadingMessage, setLoadingMessage] = useState('');
+  const [streamingText, setStreamingText] = useState('');
+  const [partialFeedback, setPartialFeedback] = useState('');
+  const [partialBetterVersion, setPartialBetterVersion] = useState('');
 
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
@@ -54,6 +70,19 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
     setShowSuccessAnimation(false);
     setSavedPhrases(new Set());
     
+    // Pre-fetching logic for next item in queue
+    if (nextVocabId) {
+      const nextVocab = allAdvancedVocab.find(v => v.id === nextVocabId);
+      if (nextVocab) {
+        console.log(`[Pre-fetch] Preparing next gem: ${nextVocab.word}`);
+        // Background Fetching: Pre-warm the audio for the next word
+        // This simulates the "API handshake" and reduces perceived latency for the next item
+        if (nextVocab.word.length >= 10) {
+          generateDiaryAudio(stripRuby(nextVocab.word)).catch(() => {});
+        }
+      }
+    }
+
     return () => {
       if (audioSourceRef.current) {
         audioSourceRef.current.stop();
@@ -106,13 +135,37 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
   const handleValidate = async () => {
     if (!practiceInput.trim() || isValidating) return;
     setIsValidating(true);
+    setLastFeedback(null);
+    setStreamingText('');
+    setPartialFeedback('');
+    setPartialBetterVersion('');
+    setLoadingMessage(LOADING_MESSAGES[Math.floor(Math.random() * LOADING_MESSAGES.length)]);
+
+    let accumulatedText = '';
     try {
-      const result = await validateVocabUsage(
+      const stream = validateVocabUsageStream(
         currentVocab.word, 
         currentVocab.meaning, 
         practiceInput, 
         currentVocab.language
       );
+
+      for await (const chunk of stream) {
+        accumulatedText += chunk;
+        setStreamingText(accumulatedText);
+
+        // Simple regex to extract fields from partial JSON
+        const feedbackMatch = accumulatedText.match(/"feedback":\s*"((?:[^"\\]|\\.)*)"/);
+        if (feedbackMatch) {
+          setPartialFeedback(feedbackMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"'));
+        }
+        const betterVersionMatch = accumulatedText.match(/"betterVersion":\s*"((?:[^"\\]|\\.)*)"/);
+        if (betterVersionMatch) {
+          setPartialBetterVersion(betterVersionMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"'));
+        }
+      }
+
+      const result = JSON.parse(accumulatedText);
       setLastFeedback(result);
 
       let newMastery = currentVocab.mastery || 0;
@@ -137,7 +190,12 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
         vocabId: currentVocab.id
       };
       onUpdateMastery(currentVocab.id, currentVocab.word, newMastery, record);
-    } catch (e) { alert("评估失败，请检查网络。"); } finally { setIsValidating(false); }
+    } catch (e) { 
+      console.error("Validation error:", e);
+      alert("评估失败，请检查网络。"); 
+    } finally { 
+      setIsValidating(false); 
+    }
   };
 
   const handleSavePhrase = async (phrase: string, explanation: string) => {
@@ -248,14 +306,49 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
              />
           </div>
 
-          {!lastFeedback ? (
+          {!lastFeedback && !isValidating ? (
             <button
               onClick={handleValidate}
               disabled={!practiceInput.trim() || isValidating}
               className="py-5 md:py-6 rounded-[1.8rem] md:rounded-3xl bg-indigo-600 text-white font-black shadow-2xl hover:bg-indigo-700 transition-all active:scale-95 flex items-center justify-center disabled:opacity-50 text-sm md:text-base"
             >
-              {isValidating ? <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : '✨ 提交打磨评估 SUBMIT'}
+              ✨ 提交打磨评估 SUBMIT
             </button>
+          ) : isValidating ? (
+            <div className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border border-slate-200 shadow-xl space-y-6 animate-in fade-in duration-500">
+               <div className={`flex items-center space-x-3 mb-2 transition-all duration-500 ${partialFeedback ? 'opacity-40 scale-95' : 'opacity-100 scale-100'}`}>
+                 <div className="w-2 h-2 bg-indigo-600 rounded-full animate-ping"></div>
+                 <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest animate-pulse">{loadingMessage}</span>
+               </div>
+               
+               <div className="space-y-4">
+                 {partialFeedback ? (
+                   <p className="text-slate-600 text-xs md:text-sm italic leading-relaxed px-1 animate-in fade-in duration-300">
+                     “ {partialFeedback} ”
+                   </p>
+                 ) : (
+                   <div className="space-y-3 px-1">
+                     <div className="h-3 bg-slate-100 rounded-full w-full animate-pulse"></div>
+                     <div className="h-3 bg-slate-100 rounded-full w-5/6 animate-pulse"></div>
+                     <div className="h-3 bg-slate-100 rounded-full w-4/6 animate-pulse"></div>
+                   </div>
+                 )}
+                 
+                 <div className="p-4 md:p-5 bg-slate-900 text-white rounded-[1.5rem] md:rounded-3xl relative min-h-[80px]">
+                    <span className="text-[8px] font-black uppercase text-indigo-400 block mb-2">AI 优化建议</span>
+                    {partialBetterVersion ? (
+                      <p className="serif-font italic text-base md:text-lg leading-relaxed animate-in fade-in duration-300">
+                        {renderRuby(partialBetterVersion)}
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="h-5 bg-white/10 rounded-full w-full animate-pulse"></div>
+                        <div className="h-5 bg-white/10 rounded-full w-2/3 animate-pulse"></div>
+                      </div>
+                    )}
+                 </div>
+               </div>
+            </div>
           ) : (
             <div className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border border-slate-200 shadow-xl space-y-5 animate-in slide-in-from-bottom-4">
                <div className="flex items-center justify-between mb-1">

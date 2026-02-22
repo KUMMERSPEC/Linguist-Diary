@@ -13,6 +13,7 @@ interface EditorProps {
   fragments: InspirationFragment[];
   onDeleteFragment?: (id: string) => void;
   preferredLanguages: string[];
+  partialAnalysis?: string;
 }
 
 interface MuseCard {
@@ -30,7 +31,17 @@ const LANGUAGES = [
   { code: 'German', label: 'Deutsch', flag: '🇩🇪' },
 ];
 
-const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, initialText = '', initialLanguage, summaryPrompt, fragments, onDeleteFragment, preferredLanguages }) => {
+const CURATOR_WISDOM = [
+  "正在查阅馆藏辞海，为您寻找更精准的措辞...",
+  "正在对比母语者的表达习惯，雕琢句子的灵魂...",
+  "你知道吗？优秀的表达往往在于动词的精准选择...",
+  "正在扫描语法脉络，确保每一处衔接都自然流畅...",
+  "馆长正在审阅您的文稿，请稍候片刻...",
+  "正在注入地道的语言风味，让表达更有温度...",
+  "正在为您整理进阶词汇，助力表达更上一层楼..."
+];
+
+const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, initialText = '', initialLanguage, summaryPrompt, fragments, onDeleteFragment, preferredLanguages, partialAnalysis }) => {
   const [text, setText] = useState(initialText);
   const [language, setLanguage] = useState(initialLanguage || preferredLanguages[0] || 'English');
   const [isFragmentDrawerOpen, setIsFragmentDrawerOpen] = useState(false);
@@ -40,6 +51,26 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
   const [muses, setMuses] = useState<MuseCard[]>([]);
   const [isMusesLoading, setIsMusesLoading] = useState(false);
   const [showMuses, setShowMuses] = useState(false);
+  const [wisdomIndex, setWisdomIndex] = useState(0);
+
+  const streamingFeedback = useMemo(() => {
+    if (!partialAnalysis) return '';
+    const match = partialAnalysis.match(/"overallFeedback":\s*"((?:[^"\\]|\\.)*)"/);
+    if (match) {
+      return match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+    }
+    return '';
+  }, [partialAnalysis]);
+
+  useEffect(() => {
+    let interval: any;
+    if (isLoading) {
+      interval = setInterval(() => {
+        setWisdomIndex(prev => (prev + 1) % CURATOR_WISDOM.length);
+      }, 4500);
+    }
+    return () => clearInterval(interval);
+  }, [isLoading]);
 
   useEffect(() => {
     setText(initialText);
@@ -236,7 +267,7 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
       )}
 
       <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 space-y-4">
-        {summaryPrompt && (
+        {summaryPrompt && !isLoading && (
           <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-[2.5rem] animate-in fade-in duration-700 shadow-sm">
              <div className="flex items-center space-x-2 mb-2">
                <span className="text-indigo-400 text-xs">💭</span>
@@ -246,15 +277,85 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
           </div>
         )}
 
-        <div className="flex-1 bg-white border border-slate-200 rounded-[2.5rem] shadow-xl overflow-hidden focus-within:ring-8 focus-within:ring-indigo-500/5 transition-all flex flex-col min-h-[300px] relative group">
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="在此开启您的撰写之旅..."
-            className="flex-1 w-full border-none focus:ring-0 p-8 md:p-14 text-lg md:text-2xl leading-relaxed serif-font resize-none bg-transparent placeholder:text-slate-200 z-10"
-            disabled={isLoading}
-          />
-        </div>
+        {isLoading ? (
+          <div className="flex-1 flex flex-col space-y-6 animate-in fade-in zoom-in-95 duration-500">
+            {/* Curator Wisdom - Always show initially, then maybe shrink if feedback starts appearing */}
+            <div className={`bg-indigo-600 p-8 rounded-[2rem] shadow-xl shadow-indigo-200 relative overflow-hidden group transition-all duration-700 ${streamingFeedback ? 'scale-95 opacity-80' : 'scale-100'}`}>
+               <div className="absolute -right-4 -bottom-4 text-8xl opacity-10 group-hover:scale-110 transition-transform duration-1000">🖋️</div>
+               <div className="relative z-10">
+                  <div className="flex items-center space-x-3 mb-4">
+                    <span className="text-indigo-200 text-xs">💡</span>
+                    <span className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">馆长审阅中 Curator's Wisdom</span>
+                  </div>
+                  <p className="text-white text-lg md:text-xl font-medium serif-font italic leading-relaxed animate-in fade-in slide-in-from-bottom-2 duration-700" key={wisdomIndex}>
+                    “ {CURATOR_WISDOM[wisdomIndex]} ”
+                  </p>
+               </div>
+            </div>
+
+            {/* Streaming Result Area */}
+            {streamingFeedback ? (
+              <div className="bg-white p-8 md:p-12 rounded-[2.5rem] border border-indigo-100 shadow-2xl relative overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent animate-scan"></div>
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="w-2 h-2 bg-indigo-500 rounded-full animate-ping"></div>
+                  <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">正在生成审阅报告...</span>
+                </div>
+                <div className="prose prose-slate max-w-none">
+                  <p className="text-slate-700 text-lg md:text-xl leading-relaxed serif-font italic">
+                    {streamingFeedback}
+                    <span className="inline-block w-1 h-5 bg-indigo-500 ml-1 animate-pulse"></span>
+                  </p>
+                </div>
+              </div>
+            ) : (
+              /* Skeleton Review Header - Only show if no streaming feedback yet */
+              <div className="bg-white p-8 md:p-12 rounded-[2.5rem] border border-slate-100 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent animate-scan"></div>
+                <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-1 h-6 bg-indigo-200 rounded-full animate-pulse"></div>
+                      <div className="h-4 bg-slate-100 rounded-full w-32 animate-pulse"></div>
+                    </div>
+                    <div className="w-10 h-10 bg-slate-50 rounded-xl animate-pulse"></div>
+                </div>
+                <div className="space-y-4">
+                    <div className="h-6 bg-slate-50 rounded-full w-full animate-pulse"></div>
+                    <div className="h-6 bg-slate-50 rounded-full w-5/6 animate-pulse"></div>
+                    <div className="h-6 bg-slate-50 rounded-full w-4/6 animate-pulse"></div>
+                </div>
+              </div>
+            )}
+
+            {/* Skeleton Grid - Always show as placeholders for corrections/vocab */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+               <div className="bg-white p-6 rounded-3xl border border-slate-50 shadow-sm space-y-4">
+                  <div className="h-3 bg-slate-100 rounded-full w-16 animate-pulse"></div>
+                  <div className="space-y-2">
+                    <div className="h-4 bg-slate-50 rounded-full w-full animate-pulse"></div>
+                    <div className="h-4 bg-slate-50 rounded-full w-3/4 animate-pulse"></div>
+                  </div>
+               </div>
+               <div className="bg-white p-6 rounded-3xl border border-slate-50 shadow-sm space-y-4">
+                  <div className="h-3 bg-slate-100 rounded-full w-16 animate-pulse"></div>
+                  <div className="space-y-2">
+                    <div className="h-4 bg-slate-50 rounded-full w-full animate-pulse"></div>
+                    <div className="h-4 bg-slate-50 rounded-full w-3/4 animate-pulse"></div>
+                  </div>
+               </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 bg-white border border-slate-200 rounded-[2.5rem] shadow-xl overflow-hidden focus-within:ring-8 focus-within:ring-indigo-500/5 transition-all flex flex-col min-h-[300px] relative group">
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="在此开启您的撰写之旅..."
+              className="flex-1 w-full border-none focus:ring-0 p-8 md:p-14 text-lg md:text-2xl leading-relaxed serif-font resize-none bg-transparent placeholder:text-slate-200 z-10"
+              disabled={isLoading}
+            />
+          </div>
+        )}
         
         <footer className="flex items-center justify-end space-x-4 shrink-0 mt-4">
           <button 

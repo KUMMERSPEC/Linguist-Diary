@@ -20,6 +20,7 @@ export interface AdvancedVocab {
   mastery?: number; 
   language: string;
   practices?: PracticeRecord[];
+  lastReviewTimestamp?: number;
   timestamp: number;
 }
 
@@ -60,7 +61,7 @@ export interface InspirationFragment {
   fragmentType: 'transient' | 'seed';
 }
 
-export type ViewState = 'dashboard' | 'editor' | 'review' | 'history' | 'chat' | 'vocab_list' | 'vocab_practice' | 'vocab_practice_detail' | 'rehearsal' | 'rehearsal_report' | 'profile' | 'challenge';
+export type ViewState = 'dashboard' | 'editor' | 'review' | 'history' | 'chat' | 'vocab_list' | 'vocab_practice' | 'vocab_practice_detail' | 'rehearsal' | 'rehearsal_report' | 'profile';
 
 export interface ChatMessage {
   role: 'ai' | 'user';
@@ -76,23 +77,6 @@ export interface UserProfile {
   proExpiry?: number;
   dailyUsageCount?: number;
   lastUsageDate?: string;
-  challengeProgress?: {
-    challengeId: string; // To identify which monthly challenge this is
-    startDate: number;
-    completedDays: string[]; 
-    lastCompletedDate?: string;
-    isRewardClaimed?: boolean;
-    isPaid: boolean;
-    status: 'active' | 'failed' | 'completed';
-  };
-}
-
-export interface GlobalChallenge {
-  id: string;
-  month: string; // e.g., '2024-06'
-  themes: string[];
-  entryFee: number; // in points or simulated currency
-  rewardDurationDays: number;
 }
 
 export interface DiaryEntry {

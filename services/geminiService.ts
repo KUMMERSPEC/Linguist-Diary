@@ -29,9 +29,6 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2, initialDelay =
   throw lastError;
 }
 
-/**
- * Optimized for Token Efficiency and Surgical Precision
- */
 export const analyzeDiaryEntry = async (text: string, language: string, history: DiaryEntry[] = []): Promise<DiaryAnalysis> => {
   const ai = getAiInstance();
   const historyContext = history.slice(0, 2).map(e => `- ${e.date}: ${e.analysis?.overallFeedback}`).join('\n');
@@ -119,19 +116,110 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
     
     const analysis = JSON.parse(response.text) as DiaryAnalysis;
     
-    // Post-processing: ensure target-language meanings are clean plain-text
     if (analysis.readingPairs) {
       analysis.advancedVocab = analysis.advancedVocab.map(v => ({
         ...v,
         word: language === 'Japanese' && !v.word.includes('[') ? weaveRubyMarkdown(v.word, analysis.readingPairs, 'Japanese') : v.word,
         usage: language === 'Japanese' && !v.usage.includes('[') ? weaveRubyMarkdown(v.usage, analysis.readingPairs, 'Japanese') : v.usage,
-        meaning: stripRuby(v.meaning) // Ensure meaning is ALWAYS clean plain text
+        meaning: stripRuby(v.meaning)
       }));
     }
 
     analysis.diffedText = calculateDiff(text, analysis.modifiedText, language);
     return analysis;
   });
+};
+
+/**
+ * Optimized for Token Efficiency and Surgical Precision
+ */
+export const analyzeDiaryEntryStream = async function* (text: string, language: string, history: DiaryEntry[] = []) {
+  const ai = getAiInstance();
+  const historyContext = history.slice(0, 2).map(e => `- ${e.date}: ${e.analysis?.overallFeedback}`).join('\n');
+  
+  const response = await ai.models.generateContentStream({
+    model: 'gemini-3-flash-preview',
+    contents: `Analyze: "${text}". Lang: ${language}.
+    Context: ${historyContext}
+    Task: Correct the text. 
+    IMPORTANT: Maintain the user's original phrasing where it is correct. Only rewrite if necessary for naturalness or grammar. 
+    Provide grammar tips(${language}), advanced vocab, readingPairs(N2+).
+    
+    FOR ALL LANGUAGES:
+    - 'advancedVocab.meaning' MUST be a monolingual definition in the target language (${language}) itself. DO NOT use English or Chinese for meaning.
+    - 'corrections.explanation' MUST be in the target language (${language}).
+    - 'transitionSuggestions.explanation' MUST be in the target language (${language}).
+    
+    FOR JAPANESE:
+    - 'advancedVocab.word' and 'advancedVocab.usage' MUST use the format: [漢字](かんじ).
+    - Ensure 'readingPairs' contains all Kanji from 'advancedVocab'.
+    - 'advancedVocab.meaning' MUST BE PLAIN TEXT without any furigana or parentheses reading.`,
+    config: {
+      thinkingConfig: { thinkingBudget: 0 }, 
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          modifiedText: { type: Type.STRING },
+          overallFeedback: { type: Type.STRING },
+          readingPairs: { 
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                kanji: { type: Type.STRING },
+                reading: { type: Type.STRING }
+              },
+              required: ["kanji", "reading"]
+            }
+          },
+          corrections: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                original: { type: Type.STRING },
+                improved: { type: Type.STRING },
+                explanation: { type: Type.STRING },
+                category: { type: Type.STRING, enum: ['Grammar', 'Vocabulary', 'Style', 'Spelling'] }
+              },
+              required: ["original", "improved", "explanation", "category"]
+            }
+          },
+          advancedVocab: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                word: { type: Type.STRING },
+                meaning: { type: Type.STRING },
+                usage: { type: Type.STRING },
+                level: { type: Type.STRING, enum: ['Intermediate', 'Advanced', 'Native'] }
+              },
+              required: ["word", "meaning", "usage", "level"]
+            }
+          },
+          transitionSuggestions: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                word: { type: Type.STRING },
+                explanation: { type: Type.STRING },
+                example: { type: Type.STRING }
+              },
+              required: ["word", "explanation", "example"]
+            }
+          }
+        },
+        required: ["modifiedText", "corrections", "advancedVocab", "transitionSuggestions", "overallFeedback"]
+      }
+    }
+  });
+
+  for await (const chunk of response) {
+    yield chunk.text;
+  }
 };
 
 export const evaluateRetelling = async (source: string, retelling: string, language: string): Promise<RehearsalEvaluation> => {
@@ -180,39 +268,40 @@ export const getChatFollowUp = async (messages: ChatMessage[], language: string)
   return response.text || "";
 };
 
-export const validateVocabUsage = async (word: string, meaning: string, sentence: string, language: string): Promise<any> => {
+export const validateVocabUsageStream = async function* (word: string, meaning: string, sentence: string, language: string) {
   const ai = getAiInstance();
-  return withRetry(async () => {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Word: "${word}". Sentence: "${sentence}". Correct? Feedback(${language}).`,
-      config: {
-        thinkingConfig: { thinkingBudget: 0 },
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            isCorrect: { type: Type.BOOLEAN },
-            feedback: { type: Type.STRING },
-            betterVersion: { type: Type.STRING },
-            keyPhrases: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  phrase: { type: Type.STRING },
-                  explanation: { type: Type.STRING }
-                },
-                required: ["phrase", "explanation"]
-              }
+  const response = await ai.models.generateContentStream({
+    model: 'gemini-3-flash-preview',
+    contents: `Word: "${word}". Sentence: "${sentence}". Correct? Feedback(${language}).`,
+    config: {
+      thinkingConfig: { thinkingBudget: 0 },
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          isCorrect: { type: Type.BOOLEAN },
+          feedback: { type: Type.STRING },
+          betterVersion: { type: Type.STRING },
+          keyPhrases: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                phrase: { type: Type.STRING },
+                explanation: { type: Type.STRING }
+              },
+              required: ["phrase", "explanation"]
             }
-          },
-          required: ["isCorrect", "feedback", "betterVersion"]
-        }
+          }
+        },
+        required: ["isCorrect", "feedback", "betterVersion"]
       }
-    });
-    return JSON.parse(response.text);
+    }
   });
+
+  for await (const chunk of response) {
+    yield chunk.text;
+  }
 };
 
 export const generatePracticeArtifact = async (language: string, keywords: string, difficultyId: string, topicLabel: string): Promise<string> => {
