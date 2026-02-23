@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { Search, LayoutGrid, List, ChevronDown, ChevronUp, Filter, ArrowUpDown } from 'lucide-react';
 import { AdvancedVocab, PracticeRecord, ViewState, InspirationFragment } from '../types';
 import { generateDiaryAudio } from '../services/geminiService';
 import { decode, decodeAudioData } from '../utils/audioHelpers';
@@ -26,6 +27,10 @@ const LANGUAGE_FLAGS: Record<string, string> = {
 
 const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragments, onViewChange, onDeleteVocab, onDeleteFragment, onPromoteFragment, onPromoteToSeed }) => {
   const [activeTab, setActiveTab] = useState<'gems' | 'shards'>('gems');
+  const [viewMode, setViewMode] = useState<'grid' | 'dictionary'>('dictionary');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortMode, setSortMode] = useState<'date' | 'mastery' | 'language'>('date');
+  const [expandedGems, setExpandedGems] = useState<Set<string>>(new Set());
   const [selectedLangs, setSelectedLangs] = useState<string[]>([]); // Empty means 'All'
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
@@ -59,21 +64,71 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
 
   const selectAll = () => setSelectedLangs([]);
 
+  const toggleGemExpansion = (id: string) => {
+    setExpandedGems(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const filteredGems = useMemo(() => {
     let list = [...allAdvancedVocab];
+    
+    // Search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(g => 
+        stripRuby(g.word).toLowerCase().includes(q) ||
+        stripRuby(g.meaning).toLowerCase().includes(q) ||
+        g.practices?.some(p => p.originalAttempt?.toLowerCase().includes(q) || p.sentence.toLowerCase().includes(q))
+      );
+    }
+
+    // Language filter
     if (selectedLangs.length > 0) {
       list = list.filter(g => selectedLangs.includes(g.language));
     }
-    return list.sort((a, b) => b.timestamp - a.timestamp);
-  }, [allAdvancedVocab, selectedLangs]);
+
+    // Sort
+    list.sort((a, b) => {
+      if (sortMode === 'mastery') return (b.mastery || 0) - (a.mastery || 0);
+      if (sortMode === 'language') return a.language.localeCompare(b.language);
+      return b.timestamp - a.timestamp;
+    });
+
+    // Hierarchical Grouping: Only show parents at top level if in dictionary view
+    if (viewMode === 'dictionary' && !searchQuery) {
+      const parents = list.filter(g => !g.parentId);
+      return parents;
+    }
+
+    return list;
+  }, [allAdvancedVocab, selectedLangs, searchQuery, sortMode, viewMode]);
+
+  const getChildren = (parentId: string) => {
+    return allAdvancedVocab.filter(g => g.parentId === parentId);
+  };
 
   const filteredShards = useMemo(() => {
     let list = [...fragments];
+    
+    // Search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(f => 
+        stripRuby(f.content).toLowerCase().includes(q) ||
+        (f.meaning && stripRuby(f.meaning).toLowerCase().includes(q)) ||
+        (f.usage && stripRuby(f.usage).toLowerCase().includes(q))
+      );
+    }
+
     if (selectedLangs.length > 0) {
       list = list.filter(f => selectedLangs.includes(f.language));
     }
     return list.sort((a, b) => b.timestamp - a.timestamp);
-  }, [fragments, selectedLangs]);
+  }, [fragments, selectedLangs, searchQuery]);
 
   const handlePlayAudio = async (e: React.MouseEvent, text: string, id: string) => {
     e.stopPropagation();
@@ -107,125 +162,311 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
   };
 
   return (
-    <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 animate-in fade-in duration-700">
-      <header className="mb-10 text-left">
+    <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 animate-in fade-in duration-700 relative">
+      <header className="mb-8 text-left">
         <h2 className="text-3xl md:text-5xl font-black text-slate-900 serif-font tracking-tight">馆藏珍宝 <span className="text-indigo-600">Gems & Shards</span></h2>
         <p className="text-slate-400 text-sm md:text-base mt-2 italic">在这里查看每一件被打磨出的语言珍宝。</p>
       </header>
 
-      {/* Primary Navigation: Left-aligned Tabs and Filter */}
-      <div className="flex flex-col items-start mb-10 space-y-4">
-        <div className="bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm flex items-center">
-          <button 
-            onClick={() => setActiveTab('gems')}
-            className={`px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'gems' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-indigo-600'}`}
-          >
-            入库珍宝 GEMS ({filteredGems.length})
-          </button>
-          <button 
-            onClick={() => setActiveTab('shards')}
-            className={`px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'shards' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-indigo-600'}`}
-          >
-            灵感碎片 SHARDS ({filteredShards.length})
-          </button>
-        </div>
+      {/* Sticky Search & Controls Bar */}
+      <div className="sticky top-0 z-50 bg-slate-50/80 backdrop-blur-md py-4 mb-8 border-b border-slate-200/50 -mx-4 px-4 md:-mx-8 md:px-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 md:gap-4">
+          <div className="w-full sm:flex-1 flex items-center space-x-3 bg-white px-4 py-2.5 rounded-2xl border border-slate-100 shadow-sm focus-within:ring-4 focus-within:ring-indigo-500/5 transition-all">
+            <Search className="w-4 h-4 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="搜索单词、释义或造句..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-medium text-slate-700 placeholder:text-slate-300"
+            />
+          </div>
 
-        {/* Language Filter Popover */}
-        <div className="relative" ref={filterRef}>
-          <button 
-            onClick={() => setIsFilterOpen(!isFilterOpen)}
-            className={`flex items-center space-x-3 px-6 py-2 rounded-2xl border transition-all ${
-              isFilterOpen || selectedLangs.length > 0 
-                ? 'bg-slate-900 border-slate-900 text-white shadow-xl' 
-                : 'bg-white border-slate-100 text-slate-500 hover:border-indigo-200 shadow-sm'
-            }`}
-          >
-            <span className="text-sm">🔍</span>
-            <span className="text-[10px] font-black uppercase tracking-[0.2em]">
-              {selectedLangs.length === 0 ? '筛选馆藏语言' : `已筛选 ${selectedLangs.length} 种语言`}
-            </span>
-            <span className={`text-[8px] transition-transform duration-300 ${isFilterOpen ? 'rotate-180' : ''}`}>▼</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {/* Tab Switcher */}
+            <div className="bg-white p-1 rounded-xl border border-slate-100 shadow-sm flex shrink-0">
+              <button 
+                onClick={() => setActiveTab('gems')}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'gems' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-indigo-600'}`}
+              >
+                GEMS ({filteredGems.length})
+              </button>
+              <button 
+                onClick={() => setActiveTab('shards')}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'shards' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-indigo-600'}`}
+              >
+                SHARDS ({filteredShards.length})
+              </button>
+            </div>
 
-          {isFilterOpen && (
-            <div className="absolute top-full mt-3 left-0 w-64 bg-white rounded-[2rem] shadow-2xl border border-slate-100 p-6 z-[100] animate-in zoom-in-95 slide-in-from-top-2 duration-200">
-              <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-50">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">语言档案库</span>
-                <button onClick={selectAll} className="text-[9px] font-black text-indigo-600 uppercase hover:underline">重置全部</button>
-              </div>
-              <div className="space-y-1 max-h-64 overflow-y-auto no-scrollbar">
-                {availableLanguages.length > 0 ? availableLanguages.map(lang => (
-                  <label 
-                    key={lang} 
-                    className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors ${
-                      selectedLangs.includes(lang) ? 'bg-indigo-50/50' : 'hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <span className="text-base">{LANGUAGE_FLAGS[lang] || '🌐'}</span>
-                      <span className="text-xs font-bold text-slate-700">{lang}</span>
-                    </div>
-                    <input 
-                      type="checkbox" 
-                      checked={selectedLangs.includes(lang)}
-                      onChange={() => toggleLanguage(lang)}
-                      className="w-4 h-4 rounded border-slate-200 text-indigo-600 focus:ring-indigo-500/20"
-                    />
-                  </label>
-                )) : (
-                  <p className="text-[10px] text-center text-slate-300 py-4 font-bold uppercase">暂无记录语言</p>
-                )}
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-50">
+            {/* View Mode Switcher (Only for Gems) */}
+            {activeTab === 'gems' && (
+              <div className="bg-white p-1 rounded-xl border border-slate-100 shadow-sm flex shrink-0">
                 <button 
-                  onClick={() => setIsFilterOpen(false)}
-                  className="w-full bg-slate-900 text-white py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg"
+                  onClick={() => setViewMode('grid')}
+                  className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-300 hover:text-slate-500'}`}
+                  title="网格视图"
                 >
-                  确 定
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => setViewMode('dictionary')}
+                  className={`p-1.5 rounded-lg transition-all ${viewMode === 'dictionary' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-300 hover:text-slate-500'}`}
+                  title="词典视图"
+                >
+                  <List className="w-4 h-4" />
                 </button>
               </div>
+            )}
+
+            {/* Sort Dropdown */}
+            <div className="relative shrink-0">
+              <select 
+                value={sortMode}
+                onChange={(e) => setSortMode(e.target.value as any)}
+                className="appearance-none bg-white border border-slate-100 rounded-xl px-4 py-2 pr-10 text-[10px] font-black uppercase tracking-widest text-slate-500 shadow-sm focus:ring-4 focus:ring-indigo-500/5 outline-none cursor-pointer"
+              >
+                <option value="date">按日期排序</option>
+                <option value="mastery">按熟练度</option>
+                <option value="language">按语种</option>
+              </select>
+              <ArrowUpDown className="w-3 h-3 text-slate-300 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
-          )}
+
+            {/* Language Filter Popover Trigger */}
+            <div className="relative shrink-0" ref={filterRef}>
+              <button 
+                onClick={() => setIsFilterOpen(!isFilterOpen)}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-xl border transition-all ${
+                  isFilterOpen || selectedLangs.length > 0 
+                    ? 'bg-slate-900 border-slate-900 text-white shadow-md' 
+                    : 'bg-white border-slate-100 text-slate-500 hover:border-indigo-200 shadow-sm'
+                }`}
+              >
+                <Filter className="w-3 h-3" />
+                <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">
+                  {selectedLangs.length === 0 ? '语言' : `${selectedLangs.length} 种`}
+                </span>
+              </button>
+
+              {isFilterOpen && (
+                <div className="fixed sm:absolute top-[20vh] sm:top-full mt-3 left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 w-[90vw] sm:w-64 bg-white rounded-[2rem] shadow-2xl border border-slate-100 p-6 z-[100] animate-in zoom-in-95 slide-in-from-top-2 duration-200 mx-auto">
+                  <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-50">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">语言档案库</span>
+                    <button onClick={selectAll} className="text-[9px] font-black text-indigo-600 uppercase hover:underline">重置</button>
+                  </div>
+                  <div className="space-y-1 max-h-64 overflow-y-auto no-scrollbar">
+                    {availableLanguages.length > 0 ? availableLanguages.map(lang => (
+                      <label 
+                        key={lang} 
+                        className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors ${
+                          selectedLangs.includes(lang) ? 'bg-indigo-50/50' : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <span className="text-base">{LANGUAGE_FLAGS[lang] || '🌐'}</span>
+                          <span className="text-xs font-bold text-slate-700">{lang}</span>
+                        </div>
+                        <input 
+                          type="checkbox" 
+                          checked={selectedLangs.includes(lang)}
+                          onChange={() => toggleLanguage(lang)}
+                          className="w-4 h-4 rounded border-slate-200 text-indigo-600 focus:ring-indigo-500/20"
+                        />
+                      </label>
+                    )) : (
+                      <p className="text-[10px] text-center text-slate-300 py-4 font-bold uppercase">暂无记录语言</p>
+                    )}
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-slate-50">
+                    <button 
+                      onClick={() => setIsFilterOpen(false)}
+                      className="w-full bg-slate-900 text-white py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg"
+                    >
+                      确 定
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Items Grid */}
-      <div key={`${activeTab}-${selectedLangs.join('-')}`} className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {/* Items List/Grid */}
+      <div key={`${activeTab}-${selectedLangs.join('-')}-${viewMode}-${searchQuery}-${sortMode}`} className="animate-in fade-in slide-in-from-bottom-4 duration-700">
         {activeTab === 'gems' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredGems.length > 0 ? filteredGems.map((gem) => (
-              <div 
-                key={gem.id} 
-                onClick={() => onViewChange('vocab_practice_detail', gem.id)}
-                className="bg-white p-8 md:p-10 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all group relative cursor-pointer flex flex-col min-h-[220px]"
-              >
-                 <div className="absolute top-6 left-8">
-                   <span className="text-[8px] font-black text-slate-200 uppercase tracking-[0.2em]">{gem.language}</span>
-                 </div>
-                 <button onClick={(e) => { e.stopPropagation(); onDeleteVocab?.(gem.id); }} className="absolute top-6 right-8 p-2 text-slate-100 hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100">✕</button>
-                 <div className="flex-1 flex flex-col justify-center mt-2">
-                   <h4 className="text-3xl font-black text-slate-900 serif-font mb-2 tracking-tight leading-relaxed" dangerouslySetInnerHTML={{ __html: renderRuby(gem.word) }}></h4>
-                   <p className="text-sm text-slate-500 italic leading-relaxed font-medium">
-                     {stripRuby(gem.meaning)}
-                   </p>
-                 </div>
-                 <div className="pt-6 flex items-center justify-between mt-auto">
-                    <div className={`text-[10px] font-black uppercase tracking-[0.1em] ${getMasteryTextStyle(gem.mastery)}`}>
-                      MASTERY {gem.mastery || 0}
-                    </div>
-                    <button onClick={(e) => handlePlayAudio(e, gem.word, gem.id)} className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${playingAudioId === gem.id ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-white hover:shadow-md'}`}>{playingAudioId === gem.id ? '⏹' : '🎧'}</button>
-                 </div>
-              </div>
-            )) : (
-              <div className="col-span-full py-24 text-center flex flex-col items-center space-y-6">
-                <span className="text-6xl grayscale opacity-20">🕯️</span>
-                <div className="text-center">
-                  <p className="text-slate-900 font-bold serif-font text-xl">此视角下尚无珍宝</p>
-                  <p className="text-slate-400 text-xs mt-1 font-medium italic">请尝试更换筛选条件，或开启新的撰写。</p>
+          viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredGems.length > 0 ? filteredGems.map((gem) => (
+                <div 
+                  key={gem.id} 
+                  onClick={() => onViewChange('vocab_practice_detail', gem.id)}
+                  className="bg-white p-8 md:p-10 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all group relative cursor-pointer flex flex-col min-h-[220px]"
+                >
+                   <div className="absolute top-6 left-8">
+                     <span className="text-[8px] font-black text-slate-200 uppercase tracking-[0.2em]">{gem.language}</span>
+                   </div>
+                   <button onClick={(e) => { e.stopPropagation(); onDeleteVocab?.(gem.id); }} className="absolute top-6 right-8 p-2 text-slate-100 hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100">✕</button>
+                   <div className="flex-1 flex flex-col justify-center mt-2">
+                     <h4 className="text-3xl font-black text-slate-900 serif-font mb-2 tracking-tight leading-relaxed" dangerouslySetInnerHTML={{ __html: renderRuby(gem.word) }}></h4>
+                     {gem.phonetic && (
+                       <p className="text-[10px] text-slate-400 font-mono tracking-widest mb-2 opacity-60">{gem.phonetic}</p>
+                     )}
+                     <p className="text-sm text-slate-500 italic leading-relaxed font-medium">
+                       {stripRuby(gem.meaning)}
+                     </p>
+                   </div>
+                   <div className="pt-6 flex items-center justify-between mt-auto">
+                      <div className={`text-[10px] font-black uppercase tracking-[0.1em] ${getMasteryTextStyle(gem.mastery)}`}>
+                        MASTERY {gem.mastery || 0}
+                      </div>
+                      <button onClick={(e) => handlePlayAudio(e, gem.word, gem.id)} className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${playingAudioId === gem.id ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-white hover:shadow-md'}`}>{playingAudioId === gem.id ? '⏹' : '🎧'}</button>
+                   </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )) : (
+                <EmptyState message="此视角下尚无珍宝" />
+              )}
+            </div>
+          ) : (
+            /* Dictionary View (Row Layout) */
+            <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
+              {filteredGems.length > 0 ? filteredGems.map((gem) => {
+                const isExpanded = expandedGems.has(gem.id);
+                const children = getChildren(gem.id);
+                return (
+                  <div key={gem.id} className="group transition-colors hover:bg-slate-50/50">
+                    <div 
+                      onClick={() => toggleGemExpansion(gem.id)}
+                      className="flex items-center px-6 md:px-10 py-5 cursor-pointer"
+                    >
+                      <div className="flex-1 flex items-center space-x-4 md:space-x-8">
+                        <div className="w-12 md:w-16 shrink-0 flex items-center space-x-2">
+                          <span className="text-base">{LANGUAGE_FLAGS[gem.language] || '🌐'}</span>
+                          {children.length > 0 && (
+                            <span className="bg-indigo-50 text-indigo-600 text-[8px] font-black px-1.5 py-0.5 rounded-full">+{children.length}</span>
+                          )}
+                        </div>
+                        <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-8 items-center">
+                          <div className="flex items-center space-x-3">
+                            <div className="flex flex-col">
+                              <h4 className="text-lg font-black text-slate-900 serif-font tracking-tight" dangerouslySetInnerHTML={{ __html: renderRuby(gem.word) }}></h4>
+                              {gem.phonetic && (
+                                <span className="text-[10px] text-slate-400 font-mono tracking-wider">{gem.phonetic}</span>
+                              )}
+                            </div>
+                            <button onClick={(e) => handlePlayAudio(e, gem.word, gem.id)} className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${playingAudioId === gem.id ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-200 hover:text-indigo-600'}`}>
+                              {playingAudioId === gem.id ? <span className="text-[8px]">⏹</span> : <span className="text-[10px]">🎧</span>}
+                            </button>
+                          </div>
+                          <div className="text-sm text-slate-500 font-medium truncate">
+                            {stripRuby(gem.meaning)}
+                          </div>
+                          <div className="flex items-center justify-between md:justify-end space-x-4">
+                            <div className="flex space-x-0.5">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <div key={star} className={`w-1.5 h-1.5 rounded-full ${star <= (gem.mastery || 0) ? 'bg-indigo-500' : 'bg-slate-100'}`}></div>
+                              ))}
+                            </div>
+                            <div className={`text-[9px] font-black uppercase tracking-widest ${getMasteryTextStyle(gem.mastery)}`}>
+                              LV.{gem.mastery || 0}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="ml-4 md:ml-8 flex items-center space-x-4">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); onViewChange('vocab_practice_detail', gem.id); }}
+                          className="hidden md:block text-[9px] font-black text-slate-300 uppercase tracking-widest hover:text-indigo-600 transition-colors"
+                        >
+                          详情
+                        </button>
+                        {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-300" /> : <ChevronDown className="w-4 h-4 text-slate-300" />}
+                      </div>
+                    </div>
+
+                    {/* Expanded Content: Children & Sentence Gems */}
+                    {isExpanded && (
+                      <div className="px-6 md:px-10 pb-8 pt-2 animate-in slide-in-from-top-2 duration-300">
+                        <div className="bg-slate-50/50 rounded-3xl p-6 border border-slate-100/50 space-y-6">
+                          {/* Children Section */}
+                          {children.length > 0 && (
+                            <div className="space-y-3">
+                              <h5 className="text-[9px] font-black text-emerald-600 uppercase tracking-[0.2em]">关联短语/用法 LINKED PHRASES</h5>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {children.map(child => (
+                                  <div 
+                                    key={child.id}
+                                    onClick={(e) => { e.stopPropagation(); onViewChange('vocab_practice_detail', child.id); }}
+                                    className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer group/child"
+                                  >
+                                    <div className="flex items-center justify-between mb-1">
+                                      <h6 className="text-sm font-bold text-slate-800 serif-font" dangerouslySetInnerHTML={{ __html: renderRuby(child.word) }}></h6>
+                                      <span className="text-[8px] font-black text-indigo-400">LV.{child.mastery || 0}</span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 line-clamp-1 italic">{stripRuby(child.meaning)}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">造句精华 SENTENCE GEMS</h5>
+                              <button 
+                                onClick={() => onViewChange('vocab_practice', gem.id)}
+                                className="text-[9px] font-black text-indigo-600 uppercase tracking-widest hover:underline"
+                              >
+                                去练习 →
+                              </button>
+                            </div>
+                            
+                            {gem.practices && gem.practices.length > 0 ? (
+                              <div className="space-y-3">
+                                {gem.practices.slice(0, 3).map((p, idx) => (
+                                  <div key={p.id || idx} className="flex items-start space-x-3 group/sentence">
+                                    <span className="text-indigo-300 text-xs mt-1">✦</span>
+                                    <div className="flex-1">
+                                      <p className="text-sm font-medium text-slate-700 leading-relaxed serif-font">
+                                        {p.betterVersion || p.sentence}
+                                      </p>
+                                      {p.originalAttempt && p.originalAttempt !== (p.betterVersion || p.sentence) && (
+                                        <p className="text-[10px] text-slate-400 mt-1 line-through opacity-50 italic">
+                                          {p.originalAttempt}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <button onClick={(e) => handlePlayAudio(e, p.betterVersion || p.sentence, `practice-${p.id}`)} className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all opacity-0 group-hover/sentence:opacity-100 ${playingAudioId === `practice-${p.id}` ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-300 hover:text-indigo-600 shadow-sm'}`}>
+                                      {playingAudioId === `practice-${p.id}` ? <span className="text-[8px]">⏹</span> : <span className="text-[10px]">🎧</span>}
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-[10px] text-slate-400 italic">尚无造句记录，快去开启第一次磨炼吧。</p>
+                            )}
+                          </div>
+                          
+                          <div className="pt-4 flex items-center justify-between border-t border-slate-100/50">
+                             <div className="flex items-center space-x-4">
+                               <span className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">入库日期: {new Date(gem.timestamp).toLocaleDateString()}</span>
+                               <span className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">语种: {gem.language}</span>
+                             </div>
+                             <button onClick={(e) => { e.stopPropagation(); onDeleteVocab?.(gem.id); }} className="text-[9px] font-black text-rose-400 uppercase tracking-widest hover:text-rose-600 transition-colors">
+                               删除记录
+                             </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              }) : (
+                <EmptyState message="此视角下尚无珍宝" />
+              )}
+            </div>
+          )
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {filteredShards.length > 0 ? filteredShards.map((f) => (
@@ -294,5 +535,15 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
     </div>
   );
 };
+
+const EmptyState = ({ message }: { message: string }) => (
+  <div className="col-span-full py-24 text-center flex flex-col items-center space-y-6">
+    <span className="text-6xl grayscale opacity-20">🕯️</span>
+    <div className="text-center">
+      <p className="text-slate-900 font-bold serif-font text-xl">{message}</p>
+      <p className="text-slate-400 text-xs mt-1 font-medium italic">请尝试更换筛选条件，或开启新的撰写。</p>
+    </div>
+  </div>
+);
 
 export default VocabListView;

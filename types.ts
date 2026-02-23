@@ -16,6 +16,8 @@ export interface AdvancedVocab {
   word: string;
   meaning: string;
   usage: string;
+  phonetic?: string;
+  parentId?: string;
   level: 'Intermediate' | 'Advanced' | 'Native';
   mastery?: number; 
   language: string;

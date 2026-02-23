@@ -70,6 +70,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const { columns, monthLabels } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    
     const counts: { [key: string]: number } = {};
     entries.forEach(entry => {
       const d = new Date(entry.timestamp);
@@ -77,9 +78,11 @@ const Dashboard: React.FC<DashboardProps> = ({
       counts[d.toDateString()] = (counts[d.toDateString()] || 0) + 1;
     });
 
+    // Calculate the start date (364 days ago)
     const startDate = new Date(today);
     startDate.setDate(today.getDate() - 364);
     
+    // Align start date to the beginning of that week (Sunday)
     const startOfGrid = new Date(startDate);
     startOfGrid.setDate(startDate.getDate() - startDate.getDay());
 
@@ -87,22 +90,25 @@ const Dashboard: React.FC<DashboardProps> = ({
     const labels: { text: string; index: number }[] = [];
     let lastMonth = -1;
 
+    // 53 weeks to cover 365+ days
     for (let w = 0; w < 53; w++) {
       const week: { date: Date; count: number }[] = [];
       for (let d = 0; d < 7; d++) {
         const currentDate = new Date(startOfGrid);
         currentDate.setDate(startOfGrid.getDate() + (w * 7) + d);
-        week.push({ date: currentDate, count: counts[currentDate.toDateString()] || 0 });
+        
+        week.push({ 
+          date: currentDate, 
+          count: counts[currentDate.toDateString()] || 0 
+        });
         
         if (d === 0) {
           const currentMonth = currentDate.getMonth();
           if (currentMonth !== lastMonth) {
-            if (w < 49) {
-              labels.push({ 
-                text: currentDate.toLocaleDateString('zh-CN', { month: 'short' }), 
-                index: w 
-              });
-            }
+            labels.push({ 
+              text: currentDate.toLocaleDateString('en-US', { month: 'short' }), 
+              index: w 
+            });
             lastMonth = currentMonth;
           }
         }
@@ -142,7 +148,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   };
 
   return (
-    <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-8 px-4 md:px-8 pb-24 md:pb-12 animate-in fade-in duration-700 space-y-4 md:space-y-6">
+    <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-8 px-4 md:px-8 pb-12 md:pb-8 animate-in fade-in duration-700 space-y-4 md:space-y-6">
       <section className="space-y-4">
         <header className="px-1 space-y-0.5">
           <h2 className="text-2xl md:text-3xl font-bold text-slate-900 serif-font tracking-tight">馆长，欢迎回来。</h2>
@@ -204,7 +210,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         )}
       </section>
 
-      <section className="bg-white p-5 md:p-6 rounded-[1.8rem] md:rounded-[2.2rem] border border-slate-200 shadow-sm relative group overflow-hidden">
+      <section className="bg-white p-5 md:p-6 rounded-[1.8rem] md:rounded-[2.2rem] border border-slate-200 shadow-sm relative group overflow-hidden h-auto">
         <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50/50 rounded-bl-[3rem] -mr-6 -mt-6 opacity-30 pointer-events-none"></div>
         <div className="flex items-center justify-between mb-3 relative z-10">
           <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em]">灵感碎片快捕 FRAGMENT CAPTURE</h4>
@@ -302,49 +308,58 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      <section className="bg-white p-6 rounded-[1.8rem] md:rounded-[2.2rem] border border-slate-200 shadow-sm overflow-hidden">
+      <section className="bg-white p-6 rounded-[1.8rem] md:rounded-[2.2rem] border border-slate-200 shadow-sm overflow-hidden h-auto">
         <div className="flex items-center justify-between mb-6">
           <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">年度足迹 ANNUAL FOOTPRINT</h4>
         </div>
         
-        <div className="overflow-x-auto no-scrollbar pb-1">
-          <div className="relative h-4 mb-1 ml-8 w-full min-w-max">
-            {monthLabels.map((label, i) => (
-              <span 
-                key={i} 
-                className="absolute text-[8px] font-bold text-slate-400 uppercase whitespace-nowrap"
-                style={{ left: `${label.index * 13}px` }}
-              >
-                {label.text}
-              </span>
-            ))}
-          </div>
-
-          <div className="flex min-w-max">
-            <div className="flex flex-col gap-[2.5px] pr-2.5 justify-between py-[1.5px] h-[88px] w-7 shrink-0">
-              <span className="text-[8px] font-bold text-slate-400 uppercase opacity-60">Mon</span>
-              <span className="text-[8px] font-bold text-slate-400 uppercase opacity-60">Wed</span>
-              <span className="text-[8px] font-bold text-slate-400 uppercase opacity-60">Fri</span>
+        <div className="w-full overflow-x-auto no-scrollbar pb-2">
+          <div className="min-w-max flex flex-col">
+            {/* Month Labels Row */}
+            <div className="flex ml-8 mb-2 relative h-4">
+              {monthLabels.map((label, i) => (
+                <span 
+                  key={i} 
+                  className="absolute text-[8px] font-bold text-slate-400 uppercase whitespace-nowrap"
+                  style={{ left: `${label.index * 13}px` }}
+                >
+                  {label.text}
+                </span>
+              ))}
             </div>
 
-            <div className="flex gap-[2.5px]">
-              {columns.map((week, wIdx) => (
-                <div key={wIdx} className="flex flex-col gap-[2.5px] shrink-0">
-                  {week.map((day, dIdx) => (
-                    <div
-                      key={dIdx}
-                      title={`${day.date.toLocaleDateString('zh-CN')}: ${day.count} 篇`}
-                      className={`w-[10px] h-[10px] rounded-[1.5px] transition-all ${getColor(day.count)} cursor-crosshair`}
-                    ></div>
-                  ))}
-                </div>
-              ))}
+            <div className="flex">
+              {/* Day Labels Column - Perfectly aligned with grid rows */}
+              <div className="flex flex-col gap-[3px] pr-2 py-[2px] h-[88px] w-8 shrink-0">
+                <div className="h-[10px]"></div> {/* Sun */}
+                <span className="h-[10px] text-[8px] font-bold text-slate-400 uppercase opacity-60 flex items-center">Mon</span>
+                <div className="h-[10px]"></div> {/* Tue */}
+                <span className="h-[10px] text-[8px] font-bold text-slate-400 uppercase opacity-60 flex items-center">Wed</span>
+                <div className="h-[10px]"></div> {/* Thu */}
+                <span className="h-[10px] text-[8px] font-bold text-slate-400 uppercase opacity-60 flex items-center">Fri</span>
+                <div className="h-[10px]"></div> {/* Sat */}
+              </div>
+
+              {/* Grid Columns */}
+              <div className="flex gap-[3px] flex-grow">
+                {columns.map((week, wIdx) => (
+                  <div key={wIdx} className="flex flex-col gap-[3px] shrink-0">
+                    {week.map((day, dIdx) => (
+                      <div
+                        key={dIdx}
+                        title={`${day.date.toLocaleDateString('zh-CN')}: ${day.count} 篇`}
+                        className={`w-[10px] h-[10px] rounded-[1.5px] transition-all ${getColor(day.count)} cursor-crosshair`}
+                      ></div>
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="bg-white p-6 rounded-[1.8rem] md:rounded-[2.2rem] border border-slate-200 shadow-sm mb-12">
+      <section className="bg-white p-6 rounded-[1.8rem] md:rounded-[2.2rem] border border-slate-200 shadow-sm mb-4 h-auto">
         <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest mb-6">珍宝磨炼进度 POLISH LEVELS</h4>
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">

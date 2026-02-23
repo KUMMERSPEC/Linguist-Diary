@@ -64,6 +64,11 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
     return allAdvancedVocab.find(v => v.id === selectedVocabId || `${v.word}-${v.language}` === selectedVocabId);
   }, [selectedVocabId, allAdvancedVocab]);
 
+  const parentVocab = useMemo(() => {
+    if (!currentVocab?.parentId) return null;
+    return allAdvancedVocab.find(v => v.id === currentVocab.parentId);
+  }, [currentVocab, allAdvancedVocab]);
+
   useEffect(() => {
     setLastFeedback(null);
     setPracticeInput('');
@@ -134,68 +139,73 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
 
   const handleValidate = async () => {
     if (!practiceInput.trim() || isValidating) return;
-    setIsValidating(true);
-    setLastFeedback(null);
-    setStreamingText('');
-    setPartialFeedback('');
-    setPartialBetterVersion('');
-    setLoadingMessage(LOADING_MESSAGES[Math.floor(Math.random() * LOADING_MESSAGES.length)]);
-
-    let accumulatedText = '';
-    try {
-      const stream = validateVocabUsageStream(
-        currentVocab.word, 
-        currentVocab.meaning, 
-        practiceInput, 
-        currentVocab.language
-      );
-
-      for await (const chunk of stream) {
-        accumulatedText += chunk;
-        setStreamingText(accumulatedText);
-
-        // Simple regex to extract fields from partial JSON
-        const feedbackMatch = accumulatedText.match(/"feedback":\s*"((?:[^"\\]|\\.)*)"/);
-        if (feedbackMatch) {
-          setPartialFeedback(feedbackMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"'));
-        }
-        const betterVersionMatch = accumulatedText.match(/"betterVersion":\s*"((?:[^"\\]|\\.)*)"/);
-        if (betterVersionMatch) {
-          setPartialBetterVersion(betterVersionMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"'));
-        }
-      }
-
-      const result = JSON.parse(accumulatedText);
-      setLastFeedback(result);
-
-      let newMastery = currentVocab.mastery || 0;
-      let status: PracticeRecord['status'] = 'Polished';
-      if (result.isCorrect) {
-        newMastery = Math.min(newMastery + 1, 5);
-        status = 'Perfect';
-        setShowSuccessAnimation(true);
-        setTimeout(() => setShowSuccessAnimation(false), 1500);
-      } else {
-        newMastery = Math.max(newMastery - 1, 0);
-      }
-
-      const record: PracticeRecord = {
-        id: uuidv4(),
-        sentence: currentVocab.usage,
-        originalAttempt: practiceInput,
-        feedback: result.feedback || "AI 已评估该句子。",
-        betterVersion: result.betterVersion,
-        timestamp: Date.now(),
-        status,
-        vocabId: currentVocab.id
-      };
-      onUpdateMastery(currentVocab.id, currentVocab.word, newMastery, record);
-    } catch (e) { 
-      console.error("Validation error:", e);
-      alert("评估失败，请检查网络。"); 
-    } finally { 
-      setIsValidating(false); 
+    
+    const inputToValidate = practiceInput;
+    const vocabToValidate = currentVocab;
+    
+    // 1. Locally mark as "done" or "submitting" and move to next if in queue
+    // We don't have a "done" status in AdvancedVocab, but we can trigger the next item
+    if (onNextInQueue && queueProgress && queueProgress.current < queueProgress.total) {
+      // Move to next item immediately
+      onNextInQueue();
+    } else {
+      // If last item, maybe just show a "Submitting..." state or go back
+      setIsValidating(true);
+      setLoadingMessage("正在后台评估你的最后一件珍宝...");
     }
+
+    // 2. Run validation in background
+    (async () => {
+      let accumulatedText = '';
+      try {
+        const stream = validateVocabUsageStream(
+          vocabToValidate.word, 
+          vocabToValidate.meaning, 
+          inputToValidate, 
+          vocabToValidate.language
+        );
+
+        for await (const chunk of stream) {
+          accumulatedText += chunk;
+        }
+
+        const result = JSON.parse(accumulatedText);
+        
+        let newMastery = vocabToValidate.mastery || 0;
+        let status: PracticeRecord['status'] = 'Polished';
+        if (result.isCorrect) {
+          newMastery = Math.min(newMastery + 1, 5);
+          status = 'Perfect';
+        } else {
+          newMastery = Math.max(newMastery - 1, 0);
+        }
+
+        const record: PracticeRecord = {
+          id: uuidv4(),
+          sentence: vocabToValidate.usage,
+          originalAttempt: inputToValidate,
+          feedback: result.feedback || "AI 已评估该句子。",
+          betterVersion: result.betterVersion,
+          timestamp: Date.now(),
+          status,
+          vocabId: vocabToValidate.id
+        };
+        
+        onUpdateMastery(vocabToValidate.id, vocabToValidate.word, newMastery, record);
+        
+        // If we were showing the "last item" loading state
+        if (!onNextInQueue || (queueProgress && queueProgress.current === queueProgress.total)) {
+          setLastFeedback(result);
+          setIsValidating(false);
+        }
+      } catch (e) { 
+        console.error("Background validation error:", e);
+        if (!onNextInQueue || (queueProgress && queueProgress.current === queueProgress.total)) {
+          setIsValidating(false);
+          alert("评估失败，请检查网络。");
+        }
+      }
+    })();
   };
 
   const handleSavePhrase = async (phrase: string, explanation: string) => {
@@ -261,10 +271,22 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
             </div>
           )}
 
-          <div className="flex items-center justify-between pb-4 border-b border-slate-50">
-            <h3 className="text-2xl md:text-3xl font-black text-slate-900 serif-font">
-              {renderRuby(currentVocab.word)}
-            </h3>
+          <div className="flex items-center justify-between pb-4 border-b border-slate-50 relative">
+            <div className="flex flex-col">
+              <h3 className="text-2xl md:text-3xl font-black text-slate-900 serif-font">
+                {renderRuby(currentVocab.word)}
+              </h3>
+              {parentVocab && (
+                <div className="mt-1 flex items-center space-x-1.5 opacity-40 hover:opacity-100 transition-opacity cursor-help group/parent" title={`父词汇: ${stripRuby(parentVocab.word)}\n释义: ${stripRuby(parentVocab.meaning)}`}>
+                  <span className="text-[8px] font-black bg-slate-100 text-slate-500 px-1 rounded">PARENT</span>
+                  <span className="text-[10px] font-bold text-slate-500 serif-font">{stripRuby(parentVocab.word)}</span>
+                  <div className="hidden group-hover/parent:block absolute top-full left-0 mt-2 p-3 bg-slate-900 text-white text-[10px] rounded-xl shadow-xl z-30 w-48 animate-in fade-in slide-in-from-top-1">
+                    <p className="font-bold mb-1 text-indigo-300 uppercase tracking-widest text-[8px]">原始定义 ORIGINAL DEFINITION</p>
+                    <p className="leading-relaxed opacity-90">{stripRuby(parentVocab.meaning)}</p>
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="flex items-center space-x-2">
               <span className="md:hidden px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-lg text-[8px] font-black uppercase tracking-widest">M{currentVocab.mastery || 0}</span>
               <button 

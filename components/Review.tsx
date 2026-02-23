@@ -8,13 +8,14 @@ interface ReviewProps {
   analysis: DiaryAnalysis;
   language: string;
   iterations: DiaryIteration[]; 
+  allAdvancedVocab?: AdvancedVocab[];
   onSave: () => void;
   onBack: () => void;
   onSaveManualVocab?: (vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>) => void;
   isExistingEntry?: boolean;
 }
 
-const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave, onBack, onSaveManualVocab, isExistingEntry }) => {
+const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, allAdvancedVocab, onSave, onBack, onSaveManualVocab, isExistingEntry }) => {
   const [activeTab, setActiveTab] = useState<'overall' | 'corrections' | 'vocab' | 'history'>('overall');
   const [viewMode, setViewMode] = useState<'diff' | 'final'>('diff');
   const [isPlaying, setIsPlaying] = useState<string | null>(null); 
@@ -82,6 +83,17 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
     if (source) {
       audioSourceRef.current = source as AudioBufferSourceNode;
     }
+  };
+
+  const findParentForVocab = (word: string) => {
+    if (!allAdvancedVocab) return null;
+    const cleanWord = stripRuby(word).toLowerCase().trim();
+    return allAdvancedVocab.find(v => {
+      if (v.language !== language) return false;
+      const cleanExisting = stripRuby(v.word).toLowerCase().trim();
+      // Simple "semantic overlap" logic: if one is a substring of another
+      return cleanWord.includes(cleanExisting) && cleanWord !== cleanExisting;
+    });
   };
 
   return (
@@ -204,18 +216,33 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, onSave,
 
         {activeTab === 'vocab' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
-            {analysis.advancedVocab.map((v, index) => (
-              <div key={index} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col h-full">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-xl font-black text-slate-900 serif-font" dangerouslySetInnerHTML={{ __html: renderRuby(v.word) }}></h4>
-                  <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-lg text-[8px] font-black uppercase tracking-widest">{v.level}</span>
+            {analysis.advancedVocab.map((v, index) => {
+              const parent = findParentForVocab(v.word);
+              return (
+                <div key={index} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col h-full relative group">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xl font-black text-slate-900 serif-font" dangerouslySetInnerHTML={{ __html: renderRuby(v.word) }}></h4>
+                    <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-lg text-[8px] font-black uppercase tracking-widest">{v.level}</span>
+                  </div>
+                  <p className="text-slate-600 text-xs mb-4 flex-1">{stripRuby(v.meaning)}</p>
+                  
+                  {parent && (
+                    <div className="mb-4 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                      <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1 flex items-center">
+                        <span className="mr-1">✨</span> 智能关联 SMART LINK
+                      </p>
+                      <p className="text-[10px] text-emerald-700 font-medium leading-relaxed">
+                        该短语建议作为「<span className="font-bold">{stripRuby(parent.word)}</span>」的进阶用法存入。
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="bg-slate-50 p-4 rounded-xl">
+                     <p className="text-[11px] text-slate-500 italic serif-font" dangerouslySetInnerHTML={{ __html: `“ ${renderRuby(v.usage)} ”` }}></p>
+                  </div>
                 </div>
-                <p className="text-slate-600 text-xs mb-4 flex-1">{stripRuby(v.meaning)}</p>
-                <div className="bg-slate-50 p-4 rounded-xl">
-                   <p className="text-[11px] text-slate-500 italic serif-font" dangerouslySetInnerHTML={{ __html: `“ ${renderRuby(v.usage)} ”` }}></p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

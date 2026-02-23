@@ -403,7 +403,19 @@ const App: React.FC = () => {
           const normalizedExistingWord = stripRuby(existing.word).trim().toLowerCase();
           return normalizedExistingWord === normalizedNewWord && existing.language === language;
         });
-      }).map(v => ({ ...v, id: uuidv4(), mastery: 0, language, practices: [], timestamp: Date.now() }));
+      }).map(v => {
+        const normalizedNewWord = stripRuby(v.word).trim().toLowerCase();
+        const potentialParents = allAdvancedVocab
+          .filter(existing => existing.language === language)
+          .filter(existing => {
+            const cleanExisting = stripRuby(existing.word).toLowerCase().trim();
+            return normalizedNewWord.includes(cleanExisting) && normalizedNewWord !== cleanExisting;
+          })
+          .sort((a, b) => stripRuby(b.word).length - stripRuby(a.word).length);
+        
+        const parentId = potentialParents[0]?.id;
+        return { ...v, id: uuidv4(), mastery: 0, language, practices: [], timestamp: Date.now(), parentId };
+      });
 
       if (vocabItemsToSave.length > 0) {
         if (!db || user.isMock) {
@@ -454,14 +466,62 @@ const App: React.FC = () => {
     const normalizedNewWord = stripRuby(vocab.word).trim().toLowerCase();
     const isExisting = allAdvancedVocab.some(v => stripRuby(v.word).trim().toLowerCase() === normalizedNewWord && v.language === vocab.language);
     if (isExisting) { alert("该词汇已在馆藏中。"); return; }
-    const newVocab: AdvancedVocab = { ...vocab, id: uuidv4(), mastery: 0, practices: [], timestamp: Date.now() };
-    setAllAdvancedVocab(prev => [newVocab, ...prev]);
+
+    // Find Parent
+    const cleanWord = normalizedNewWord;
+    const potentialParents = allAdvancedVocab
+      .filter(v => v.language === vocab.language)
+      .filter(v => {
+        const cleanExisting = stripRuby(v.word).toLowerCase().trim();
+        return cleanWord.includes(cleanExisting) && cleanWord !== cleanExisting;
+      })
+      .sort((a, b) => stripRuby(b.word).length - stripRuby(a.word).length);
+    
+    const parentId = potentialParents[0]?.id;
+
+    const newVocab: AdvancedVocab = { ...vocab, id: uuidv4(), mastery: 0, practices: [], timestamp: Date.now(), parentId };
+    
+    // Update existing items that might be children of this new word
+    setAllAdvancedVocab(prev => {
+      const updatedPrev = prev.map(v => {
+        if (v.language === vocab.language && !v.parentId) {
+          const cleanExisting = stripRuby(v.word).toLowerCase().trim();
+          if (cleanExisting.includes(cleanWord) && cleanExisting !== cleanWord) {
+            return { ...v, parentId: newVocab.id };
+          }
+        }
+        return v;
+      });
+      return [newVocab, ...updatedPrev];
+    });
+
     if (!db || user.isMock) {
       const currentVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
-      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify([newVocab, ...currentVocab]));
+      const updatedVocab = currentVocab.map((v: any) => {
+        if (v.language === vocab.language && !v.parentId) {
+          const cleanExisting = stripRuby(v.word).toLowerCase().trim();
+          if (cleanExisting.includes(cleanWord) && cleanExisting !== cleanWord) {
+            return { ...v, parentId: newVocab.id };
+          }
+        }
+        return v;
+      });
+      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify([newVocab, ...updatedVocab]));
     } else {
       const { id, practices, ...data } = newVocab;
-      await addDoc(collection(db, 'users', user.uid, 'advancedVocab'), { ...data, timestamp: serverTimestamp() });
+      const docRef = await addDoc(collection(db, 'users', user.uid, 'advancedVocab'), { ...data, timestamp: serverTimestamp() });
+      
+      // Update existing children in Firebase
+      const childrenToUpdate = allAdvancedVocab.filter(v => 
+        v.language === vocab.language && 
+        !v.parentId && 
+        stripRuby(v.word).toLowerCase().trim().includes(cleanWord) && 
+        stripRuby(v.word).toLowerCase().trim() !== cleanWord
+      );
+
+      for (const child of childrenToUpdate) {
+        await updateDoc(doc(db, 'users', user.uid, 'advancedVocab', child.id), { parentId: docRef.id });
+      }
     }
   };
 
@@ -560,10 +620,24 @@ const App: React.FC = () => {
       return masteryA - masteryB;
     });
 
-    const queue = sorted.slice(0, 10).map(v => v.id);
-    setPracticeQueue(queue);
+    const finalQueue: string[] = [];
+    const excludedIds = new Set<string>();
+
+    for (const v of sorted) {
+      if (finalQueue.length >= 10) break;
+      if (excludedIds.has(v.id)) continue;
+
+      finalQueue.push(v.id);
+      
+      // If we pick this item, exclude its parent and all its children from this session
+      if (v.parentId) excludedIds.add(v.parentId);
+      const children = allAdvancedVocab.filter(child => child.parentId === v.id);
+      children.forEach(child => excludedIds.add(child.id));
+    }
+
+    setPracticeQueue(finalQueue);
     setQueueIndex(0);
-    setSelectedVocabForPracticeId(queue[0]);
+    setSelectedVocabForPracticeId(finalQueue[0]);
     setIsPracticeActive(true);
     setView('vocab_practice');
   };
@@ -571,21 +645,44 @@ const App: React.FC = () => {
   const handleUpdateMastery = async (vocabId: string, word: string, newMastery: number, record?: PracticeRecord) => {
     if (!user) return;
     const now = Date.now();
-    setAllAdvancedVocab(prev => prev.map(v => v.id === vocabId ? { 
-      ...v, 
-      mastery: newMastery, 
-      lastReviewTimestamp: now,
-      practices: record ? [record, ...(v.practices || [])] : v.practices 
-    } : v));
     
-    if (!db || user.isMock) {
-      const localVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
-      const updated = localVocab.map((v: any) => v.id === vocabId ? { 
+    const vocabToUpdate = allAdvancedVocab.find(v => v.id === vocabId);
+    const parentId = vocabToUpdate?.parentId;
+
+    setAllAdvancedVocab(prev => {
+      let next = prev.map(v => v.id === vocabId ? { 
         ...v, 
         mastery: newMastery, 
         lastReviewTimestamp: now,
         practices: record ? [record, ...(v.practices || [])] : v.practices 
       } : v);
+
+      // Synergy Boost: If this is a child, boost parent by 20% of the gain or just a flat 0.2
+      if (parentId) {
+        next = next.map(v => {
+          if (v.id === parentId) {
+            const currentMastery = v.mastery || 0;
+            return { ...v, mastery: Math.min(5, currentMastery + 0.2) };
+          }
+          return v;
+        });
+      }
+      return next;
+    });
+    
+    if (!db || user.isMock) {
+      const localVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
+      let updated = localVocab.map((v: any) => v.id === vocabId ? { 
+        ...v, 
+        mastery: newMastery, 
+        lastReviewTimestamp: now,
+        practices: record ? [record, ...(v.practices || [])] : v.practices 
+      } : v);
+
+      if (parentId) {
+        updated = updated.map((v: any) => v.id === parentId ? { ...v, mastery: Math.min(5, (v.mastery || 0) + 0.2) } : v);
+      }
+
       localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
     } else {
       const vocabDocRef = doc(db, 'users', user.uid, 'advancedVocab', vocabId);
@@ -594,6 +691,15 @@ const App: React.FC = () => {
         lastReviewTimestamp: now
       });
       if (record) { await addDoc(collection(vocabDocRef, 'practices'), { ...record, timestamp: serverTimestamp() }); }
+
+      if (parentId) {
+        const parentDocRef = doc(db, 'users', user.uid, 'advancedVocab', parentId);
+        const parentSnap = await getDoc(parentDocRef);
+        if (parentSnap.exists()) {
+          const currentParentMastery = parentSnap.data().mastery || 0;
+          await updateDoc(parentDocRef, { mastery: Math.min(5, currentParentMastery + 0.2) });
+        }
+      }
     }
   };
 
@@ -755,7 +861,7 @@ const App: React.FC = () => {
     <Layout activeView={view} onViewChange={handleViewChange} user={user} onLogout={handleLogout}>
       {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartSmartReview} entries={entries} allAdvancedVocab={allAdvancedVocab} recommendedIteration={recommendedIteration} onStartIteration={handleStartIteration} onSaveFragment={handleSaveFragment} />}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraft} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} fragments={fragments} onDeleteFragment={handleDeleteFragment} preferredLanguages={preferredLanguages} partialAnalysis={partialAnalysis} />}
-      {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isExistingEntry={isReviewingExisting} />}
+      {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} allAdvancedVocab={allAdvancedVocab} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isExistingEntry={isReviewingExisting} />}
       {/* // FIX: Updated function name from handleUpdateLanguage to handleUpdateEntryLanguage */}
       {view === 'history' && <History entries={entries} isAnalyzingId={analyzingId} onAnalyzeDraft={handleAnalyzeExistingEntry} onUpdateLanguage={handleUpdateEntryLanguage} onSelect={(e) => { setCurrentEntry(e); setIsReviewingExisting(true); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); setEntries(prev => prev.filter(e => e.id !== id)); }} onRewrite={(e) => { handleStartIteration(e); }} preferredLanguages={preferredLanguages} />}
       {view === 'chat' && <ChatEditor onFinish={(msgs, lang, summary) => { setChatLanguage(lang); setPrefilledEditorText(''); setSummaryPrompt(summary); setView('editor'); }} allGems={allAdvancedVocab} preferredLanguages={preferredLanguages} />}

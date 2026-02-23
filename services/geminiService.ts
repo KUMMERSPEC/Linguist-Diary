@@ -16,11 +16,21 @@ const isRetryableError = (error: any): boolean => {
   return (status === 500 || status === 429 || status === "UNKNOWN" || message.includes("xhr error") || message.includes("fetch"));
 };
 
-async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2, initialDelay = 1000): Promise<T> {
+async function withRetry<T>(fn: (model: string) => Promise<T>, initialModel: string, maxRetries = 2, initialDelay = 1000): Promise<T> {
   let lastError: any;
+  let currentModel = initialModel;
   for (let i = 0; i < maxRetries; i++) {
-    try { return await fn(); } catch (error: any) {
+    try { 
+      return await fn(currentModel); 
+    } catch (error: any) {
       lastError = error;
+      const status = error?.status || error?.code;
+      
+      // If 429, try switching model to a lighter one if we are on the main one
+      if (status === 429 && currentModel === 'gemini-3-flash-preview') {
+        currentModel = 'gemini-flash-latest'; // Fallback to standard flash
+      }
+
       if (!isRetryableError(error) || i === maxRetries - 1) throw error;
       const delay = initialDelay * Math.pow(2, i);
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -33,9 +43,9 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
   const ai = getAiInstance();
   const historyContext = history.slice(0, 2).map(e => `- ${e.date}: ${e.analysis?.overallFeedback}`).join('\n');
   
-  return withRetry(async () => {
+  return withRetry(async (model) => {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: model as any,
       contents: `Analyze: "${text}". Lang: ${language}.
       Context: ${historyContext}
       Task: Correct the text. 
@@ -91,6 +101,7 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
                   word: { type: Type.STRING },
                   meaning: { type: Type.STRING },
                   usage: { type: Type.STRING },
+                  phonetic: { type: Type.STRING, description: "Phonetic transcription or IPA. For Japanese, use reading if not already in word." },
                   level: { type: Type.STRING, enum: ['Intermediate', 'Advanced', 'Native'] }
                 },
                 required: ["word", "meaning", "usage", "level"]
@@ -194,6 +205,7 @@ export const analyzeDiaryEntryStream = async function* (text: string, language: 
                 word: { type: Type.STRING },
                 meaning: { type: Type.STRING },
                 usage: { type: Type.STRING },
+                phonetic: { type: Type.STRING, description: "Phonetic transcription or IPA. For Japanese, use reading if not already in word." },
                 level: { type: Type.STRING, enum: ['Intermediate', 'Advanced', 'Native'] }
               },
               required: ["word", "meaning", "usage", "level"]
@@ -224,9 +236,9 @@ export const analyzeDiaryEntryStream = async function* (text: string, language: 
 
 export const evaluateRetelling = async (source: string, retelling: string, language: string): Promise<RehearsalEvaluation> => {
   const ai = getAiInstance();
-  return withRetry(async () => {
+  return withRetry(async (model) => {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: model as any,
       contents: `Compare Source/Retelling in ${language}. Score accuracy/quality. Feedbacks(${language}).`,
       config: {
         thinkingConfig: { thinkingBudget: 0 },
@@ -270,37 +282,79 @@ export const getChatFollowUp = async (messages: ChatMessage[], language: string)
 
 export const validateVocabUsageStream = async function* (word: string, meaning: string, sentence: string, language: string) {
   const ai = getAiInstance();
-  const response = await ai.models.generateContentStream({
-    model: 'gemini-3-flash-preview',
-    contents: `Word: "${word}". Sentence: "${sentence}". Correct? Feedback(${language}).`,
-    config: {
-      thinkingConfig: { thinkingBudget: 0 },
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          isCorrect: { type: Type.BOOLEAN },
-          feedback: { type: Type.STRING },
-          betterVersion: { type: Type.STRING },
-          keyPhrases: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                phrase: { type: Type.STRING },
-                explanation: { type: Type.STRING }
-              },
-              required: ["phrase", "explanation"]
+  let model = 'gemini-3-flash-preview';
+  
+  try {
+    const response = await ai.models.generateContentStream({
+      model: model as any,
+      contents: `Word: "${word}". Sentence: "${sentence}". Correct? Feedback(${language}).`,
+      config: {
+        thinkingConfig: { thinkingBudget: 0 },
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            isCorrect: { type: Type.BOOLEAN },
+            feedback: { type: Type.STRING },
+            betterVersion: { type: Type.STRING },
+            keyPhrases: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  phrase: { type: Type.STRING },
+                  explanation: { type: Type.STRING }
+                },
+                required: ["phrase", "explanation"]
+              }
             }
-          }
-        },
-        required: ["isCorrect", "feedback", "betterVersion"]
+          },
+          required: ["isCorrect", "feedback", "betterVersion"]
+        }
       }
-    }
-  });
+    });
 
-  for await (const chunk of response) {
-    yield chunk.text;
+    for await (const chunk of response) {
+      yield chunk.text;
+    }
+  } catch (error: any) {
+    const status = error?.status || error?.code;
+    if (status === 429) {
+      // Fallback for stream
+      const fallbackResponse = await ai.models.generateContentStream({
+        model: 'gemini-flash-latest' as any,
+        contents: `Word: "${word}". Sentence: "${sentence}". Correct? Feedback(${language}).`,
+        config: {
+          thinkingConfig: { thinkingBudget: 0 },
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              isCorrect: { type: Type.BOOLEAN },
+              feedback: { type: Type.STRING },
+              betterVersion: { type: Type.STRING },
+              keyPhrases: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    phrase: { type: Type.STRING },
+                    explanation: { type: Type.STRING }
+                  },
+                  required: ["phrase", "explanation"]
+                }
+              }
+            },
+            required: ["isCorrect", "feedback", "betterVersion"]
+          }
+        }
+      });
+      for await (const chunk of fallbackResponse) {
+        yield chunk.text;
+      }
+    } else {
+      throw error;
+    }
   }
 };
 

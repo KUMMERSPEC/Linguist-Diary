@@ -47,6 +47,7 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
   const [isFragmentDrawerOpen, setIsFragmentDrawerOpen] = useState(false);
   const [fragmentSearch, setFragmentSearch] = useState('');
   const [usedFragmentIds, setUsedFragmentIds] = useState<Set<string>>(new Set());
+  const [quotedFragment, setQuotedFragment] = useState<InspirationFragment | null>(null);
   
   const [muses, setMuses] = useState<MuseCard[]>([]);
   const [isMusesLoading, setIsMusesLoading] = useState(false);
@@ -118,10 +119,17 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
   }, [preferredLanguages]);
 
   const filteredFragments = useMemo(() => {
-    return fragments.filter(f => 
+    let list = fragments.filter(f => 
       f.content.toLowerCase().includes(fragmentSearch.toLowerCase()) || 
       (f.meaning && f.meaning.toLowerCase().includes(fragmentSearch.toLowerCase()))
     );
+    
+    // Sort: Transient (Muses) first, then Seeds
+    return list.sort((a, b) => {
+      if (a.fragmentType === 'transient' && b.fragmentType !== 'transient') return -1;
+      if (a.fragmentType !== 'transient' && b.fragmentType === 'transient') return 1;
+      return b.timestamp - a.timestamp;
+    });
   }, [fragments, fragmentSearch]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -131,7 +139,7 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
   };
 
   const handleInsertFragment = (f: InspirationFragment) => {
-    setText(prev => prev + (prev.length > 0 ? '\n' : '') + f.content);
+    setQuotedFragment(f);
     if (f.fragmentType === 'transient') {
       setUsedFragmentIds(prev => new Set(prev).add(f.id));
     }
@@ -210,21 +218,21 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
           </div>
           <div className="flex space-x-4 overflow-x-auto no-scrollbar pb-2">
             {filteredFragments.length > 0 ? filteredFragments.map(f => (
-              <div key={f.id} className={`min-w-[200px] max-w-[250px] p-4 rounded-2xl border shadow-sm relative group transition-all ${usedFragmentIds.has(f.id) ? 'bg-slate-50 opacity-50 grayscale' : 'bg-white border-slate-100'}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[9px] font-black text-indigo-400">{f.fragmentType === 'transient' ? '📜 随笔' : '🌱 种子'}</span>
-                  {usedFragmentIds.has(f.id) && <span className="text-[8px] font-black text-emerald-500 uppercase">已引用</span>}
+              <div key={f.id} className={`min-w-[180px] max-w-[220px] p-3 rounded-2xl border shadow-sm relative group transition-all ${usedFragmentIds.has(f.id) ? 'bg-slate-50 opacity-50 grayscale' : 'bg-white border-slate-100'}`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[8px] font-black text-indigo-400 uppercase tracking-tighter">{f.fragmentType === 'transient' ? '📜 随笔' : '🌱 种子'}</span>
+                  {usedFragmentIds.has(f.id) && <span className="text-[7px] font-black text-emerald-500 uppercase">已引用</span>}
                 </div>
-                <p className="text-xs text-slate-600 italic line-clamp-3 mb-3 serif-font">“ {f.content} ”</p>
+                <p className="text-[10px] text-slate-600 italic line-clamp-2 mb-2 serif-font leading-relaxed">“ {f.content} ”</p>
                 <div className="flex items-center justify-between">
                    <button 
                     onClick={() => handleInsertFragment(f)} 
                     disabled={usedFragmentIds.has(f.id)}
-                    className="text-[9px] font-black text-indigo-600 uppercase tracking-widest hover:underline disabled:text-slate-300"
+                    className="text-[8px] font-black text-indigo-600 uppercase tracking-widest hover:underline disabled:text-slate-300"
                    >
-                     点击引用
+                     引用 REFERENCE
                    </button>
-                   <button onClick={() => onDeleteFragment?.(f.id)} className="text-[9px] text-slate-200 hover:text-rose-400 transition-colors">删除</button>
+                   <button onClick={() => onDeleteFragment?.(f.id)} className="text-[8px] text-slate-200 hover:text-rose-400 transition-colors">删除</button>
                 </div>
               </div>
             )) : (
@@ -347,13 +355,33 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
           </div>
         ) : (
           <div className="flex-1 bg-white border border-slate-200 rounded-[2.5rem] shadow-xl overflow-hidden focus-within:ring-8 focus-within:ring-indigo-500/5 transition-all flex flex-col min-h-[300px] relative group">
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="在此开启您的撰写之旅..."
-              className="flex-1 w-full border-none focus:ring-0 p-8 md:p-14 text-lg md:text-2xl leading-relaxed serif-font resize-none bg-transparent placeholder:text-slate-200 z-10"
-              disabled={isLoading}
-            />
+            {quotedFragment && (
+              <div className="absolute top-0 left-0 right-0 z-20 bg-slate-50/80 backdrop-blur-md border-b border-slate-100 p-4 md:p-6 animate-in slide-in-from-top-2 duration-500">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <span className="bg-indigo-600 text-white px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest">正在引导创作 WRITING GUIDE</span>
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{quotedFragment.fragmentType === 'transient' ? '📜 随笔对照' : '🌱 种子参考'}</span>
+                  </div>
+                  <button onClick={() => setQuotedFragment(null)} className="text-[10px] text-slate-300 hover:text-rose-400 font-black">移除 ×</button>
+                </div>
+                <p className="text-sm md:text-base text-slate-600 italic serif-font leading-relaxed">“ {quotedFragment.content} ”</p>
+              </div>
+            )}
+            
+            <div className="relative flex-1 flex flex-col">
+              {!text && quotedFragment && (
+                <div className="absolute inset-0 p-8 md:p-14 text-lg md:text-2xl leading-relaxed serif-font text-slate-200 pointer-events-none z-0 italic">
+                  {quotedFragment.fragmentType === 'transient' ? '在此开始您的译文或续写...' : `围绕“${quotedFragment.content}”展开您的创作...`}
+                </div>
+              )}
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder={quotedFragment ? "" : "在此开启您的撰写之旅..."}
+                className={`flex-1 w-full border-none focus:ring-0 p-8 md:p-14 text-lg md:text-2xl leading-relaxed serif-font resize-none bg-transparent placeholder:text-slate-200 z-10 ${quotedFragment ? 'pt-24 md:pt-32' : ''}`}
+                disabled={isLoading}
+              />
+            </div>
           </div>
         )}
         
