@@ -349,22 +349,6 @@ const ProfileView: React.FC<ProfileViewProps> = ({
         </div>
       )}
 
-      {isAdminOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">
-           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-xl" onClick={() => setIsAdminOpen(false)}></div>
-           
-           <div className="relative w-full max-w-2xl bg-white rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 max-h-full">
-              <header className="p-8 border-b border-slate-50 flex items-center justify-between shrink-0">
-                 <div className="flex items-center space-x-4">
-                   <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center text-xl shadow-inner">🛠️</div>
-                   <div>
-                     <h3 className="text-xl font-black serif-font text-slate-900">挑战管理后台</h3>
-                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Challenge Admin Console</p>
-                   </div>
-                 </div>
-                 <button onClick={() => setIsAdminOpen(false)} className="w-10 h-10 rounded-full hover:bg-slate-50 flex items-center justify-center text-slate-300 transition-colors">✕</button>
-              </header>
-
     </div>
   );
 };
