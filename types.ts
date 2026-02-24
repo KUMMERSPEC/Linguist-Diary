@@ -109,4 +109,5 @@ export interface RehearsalEvaluation {
   diffedRetelling: string;
   sourceText?: string;
   userRetelling?: string;
+  recommendedGems?: { word: string; meaning: string; usage: string; }[];
 }

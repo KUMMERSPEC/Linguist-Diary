@@ -75,6 +75,7 @@ const App: React.FC = () => {
   const [selectedVocabForPracticeId, setSelectedVocabForPracticeId] = useState<string | null>(null);
   const [isPracticeActive, setIsPracticeActive] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [promotingFragmentId, setPromotingFragmentId] = useState<string | null>(null);
 
   const [practiceQueue, setPracticeQueue] = useState<string[]>([]);
   const [queueIndex, setQueueIndex] = useState(-1);
@@ -311,11 +312,11 @@ const App: React.FC = () => {
    * 优化后的升级函数：增加 AI 智能补全逻辑
    */
   const handlePromoteFragment = async (fragmentId: string) => {
-    if (!user) return;
+    if (!user || promotingFragmentId) return;
     const fragment = fragments.find(f => f.id === fragmentId);
     if (!fragment) return;
 
-    setIsLoading(true); // 进入修缮模式
+    setPromotingFragmentId(fragmentId);
     try {
       let finalMeaning = fragment.meaning;
       let finalUsage = fragment.usage;
@@ -346,7 +347,7 @@ const App: React.FC = () => {
       console.error("Promotion failed:", e);
       alert("词汇入库失败，请重试。");
     } finally {
-      setIsLoading(false);
+      setPromotingFragmentId(null);
     }
   };
 
@@ -782,6 +783,59 @@ const App: React.FC = () => {
     if (v !== 'editor') { setPrefilledEditorText(''); setSummaryPrompt(''); }
   };
 
+    const handleDeletePractice = async (vocabId: string, practiceId: string) => {
+    if (!user) return;
+
+    setAllAdvancedVocab(prev => prev.map(v => {
+      if (v.id === vocabId) {
+        return { ...v, practices: v.practices?.filter(p => p.id !== practiceId) };
+      }
+      return v;
+    }));
+
+    if (!db || user.isMock) {
+      const localVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
+      const updated = localVocab.map((v: AdvancedVocab) => {
+        if (v.id === vocabId) {
+          return { ...v, practices: v.practices?.filter(p => p.id !== practiceId) };
+        }
+        return v;
+      });
+      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
+    } else {
+      await deleteDoc(doc(db, 'users', user.uid, 'advancedVocab', vocabId, 'practices', practiceId));
+    }
+  };
+
+  const handleBatchDeletePractices = async (vocabId: string, practiceIds: string[]) => {
+    if (!user) return;
+
+    setAllAdvancedVocab(prev => prev.map(v => {
+      if (v.id === vocabId) {
+        return { ...v, practices: v.practices?.filter(p => !practiceIds.includes(p.id)) };
+      }
+      return v;
+    }));
+
+    if (!db || user.isMock) {
+      const localVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
+      const updated = localVocab.map((v: AdvancedVocab) => {
+        if (v.id === vocabId) {
+          return { ...v, practices: v.practices?.filter(p => !practiceIds.includes(p.id)) };
+        }
+        return v;
+      });
+      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
+    } else {
+      const batch = writeBatch(db);
+      practiceIds.forEach(pid => {
+        const docRef = doc(db, 'users', user.uid, 'advancedVocab', vocabId, 'practices', pid);
+        batch.delete(docRef);
+      });
+      await batch.commit();
+    }
+  };
+
   const handleLogout = async () => {
     if (auth && !user?.isMock) { await signOut(auth); }
     setUser(null);
@@ -921,7 +975,7 @@ const App: React.FC = () => {
         <VocabPracticeDetailView selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onBackToPracticeHistory={() => setView('vocab_list')} onUpdateLanguage={handleUpdateVocabLanguage} preferredLanguages={preferredLanguages} />
       )}
       {view === 'rehearsal' && <Rehearsal allAdvancedVocab={allAdvancedVocab} preferredLanguages={preferredLanguages} />}
-      {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} />}
+      {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} onSaveVocab={handleSaveManualVocab} />}
       {view === 'profile' && <ProfileView user={user} editName={editName} setEditName={setEditName} editPhoto={editPhoto} setEditPhoto={setEditPhoto} isAvatarPickerOpen={isAvatarPickerOpen} setIsAvatarPickerOpen={setIsAvatarPickerOpen} avatarSeeds={AVATAR_SEEDS} onSaveProfile={handleSaveProfile} isLoading={isLoading} iterationDay={user.iterationDay ?? 0} onSetIterationDay={handleSetIterationDay} preferredLanguages={preferredLanguages} onSetPreferredLanguages={handleSetPreferredLanguages} onActivatePro={handleActivatePro} />}
       
       {showProModal && <ProUpgradeModal />}

@@ -151,7 +151,7 @@ const Editor: React.FC<EditorProps> = ({ onAnalyze, onSaveDraft, isLoading, init
   };
 
   return (
-    <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-500 relative">
+    <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-500 relative max-w-4xl mx-auto w-full">
       <header className="mb-6 space-y-4 shrink-0">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <h2 className="text-2xl md:text-3xl font-bold text-slate-900 serif-font">

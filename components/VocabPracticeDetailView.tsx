@@ -160,6 +160,13 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
     if (m >= 4) return '✨';
   };
 
+    const safeGetDate = (timestamp: number | undefined) => {
+    if (timestamp && !isNaN(timestamp)) {
+      return new Date(timestamp);
+    }
+    return new Date(); // Fallback to now
+  };
+
   const sortedPractices = useMemo(() => {
     if (localPractices.length > 0) return [...localPractices].sort((a, b) => b.timestamp - a.timestamp);
     return currentVocab?.practices ? [...currentVocab.practices].sort((a, b) => b.timestamp - a.timestamp) : [];
@@ -273,10 +280,10 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
                     <div className="flex items-center justify-between mb-2 px-1">
                       <div className="flex items-center space-x-3">
                         <div className="w-8 h-8 rounded-full bg-white border border-slate-100 shadow-sm flex items-center justify-center shrink-0 z-10 transition-transform group-hover/pitem:scale-110">
-                          <span className="text-[9px] font-black text-slate-400">{new Date(practice.timestamp).getDate()}</span>
+                          <span className="text-[9px] font-black text-slate-400">{safeGetDate(practice.timestamp).getDate()}</span>
                         </div>
                         <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">
-                          {new Date(practice.timestamp).toLocaleDateString('zh-CN', { month: 'short' })}
+                          {safeGetDate(practice.timestamp).toLocaleDateString('zh-CN', { month: 'short' })}
                         </span>
                       </div>
                       {isManageMode && (

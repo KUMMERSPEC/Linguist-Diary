@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Search, LayoutGrid, List, ChevronDown, ChevronUp, Filter, ArrowUpDown } from 'lucide-react';
+import { Tooltip } from 'react-tooltip';
 import { AdvancedVocab, PracticeRecord, ViewState, InspirationFragment } from '../types';
 import { generateDiaryAudio } from '../services/geminiService';
 import { decode, decodeAudioData } from '../utils/audioHelpers';
@@ -19,6 +20,7 @@ interface VocabListViewProps {
   onPromoteToSeed?: (id: string) => void;
   isMenuOpen?: boolean;
   onBulkUpdateLanguage?: (vocabIds: string[], language: string) => void;
+  promotingFragmentId?: string | null;
 }
 
 const LANGUAGE_FLAGS: Record<string, string> = {
@@ -38,7 +40,8 @@ const VocabListView: React.FC<VocabListViewProps> = ({
   onPromoteFragment, 
   onPromoteToSeed,
   isMenuOpen,
-  onBulkUpdateLanguage
+  onBulkUpdateLanguage,
+  promotingFragmentId
 }) => {
   const [activeTab, setActiveTab] = useState<'gems' | 'shards'>('gems');
   const [viewMode, setViewMode] = useState<'grid' | 'dictionary'>('dictionary');
@@ -50,7 +53,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
   const [selectedLangs, setSelectedLangs] = useState<string[]>([]); // Empty means 'All'
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
-  const [isScrolled, setIsScrolled] = useState(false);
+  
   const [selectedVocabIds, setSelectedVocabIds] = useState<Set<string>>(new Set());
   const [isBulkLanguageModalOpen, setIsBulkLanguageModalOpen] = useState(false);
   
@@ -58,9 +61,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const filterRef = useRef<HTMLDivElement>(null);
 
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    setIsScrolled(e.currentTarget.scrollTop > 10);
-  };
+  
 
   // Close filter menu when clicking outside
   useEffect(() => {
@@ -239,7 +240,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
   return (
     <div 
       ref={containerRef}
-      onScroll={handleScroll}
+      
       className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 animate-in fade-in duration-700 relative"
     >
       <header className="mb-8 text-left">
@@ -248,11 +249,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
       </header>
 
       {/* Sticky Search & Controls Bar */}
-      <div className={`sticky top-0 transition-all duration-300 py-4 mb-8 border-b -mx-4 px-4 md:-mx-8 md:px-8 ${
-        isScrolled ? 'shadow-sm border-slate-200/80' : 'border-transparent'
-      } ${
-        isFilterOpen ? 'bg-white/60 backdrop-blur-sm' : 'bg-white/95 backdrop-blur-md'
-      } ${isMenuOpen ? 'opacity-30 grayscale pointer-events-none' : 'opacity-100'}`}>
+      <div className={`sticky top-0 z-50 bg-white/95 backdrop-blur-md transition-all duration-300 py-4 border-b border-slate-200/80 shadow-sm -mx-4 px-4 md:-mx-8 md:px-8 ${isMenuOpen ? 'opacity-30 grayscale pointer-events-none' : 'opacity-100'}`}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 md:gap-4">
           <div className={`w-full sm:flex-1 flex items-center space-x-3 px-4 py-2.5 rounded-2xl border transition-all duration-200 ${
             isFilterOpen 
@@ -382,7 +379,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
       </div>
 
       {/* Items List/Grid */}
-      <div key={`${activeTab}-${selectedLangs.join('-')}-${viewMode}-${searchQuery}-${sortMode}`} className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div key={`${activeTab}-${selectedLangs.join('-')}-${viewMode}-${searchQuery}-${sortMode}`} className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
         {activeTab === 'gems' ? (
           viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -446,7 +443,14 @@ const VocabListView: React.FC<VocabListViewProps> = ({
                         <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-8 items-center">
                           <div className="flex items-center space-x-3">
                             <div className="flex flex-col">
-                              <h4 className="text-lg font-black text-slate-900 serif-font tracking-tight" dangerouslySetInnerHTML={{ __html: renderRuby(gem.word) }}></h4>
+                              <h4
+                              className={`text-lg font-black text-slate-900 serif-font tracking-tight ${viewMode === 'dictionary' ? 'leading-tight' : 'leading-relaxed'}`}
+                              dangerouslySetInnerHTML={{
+                                __html: viewMode === 'dictionary' ? stripRuby(gem.word) : renderRuby(gem.word),
+                              }}
+                              data-tooltip-id="vocab-tooltip"
+                              data-tooltip-content={renderRuby(gem.word)}
+                            ></h4>
                               {gem.phonetic && (
                                 <span className="text-[10px] text-slate-400 font-mono tracking-wider">{gem.phonetic}</span>
                               )}
@@ -613,9 +617,10 @@ const VocabListView: React.FC<VocabListViewProps> = ({
                      {f.fragmentType === 'seed' && (
                        <button 
                          onClick={() => onPromoteFragment?.(f.id)}
-                         className="w-full text-[9px] font-black text-indigo-600 bg-indigo-50 py-2 rounded-xl uppercase tracking-widest hover:bg-indigo-100 transition-colors border border-indigo-100"
+                         disabled={promotingFragmentId === f.id}
+                         className="w-full text-[9px] font-black text-indigo-600 bg-indigo-50 py-2 rounded-xl uppercase tracking-widest hover:bg-indigo-100 transition-colors border border-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
                        >
-                         💎 升级为珍宝
+                         {promotingFragmentId === f.id ? '转化中...' : '💎 升级为珍宝'}
                        </button>
                      )}
                    </div>
@@ -659,6 +664,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
       )}
 
       {/* Bulk Language Modal */}
+      <Tooltip id="vocab-tooltip" className="z-[100] !bg-slate-900 !text-white !text-base !px-4 !py-2 !rounded-xl !shadow-lg" />
       {isBulkLanguageModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsBulkLanguageModalOpen(false)}></div>

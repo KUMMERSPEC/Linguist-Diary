@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { RehearsalEvaluation } from '../types';
+import { RehearsalEvaluation, AdvancedVocab } from '../types';
 import { generateDiaryAudio } from '../services/geminiService';
 import { decode, decodeAudioData } from '../utils/audioHelpers';
 
@@ -9,11 +9,13 @@ interface RehearsalReportProps {
   language: string;
   date: string;
   onBack: () => void;
+  onSaveVocab: (vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>) => Promise<void>;
 }
 
-const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language, date, onBack }) => {
+const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language, date, onBack, onSaveVocab }) => {
   const [isPlaying, setIsPlaying] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'diff' | 'final'>('diff');
+  const [savedGems, setSavedGems] = useState<Set<string>>(new Set());
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   const renderRuby = (text?: string) => {
@@ -85,6 +87,33 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl -mr-48 -mt-48 pointer-events-none"></div>
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 relative z-10">
+          {/* Detailed Content Column */}
+          <div className="lg:col-span-8 space-y-8">
+            <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/5 relative group">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">源文物对照 SOURCE ARTIFACT</h4>
+                <button onClick={() => handlePlayAudio(evaluation.sourceText || "", 'source')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isPlaying === 'source' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-slate-400 hover:text-white'}`}>{isPlaying === 'source' ? '⏹' : '🎧'}</button>
+              </div>
+              <p className="text-base md:text-lg text-slate-400 leading-[1.8] serif-font italic opacity-60">“ {renderRuby(evaluation.sourceText || "")} ”</p>
+            </div>
+
+            <div className="bg-white/10 p-8 md:p-12 rounded-[3rem] border border-white/10 shadow-inner relative group flex-1">
+              <div className="flex items-center justify-between mb-6">
+                <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">复述打磨记录 RESTORED VERSION</h4>
+                <div className="flex items-center space-x-4">
+                  <div className="flex bg-white/5 p-1 rounded-xl">
+                    <button onClick={() => setViewMode('diff')} className={`px-4 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${viewMode === 'diff' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>对比</button>
+                    <button onClick={() => setViewMode('final')} className={`px-4 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${viewMode === 'final' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>最终</button>
+                  </div>
+                  <button onClick={() => handlePlayAudio(evaluation.suggestedVersion || "", 'suggested')} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isPlaying === 'suggested' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-slate-400 hover:text-white'}`}>{isPlaying === 'suggested' ? '⏹' : '🎧'}</button>
+                </div>
+              </div>
+              <div className="italic min-h-[150px]">
+                {viewMode === 'diff' ? renderDiffText(evaluation.diffedRetelling) : <p className="text-lg md:text-xl leading-[2.5] text-slate-100 serif-font italic">{renderRuby(evaluation.suggestedVersion)}</p>}
+              </div>
+            </div>
+          </div>
+
           {/* Stats Column */}
           <div className="lg:col-span-4 space-y-8">
             <div className="grid grid-cols-2 gap-4">
@@ -115,9 +144,6 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
               </div>
             </div>
           </div>
-
-          {/* Detailed Content Column */}
-          <div className="lg:col-span-8 space-y-8">
             <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/5 relative group">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">源文物对照 SOURCE ARTIFACT</h4>
@@ -140,8 +166,37 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
               <div className="italic min-h-[150px]">
                 {viewMode === 'diff' ? renderDiffText(evaluation.diffedRetelling) : <p className="text-lg md:text-xl leading-[2.5] text-slate-100 serif-font italic">{renderRuby(evaluation.suggestedVersion)}</p>}
               </div>
+
+              {evaluation.recommendedGems && evaluation.recommendedGems.length > 0 && (
+                <div className="mt-6 pt-6 border-t border-white/10">
+                  <h4 className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-4">入馆推荐 RECOMMENDED GEMS</h4>
+                  <div className="space-y-3">
+                    {evaluation.recommendedGems.map((gem, index) => {
+                      const isSaved = savedGems.has(gem.word);
+                      return (
+                        <div key={index} className="bg-white/5 p-4 rounded-2xl flex items-center justify-between">
+                          <div>
+                            <h5 className="font-bold text-white">{gem.word}</h5>
+                            <p className="text-xs text-slate-300">{gem.meaning}</p>
+                            <p className="text-xs text-slate-400 italic mt-1">e.g., "{gem.usage}"</p>
+                          </div>
+                          <button 
+                            onClick={async () => {
+                              await onSaveVocab({ word: gem.word, meaning: gem.meaning, usage: gem.usage, language, level: 'Intermediate', timestamp: Date.now() });
+                              setSavedGems(prev => new Set(prev).add(gem.word));
+                            }}
+                            disabled={isSaved}
+                            className="text-xs font-bold px-3 py-1 rounded-lg bg-indigo-500 text-white disabled:bg-emerald-500 disabled:opacity-70 transition-colors"
+                          >
+                            {isSaved ? '已收藏' : '收藏'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
         </div>
       </div>
     </div>

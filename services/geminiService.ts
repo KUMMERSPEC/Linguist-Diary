@@ -271,7 +271,19 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
             qualityScore: { type: Type.NUMBER },
             contentFeedback: { type: Type.STRING },
             languageFeedback: { type: Type.STRING },
-            suggestedVersion: { type: Type.STRING }
+            suggestedVersion: { type: Type.STRING },
+            recommendedGems: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  word: { type: Type.STRING },
+                  meaning: { type: Type.STRING },
+                  usage: { type: Type.STRING }
+                },
+                required: ["word", "meaning", "usage"]
+              }
+            }
           },
           required: ["accuracyScore", "qualityScore", "contentFeedback", "languageFeedback", "suggestedVersion"]
         }
