@@ -13,17 +13,32 @@ interface VocabPracticeDetailViewProps {
   onBackToPracticeHistory: () => void;
   onDeletePractice?: (vocabId: string, practiceId: string) => void;
   onBatchDeletePractices?: (vocabId: string, practiceIds: string[]) => void;
+  onUpdateLanguage?: (vocabId: string, language: string) => void;
+  preferredLanguages?: string[];
 }
+
+const LANGUAGE_FLAGS: Record<string, string> = {
+  'English': '🇬🇧',
+  'Japanese': '🇯🇵',
+  'French': '🇫🇷',
+  'Spanish': '🇪🇸',
+  'Chinese': '🇨🇳',
+  'Korean': '🇰🇷',
+  'German': '🇩🇪',
+};
 
 const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
   selectedVocabId,
   allAdvancedVocab,
   onBackToPracticeHistory,
   onDeletePractice,
-  onBatchDeletePractices
+  onBatchDeletePractices,
+  onUpdateLanguage,
+  preferredLanguages = []
 }) => {
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [isManageMode, setIsManageMode] = useState(false);
+  const [isLanguagePickerOpen, setIsLanguagePickerOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [localPractices, setLocalPractices] = useState<PracticeRecord[]>([]);
   const [isLoadingPractices, setIsLoadingPractices] = useState(false);
@@ -171,10 +186,37 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
                 {isManageMode ? '退出管理' : '批量管理'}
               </button>
             )}
-           <div className={`px-4 py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest flex items-center space-x-2 border shadow-sm ${getMasteryColor(currentVocab.mastery)}`}>
-               <span>{getMasteryIcon(currentVocab.mastery)} Mastery {currentVocab.mastery || 0}</span>
-               <span>|</span>
-               <span>{currentVocab.language}</span>
+           <div className="relative">
+             <button 
+               onClick={() => setIsLanguagePickerOpen(!isLanguagePickerOpen)}
+               className={`px-4 py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest flex items-center space-x-2 border shadow-sm transition-all hover:border-indigo-300 ${getMasteryColor(currentVocab.mastery)}`}
+             >
+                 <span>{getMasteryIcon(currentVocab.mastery)} Mastery {currentVocab.mastery || 0}</span>
+                 <span>|</span>
+                 <span>{LANGUAGE_FLAGS[currentVocab.language] || '🌐'} {currentVocab.language}</span>
+                 <span className="text-[8px] opacity-40">▼</span>
+             </button>
+
+             {isLanguagePickerOpen && (
+               <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 p-2 z-50 animate-in slide-in-from-top-2">
+                 <div className="px-3 py-2 border-b border-slate-50 mb-1">
+                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">修改归属语言</span>
+                 </div>
+                 {preferredLanguages.map(lang => (
+                   <button
+                     key={lang}
+                     onClick={() => {
+                       onUpdateLanguage?.(currentVocab.id, lang);
+                       setIsLanguagePickerOpen(false);
+                     }}
+                     className={`w-full flex items-center space-x-3 p-3 rounded-xl transition-colors ${currentVocab.language === lang ? 'bg-indigo-50 text-indigo-600' : 'hover:bg-slate-50 text-slate-700'}`}
+                   >
+                     <span className="text-base">{LANGUAGE_FLAGS[lang] || '🌐'}</span>
+                     <span className="text-xs font-bold">{lang}</span>
+                   </button>
+                 ))}
+               </div>
+             )}
            </div>
         </div>
       </header>

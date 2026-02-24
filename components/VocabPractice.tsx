@@ -29,6 +29,19 @@ interface VocabPracticeProps {
   nextVocabId?: string;
 }
 
+interface SessionResult {
+  wordId: string;
+  word: string;
+  input: string;
+  language: string;
+  isCorrect?: boolean;
+  feedback?: string;
+  betterVersion?: string;
+  keyPhrases?: { phrase: string, explanation: string }[];
+  status?: 'Perfect' | 'Polished' | 'Pending';
+  timestamp: number;
+}
+
 const VocabPractice: React.FC<VocabPracticeProps> = ({
   selectedVocabId,
   allAdvancedVocab,
@@ -45,6 +58,8 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
   const [isValidating, setIsValidating] = useState(false);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
+  const [sessionResults, setSessionResults] = useState<Record<string, SessionResult>>({});
+  const [showSummary, setShowSummary] = useState(false);
   const [lastFeedback, setLastFeedback] = useState<{ 
     isCorrect: boolean; 
     feedback: string; 
@@ -54,11 +69,11 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   const [savedPhrases, setSavedPhrases] = useState<Set<string>>(new Set());
   const [loadingMessage, setLoadingMessage] = useState('');
-  const [streamingText, setStreamingText] = useState('');
   const [partialFeedback, setPartialFeedback] = useState('');
   const [partialBetterVersion, setPartialBetterVersion] = useState('');
 
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const validationRequestsRef = useRef<Set<string>>(new Set());
 
   const currentVocab = useMemo(() => {
     return allAdvancedVocab.find(v => v.id === selectedVocabId || `${v.word}-${v.language}` === selectedVocabId);
@@ -142,14 +157,31 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
     
     const inputToValidate = practiceInput;
     const vocabToValidate = currentVocab;
+    const requestId = `${vocabToValidate.id}-${Date.now()}`;
     
-    // 1. Locally mark as "done" or "submitting" and move to next if in queue
-    // We don't have a "done" status in AdvancedVocab, but we can trigger the next item
+    // Initialize session result as pending
+    setSessionResults(prev => ({
+      ...prev,
+      [vocabToValidate.id]: {
+        wordId: vocabToValidate.id,
+        word: vocabToValidate.word,
+        input: inputToValidate,
+        language: vocabToValidate.language,
+        status: 'Pending',
+        timestamp: Date.now()
+      }
+    }));
+
+    // 1. Check if we should move to next or show summary
     if (onNextInQueue && queueProgress && queueProgress.current < queueProgress.total) {
       // Move to next item immediately
       onNextInQueue();
+      setPracticeInput('');
+    } else if (queueProgress && queueProgress.current === queueProgress.total) {
+      // Last item in queue, show summary report
+      setShowSummary(true);
     } else {
-      // If last item, maybe just show a "Submitting..." state or go back
+      // Single item practice, stay and show result
       setIsValidating(true);
       setLoadingMessage("正在后台评估你的最后一件珍宝...");
     }
@@ -167,6 +199,11 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
 
         for await (const chunk of stream) {
           accumulatedText += chunk;
+          // Update partial feedback only if we are still on this vocab
+          if (selectedVocabId === vocabToValidate.id) {
+             // Try to parse partial JSON if possible for better UX
+             // (Simplified for now, full parse happens at end)
+          }
         }
 
         const result = JSON.parse(accumulatedText);
@@ -193,14 +230,35 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
         
         onUpdateMastery(vocabToValidate.id, vocabToValidate.word, newMastery, record);
         
-        // If we were showing the "last item" loading state
-        if (!onNextInQueue || (queueProgress && queueProgress.current === queueProgress.total)) {
+        // Update session results with final data
+        setSessionResults(prev => ({
+          ...prev,
+          [vocabToValidate.id]: {
+            ...prev[vocabToValidate.id],
+            isCorrect: result.isCorrect,
+            feedback: result.feedback,
+            betterVersion: result.betterVersion,
+            keyPhrases: result.keyPhrases,
+            status: status === 'Perfect' ? 'Perfect' : 'Polished'
+          }
+        }));
+
+        // If we were showing the "last item" loading state for single item
+        if (!onNextInQueue || (!queueProgress)) {
           setLastFeedback(result);
           setIsValidating(false);
         }
       } catch (e) { 
         console.error("Background validation error:", e);
-        if (!onNextInQueue || (queueProgress && queueProgress.current === queueProgress.total)) {
+        setSessionResults(prev => ({
+          ...prev,
+          [vocabToValidate.id]: {
+            ...prev[vocabToValidate.id],
+            status: 'Polished', // Fallback
+            feedback: "评估过程中出现异常，请稍后查看。"
+          }
+        }));
+        if (!onNextInQueue || (!queueProgress)) {
           setIsValidating(false);
           alert("评估失败，请检查网络。");
         }
@@ -208,21 +266,123 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
     })();
   };
 
-  const handleSavePhrase = async (phrase: string, explanation: string) => {
-    if (savedPhrases.has(phrase)) return;
-    try {
-      await onSaveFragment(
-        phrase, 
-        currentVocab.language, 
-        'seed',
-        `打磨笔记：${explanation}`, 
-        `源自打磨语境：${lastFeedback?.betterVersion || practiceInput}`
-      );
-      setSavedPhrases(prev => new Set(prev).add(phrase));
-    } catch (e) {
-      alert("保存碎片失败。");
+  const handleCollectAllGems = async () => {
+    const results = Object.values(sessionResults).filter(r => r.keyPhrases && r.keyPhrases.length > 0);
+    let count = 0;
+    for (const res of results) {
+      if (res.keyPhrases) {
+        for (const kp of res.keyPhrases) {
+          if (!savedPhrases.has(kp.phrase)) {
+            try {
+              await onSaveFragment(
+                kp.phrase, 
+                res.language, 
+                'seed',
+                `打磨笔记：${kp.explanation}`, 
+                `源自打磨总结：${res.betterVersion || res.input}`
+              );
+              setSavedPhrases(prev => new Set(prev).add(kp.phrase));
+              count++;
+            } catch (e) {
+              console.error("Failed to save gem:", kp.phrase);
+            }
+          }
+        }
+      }
     }
+    if (count > 0) alert(`成功收藏 ${count} 个建议表达！`);
   };
+
+  if (showSummary) {
+    const resultsArray = Object.values(sessionResults).sort((a, b) => a.timestamp - b.timestamp);
+    const pendingCount = resultsArray.filter(r => r.status === 'Pending').length;
+
+    return (
+      <div className="flex flex-col h-full animate-in fade-in duration-500 overflow-hidden w-full relative p-4 md:p-8">
+        <header className="flex flex-col md:flex-row md:items-center justify-between mb-8 shrink-0">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-bold text-slate-900 serif-font tracking-tight">练习结算报告 <span className="text-indigo-600">Summary</span></h2>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">SESSION COMPLETED</p>
+          </div>
+          <div className="flex items-center space-x-3 mt-4 md:mt-0">
+            <button 
+              onClick={handleCollectAllGems}
+              className="bg-emerald-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95"
+            >
+              💎 全部收藏建议表达
+            </button>
+            <button 
+              onClick={onBackToVocabList}
+              className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-slate-800 transition-all active:scale-95"
+            >
+              返回主页 DONE
+            </button>
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto no-scrollbar space-y-6 pb-20">
+          {pendingCount > 0 && (
+            <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex items-center justify-between animate-pulse">
+              <div className="flex items-center space-x-3">
+                <div className="w-2 h-2 bg-indigo-600 rounded-full animate-ping"></div>
+                <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">还有 {pendingCount} 个单词正在后台评估中...</span>
+              </div>
+            </div>
+          )}
+
+          {resultsArray.map((res, idx) => (
+            <div key={res.wordId} className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden animate-in slide-in-from-bottom-4" style={{ animationDelay: `${idx * 100}ms` }}>
+              <div className="p-6 md:p-8 flex flex-col md:flex-row gap-6">
+                <div className="md:w-1/4 shrink-0">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest">WORD</span>
+                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${res.status === 'Perfect' ? 'bg-emerald-100 text-emerald-600' : res.status === 'Pending' ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}>
+                      {res.status}
+                    </span>
+                  </div>
+                  <h4 className="text-xl font-black text-slate-900 serif-font" dangerouslySetInnerHTML={{ __html: rubyUtil(res.word) }}></h4>
+                </div>
+                
+                <div className="flex-1 space-y-4">
+                  <div>
+                    <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest block mb-1">你的尝试 YOUR ATTEMPT</span>
+                    <p className="text-slate-600 text-sm italic serif-font">“ {res.input} ”</p>
+                  </div>
+
+                  {res.status === 'Pending' ? (
+                    <div className="space-y-2">
+                      <div className="h-4 bg-slate-50 rounded-full w-full animate-pulse"></div>
+                      <div className="h-4 bg-slate-50 rounded-full w-2/3 animate-pulse"></div>
+                    </div>
+                  ) : (
+                    <>
+                      {res.betterVersion && (
+                        <div className="bg-slate-900 p-5 rounded-2xl text-white relative">
+                          <span className="text-[7px] font-black text-indigo-400 uppercase block mb-2">AI 优化建议 REFINED</span>
+                          <p className="serif-font italic text-base leading-relaxed">{renderRuby(res.betterVersion)}</p>
+                          <button 
+                            onClick={() => handlePlayAudio(res.betterVersion!, `summary-${res.wordId}`)}
+                            className="absolute bottom-4 right-4 text-slate-400 hover:text-white transition-colors"
+                          >
+                            {playingAudioId === `summary-${res.wordId}` ? '⏹' : '🎧'}
+                          </button>
+                        </div>
+                      )}
+                      {res.feedback && (
+                        <p className="text-[11px] text-slate-500 leading-relaxed border-l-2 border-slate-100 pl-4 italic">
+                          {res.feedback}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   const handleNext = () => {
     if (onNextInQueue) {

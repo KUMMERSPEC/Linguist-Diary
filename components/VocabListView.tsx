@@ -5,6 +5,8 @@ import { AdvancedVocab, PracticeRecord, ViewState, InspirationFragment } from '.
 import { generateDiaryAudio } from '../services/geminiService';
 import { decode, decodeAudioData } from '../utils/audioHelpers';
 import { renderRuby, stripRuby } from '../utils/textHelpers';
+import { db } from '../firebase';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 
 interface VocabListViewProps {
   allAdvancedVocab: (AdvancedVocab & { language: string })[];
@@ -15,6 +17,8 @@ interface VocabListViewProps {
   onDeleteFragment?: (id: string) => void;
   onPromoteFragment?: (id: string) => void;
   onPromoteToSeed?: (id: string) => void;
+  isMenuOpen?: boolean;
+  onBulkUpdateLanguage?: (vocabIds: string[], language: string) => void;
 }
 
 const LANGUAGE_FLAGS: Record<string, string> = {
@@ -25,17 +29,38 @@ const LANGUAGE_FLAGS: Record<string, string> = {
   'German': '🇩🇪',
 };
 
-const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragments, onViewChange, onDeleteVocab, onDeleteFragment, onPromoteFragment, onPromoteToSeed }) => {
+const VocabListView: React.FC<VocabListViewProps> = ({ 
+  allAdvancedVocab, 
+  fragments, 
+  onViewChange, 
+  onDeleteVocab, 
+  onDeleteFragment, 
+  onPromoteFragment, 
+  onPromoteToSeed,
+  isMenuOpen,
+  onBulkUpdateLanguage
+}) => {
   const [activeTab, setActiveTab] = useState<'gems' | 'shards'>('gems');
   const [viewMode, setViewMode] = useState<'grid' | 'dictionary'>('dictionary');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortMode, setSortMode] = useState<'date' | 'mastery' | 'language'>('date');
   const [expandedGems, setExpandedGems] = useState<Set<string>>(new Set());
+  const [gemPractices, setGemPractices] = useState<Record<string, PracticeRecord[]>>({});
+  const [loadingPractices, setLoadingPractices] = useState<Set<string>>(new Set());
   const [selectedLangs, setSelectedLangs] = useState<string[]>([]); // Empty means 'All'
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [selectedVocabIds, setSelectedVocabIds] = useState<Set<string>>(new Set());
+  const [isBulkLanguageModalOpen, setIsBulkLanguageModalOpen] = useState(false);
+  
+  const containerRef = useRef<HTMLDivElement>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const filterRef = useRef<HTMLDivElement>(null);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    setIsScrolled(e.currentTarget.scrollTop > 10);
+  };
 
   // Close filter menu when clicking outside
   useEffect(() => {
@@ -51,9 +76,14 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
   // Dynamically extract all unique languages
   const availableLanguages = useMemo(() => {
     const langs = new Set<string>();
-    allAdvancedVocab.forEach(v => langs.add(v.language));
-    fragments.forEach(f => langs.add(f.language));
-    return Array.from(langs).sort();
+    allAdvancedVocab.forEach(v => {
+      if (v.language) langs.add(v.language);
+    });
+    fragments.forEach(f => {
+      if (f.language) langs.add(f.language);
+    });
+    const sorted = Array.from(langs).sort();
+    return ['Unknown', ...sorted];
   }, [allAdvancedVocab, fragments]);
 
   const toggleLanguage = (lang: string) => {
@@ -64,13 +94,36 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
 
   const selectAll = () => setSelectedLangs([]);
 
-  const toggleGemExpansion = (id: string) => {
+  const toggleGemExpansion = async (id: string) => {
+    const isExpanding = !expandedGems.has(id);
+    
     setExpandedGems(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+
+    if (isExpanding && !gemPractices[id] && db) {
+      setLoadingPractices(prev => new Set(prev).add(id));
+      try {
+        const userId = localStorage.getItem('last_user_id');
+        if (userId) {
+          const practicesColRef = collection(db, 'users', userId, 'advancedVocab', id, 'practices');
+          const practicesSnapshot = await getDocs(query(practicesColRef, orderBy('timestamp', 'desc')));
+          const practices = practicesSnapshot.docs.map(pDoc => ({ ...pDoc.data(), id: pDoc.id })) as PracticeRecord[];
+          setGemPractices(prev => ({ ...prev, [id]: practices }));
+        }
+      } catch (e) {
+        console.error("Failed to fetch practices for gem:", id, e);
+      } finally {
+        setLoadingPractices(prev => {
+          const nextLoading = new Set(prev);
+          nextLoading.delete(id);
+          return nextLoading;
+        });
+      }
+    }
   };
 
   const filteredGems = useMemo(() => {
@@ -88,7 +141,12 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
 
     // Language filter
     if (selectedLangs.length > 0) {
-      list = list.filter(g => selectedLangs.includes(g.language));
+      list = list.filter(g => {
+        if (selectedLangs.includes('Unknown')) {
+          return !g.language || g.language === 'Unknown' || selectedLangs.includes(g.language);
+        }
+        return selectedLangs.includes(g.language);
+      });
     }
 
     // Sort
@@ -155,6 +213,23 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
     } catch (e) { setPlayingAudioId(null); }
   };
 
+  const toggleVocabSelection = (id: string) => {
+    setSelectedVocabIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkLanguageChange = (lang: string) => {
+    if (onBulkUpdateLanguage) {
+      onBulkUpdateLanguage(Array.from(selectedVocabIds), lang);
+      setSelectedVocabIds(new Set());
+      setIsBulkLanguageModalOpen(false);
+    }
+  };
+
   const getMasteryTextStyle = (mastery: number | undefined) => {
     const m = mastery || 0;
     if (m >= 4) return 'text-indigo-600';
@@ -162,16 +237,28 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
   };
 
   return (
-    <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 animate-in fade-in duration-700 relative">
+    <div 
+      ref={containerRef}
+      onScroll={handleScroll}
+      className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 animate-in fade-in duration-700 relative"
+    >
       <header className="mb-8 text-left">
         <h2 className="text-3xl md:text-5xl font-black text-slate-900 serif-font tracking-tight">馆藏珍宝 <span className="text-indigo-600">Gems & Shards</span></h2>
         <p className="text-slate-400 text-sm md:text-base mt-2 italic">在这里查看每一件被打磨出的语言珍宝。</p>
       </header>
 
       {/* Sticky Search & Controls Bar */}
-      <div className="sticky top-0 z-50 bg-slate-50/80 backdrop-blur-md py-4 mb-8 border-b border-slate-200/50 -mx-4 px-4 md:-mx-8 md:px-8">
+      <div className={`sticky top-0 transition-all duration-300 py-4 mb-8 border-b -mx-4 px-4 md:-mx-8 md:px-8 ${
+        isScrolled ? 'shadow-sm border-slate-200/80' : 'border-transparent'
+      } ${
+        isFilterOpen ? 'bg-white/60 backdrop-blur-sm' : 'bg-white/95 backdrop-blur-md'
+      } ${isMenuOpen ? 'opacity-30 grayscale pointer-events-none' : 'opacity-100'}`}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 md:gap-4">
-          <div className="w-full sm:flex-1 flex items-center space-x-3 bg-white px-4 py-2.5 rounded-2xl border border-slate-100 shadow-sm focus-within:ring-4 focus-within:ring-indigo-500/5 transition-all">
+          <div className={`w-full sm:flex-1 flex items-center space-x-3 px-4 py-2.5 rounded-2xl border transition-all duration-200 ${
+            isFilterOpen 
+              ? 'bg-slate-100 border-transparent opacity-50 pointer-events-none shadow-none' 
+              : 'bg-white border-slate-100 shadow-sm focus-within:ring-4 focus-within:ring-indigo-500/5'
+          }`}>
             <Search className="w-4 h-4 text-slate-400" />
             <input 
               type="text" 
@@ -179,6 +266,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-medium text-slate-700 placeholder:text-slate-300"
+              disabled={isFilterOpen}
             />
           </div>
 
@@ -340,6 +428,14 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
                       onClick={() => toggleGemExpansion(gem.id)}
                       className="flex items-center px-6 md:px-10 py-5 cursor-pointer"
                     >
+                      <div className="mr-4 md:mr-6 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <input 
+                          type="checkbox" 
+                          checked={selectedVocabIds.has(gem.id)}
+                          onChange={() => toggleVocabSelection(gem.id)}
+                          className="w-4 h-4 rounded border-slate-200 text-indigo-600 focus:ring-indigo-500/20"
+                        />
+                      </div>
                       <div className="flex-1 flex items-center space-x-4 md:space-x-8">
                         <div className="w-12 md:w-16 shrink-0 flex items-center space-x-2">
                           <span className="text-base">{LANGUAGE_FLAGS[gem.language] || '🌐'}</span>
@@ -422,9 +518,14 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
                               </button>
                             </div>
                             
-                            {gem.practices && gem.practices.length > 0 ? (
+                            {loadingPractices.has(gem.id) ? (
+                              <div className="flex items-center space-x-2 py-2">
+                                <div className="w-3 h-3 border-2 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
+                                <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest">正在调取足迹...</span>
+                              </div>
+                            ) : (gemPractices[gem.id] || gem.practices) && (gemPractices[gem.id] || gem.practices)!.length > 0 ? (
                               <div className="space-y-3">
-                                {gem.practices.slice(0, 3).map((p, idx) => (
+                                {(gemPractices[gem.id] || gem.practices)!.slice(0, 3).map((p, idx) => (
                                   <div key={p.id || idx} className="flex items-start space-x-3 group/sentence">
                                     <span className="text-indigo-300 text-xs mt-1">✦</span>
                                     <div className="flex-1">
@@ -532,6 +633,58 @@ const VocabListView: React.FC<VocabListViewProps> = ({ allAdvancedVocab, fragmen
           </div>
         )}
       </div>
+
+      {/* Bulk Action Bar */}
+      {selectedVocabIds.size > 0 && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-8 py-5 rounded-[2.5rem] shadow-2xl flex items-center space-x-8 z-[60] animate-in slide-in-from-bottom-10">
+           <div className="flex flex-col">
+             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">SELECTED</span>
+             <span className="text-lg font-bold">{selectedVocabIds.size} 项珍宝</span>
+           </div>
+           <div className="flex items-center space-x-3">
+             <button 
+               onClick={() => setIsBulkLanguageModalOpen(true)}
+               className="bg-indigo-600 text-white px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-xl shadow-indigo-600/20 active:scale-95"
+             >
+               修改语种
+             </button>
+             <button 
+               onClick={() => setSelectedVocabIds(new Set())}
+               className="text-slate-400 hover:text-white text-[9px] font-black uppercase tracking-widest px-4"
+             >
+               取消
+             </button>
+           </div>
+        </div>
+      )}
+
+      {/* Bulk Language Modal */}
+      {isBulkLanguageModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsBulkLanguageModalOpen(false)}></div>
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl relative z-10 animate-in zoom-in-95 duration-300">
+            <h3 className="text-xl font-black text-slate-900 serif-font mb-6">批量修改语种</h3>
+            <div className="grid grid-cols-2 gap-3 mb-8">
+              {availableLanguages.filter(l => l !== 'Unknown').map(lang => (
+                <button
+                  key={lang}
+                  onClick={() => handleBulkLanguageChange(lang)}
+                  className="flex items-center space-x-3 p-4 rounded-2xl border border-slate-100 hover:bg-indigo-50 hover:border-indigo-100 transition-all group"
+                >
+                  <span className="text-xl group-hover:scale-110 transition-transform">{LANGUAGE_FLAGS[lang] || '🌐'}</span>
+                  <span className="text-xs font-bold text-slate-700">{lang}</span>
+                </button>
+              ))}
+            </div>
+            <button 
+              onClick={() => setIsBulkLanguageModalOpen(false)}
+              className="w-full py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest hover:text-slate-600"
+            >
+              取 消
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

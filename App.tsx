@@ -74,6 +74,7 @@ const App: React.FC = () => {
   const [allAdvancedVocab, setAllAdvancedVocab] = useState<AdvancedVocab[]>([]); 
   const [selectedVocabForPracticeId, setSelectedVocabForPracticeId] = useState<string | null>(null);
   const [isPracticeActive, setIsPracticeActive] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const [practiceQueue, setPracticeQueue] = useState<string[]>([]);
   const [queueIndex, setQueueIndex] = useState(-1);
@@ -746,6 +747,34 @@ const App: React.FC = () => {
     } else { await updateDoc(doc(db, 'users', user.uid), { 'profile.preferredLanguages': langs }); }
   };
 
+  const handleUpdateVocabLanguage = async (vocabId: string, language: string) => {
+    if (!user) return;
+    setAllAdvancedVocab(prev => prev.map(v => v.id === vocabId ? { ...v, language } : v));
+    if (!db || user.isMock) {
+      const localVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
+      const updated = localVocab.map((v: any) => v.id === vocabId ? { ...v, language } : v);
+      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
+    } else {
+      await updateDoc(doc(db, 'users', user.uid, 'advancedVocab', vocabId), { language });
+    }
+  };
+
+  const handleBulkUpdateVocabLanguage = async (vocabIds: string[], language: string) => {
+    if (!user) return;
+    setAllAdvancedVocab(prev => prev.map(v => vocabIds.includes(v.id) ? { ...v, language } : v));
+    if (!db || user.isMock) {
+      const localVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
+      const updated = localVocab.map((v: any) => vocabIds.includes(v.id) ? { ...v, language } : v);
+      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
+    } else {
+      const batch = writeBatch(db);
+      vocabIds.forEach(id => {
+        batch.update(doc(db, 'users', user.uid, 'advancedVocab', id), { language });
+      });
+      await batch.commit();
+    }
+  };
+
   const handleViewChange = (v: ViewState, vocabId?: string, isPracticeActive?: boolean) => {
     setView(v);
     if (vocabId) setSelectedVocabForPracticeId(vocabId);
@@ -858,14 +887,14 @@ const App: React.FC = () => {
   };
 
   return (
-    <Layout activeView={view} onViewChange={handleViewChange} user={user} onLogout={handleLogout}>
+    <Layout activeView={view} onViewChange={handleViewChange} user={user} onLogout={handleLogout} isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen}>
       {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartSmartReview} entries={entries} allAdvancedVocab={allAdvancedVocab} recommendedIteration={recommendedIteration} onStartIteration={handleStartIteration} onSaveFragment={handleSaveFragment} />}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraft} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} fragments={fragments} onDeleteFragment={handleDeleteFragment} preferredLanguages={preferredLanguages} partialAnalysis={partialAnalysis} />}
       {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} allAdvancedVocab={allAdvancedVocab} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isExistingEntry={isReviewingExisting} />}
       {/* // FIX: Updated function name from handleUpdateLanguage to handleUpdateEntryLanguage */}
-      {view === 'history' && <History entries={entries} isAnalyzingId={analyzingId} onAnalyzeDraft={handleAnalyzeExistingEntry} onUpdateLanguage={handleUpdateEntryLanguage} onSelect={(e) => { setCurrentEntry(e); setIsReviewingExisting(true); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); setEntries(prev => prev.filter(e => e.id !== id)); }} onRewrite={(e) => { handleStartIteration(e); }} preferredLanguages={preferredLanguages} />}
+      {view === 'history' && <History entries={entries} isAnalyzingId={analyzingId} onAnalyzeDraft={handleAnalyzeExistingEntry} onUpdateLanguage={handleUpdateEntryLanguage} onSelect={(e) => { setCurrentEntry(e); setIsReviewingExisting(true); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); setEntries(prev => prev.filter(e => e.id !== id)); }} onRewrite={(e) => { handleStartIteration(e); }} preferredLanguages={preferredLanguages} isMenuOpen={isMenuOpen} />}
       {view === 'chat' && <ChatEditor onFinish={(msgs, lang, summary) => { setChatLanguage(lang); setPrefilledEditorText(''); setSummaryPrompt(summary); setView('editor'); }} allGems={allAdvancedVocab} preferredLanguages={preferredLanguages} />}
-      {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} fragments={fragments} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} onDeleteVocab={handleDeleteVocab} onDeleteFragment={handleDeleteFragment} onPromoteFragment={handlePromoteFragment} onPromoteToSeed={handlePromoteToSeed} />}
+      {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} fragments={fragments} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} onDeleteVocab={handleDeleteVocab} onDeleteFragment={handleDeleteFragment} onPromoteFragment={handlePromoteFragment} onPromoteToSeed={handlePromoteToSeed} isMenuOpen={isMenuOpen} onBulkUpdateLanguage={handleBulkUpdateVocabLanguage} />}
       {view === 'vocab_practice' && selectedVocabForPracticeId && (
         <VocabPractice 
           selectedVocabId={selectedVocabForPracticeId} 
@@ -889,7 +918,7 @@ const App: React.FC = () => {
         />
       )}
       {view === 'vocab_practice_detail' && selectedVocabForPracticeId && (
-        <VocabPracticeDetailView selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onBackToPracticeHistory={() => setView('vocab_list')} />
+        <VocabPracticeDetailView selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onBackToPracticeHistory={() => setView('vocab_list')} onUpdateLanguage={handleUpdateVocabLanguage} preferredLanguages={preferredLanguages} />
       )}
       {view === 'rehearsal' && <Rehearsal allAdvancedVocab={allAdvancedVocab} preferredLanguages={preferredLanguages} />}
       {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} />}

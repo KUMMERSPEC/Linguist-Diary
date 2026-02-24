@@ -12,6 +12,7 @@ interface HistoryProps {
   onUpdateLanguage?: (id: string, language: string) => void; 
   isAnalyzingId?: string | null; 
   preferredLanguages: string[];
+  isMenuOpen?: boolean;
 }
 
 const LANGUAGES = [
@@ -22,11 +23,16 @@ const LANGUAGES = [
   { code: 'German', label: 'Deutsch', flag: '🇩🇪' },
 ];
 
-const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrite, onAnalyzeDraft, onUpdateLanguage, isAnalyzingId, preferredLanguages }) => {
+const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrite, onAnalyzeDraft, onUpdateLanguage, isAnalyzingId, preferredLanguages, isMenuOpen }) => {
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('All');
   const [fixingEntryId, setFixingEntryId] = useState<string | null>(null);
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    setIsScrolled(e.currentTarget.scrollTop > 10);
+  };
 
   // Calendar States
   const [calendarDate, setCalendarDate] = useState(new Date());
@@ -201,51 +207,58 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
   );
 
   return (
-    <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-8">
-      <header className="space-y-6 border-b border-slate-200 pb-8">
+    <div 
+      onScroll={handleScroll}
+      className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-8"
+    >
+      <header className="space-y-6">
         <div>
           <h2 className="text-3xl md:text-5xl font-black text-slate-900 serif-font">馆藏精品 Collection Exhibit</h2>
           <p className="text-slate-500 mt-2 text-sm md:text-base italic">在这里，每一行文字都见证了您的语言演化之路。</p>
         </div>
         
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row items-center gap-3">
-            <div className="relative group w-full sm:w-auto">
-              <select 
-                value={selectedLanguage} 
-                onChange={(e) => setSelectedLanguage(e.target.value)} 
-                className="appearance-none w-full sm:w-auto p-3.5 pl-5 pr-12 bg-white border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 transition-all outline-none"
-              >
-                {filterLanguages.map(l => <option key={l} value={l}>{l === 'All' ? '🎨 全部语言' : l}</option>)}
-              </select>
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-300">▼</div>
+        <div className={`sticky top-0 transition-all duration-300 py-4 -mx-4 px-4 md:-mx-8 md:px-8 border-b ${
+          isScrolled ? 'bg-white/95 backdrop-blur-md shadow-sm border-slate-200/80' : 'bg-transparent border-transparent'
+        } ${isMenuOpen ? 'opacity-30 grayscale pointer-events-none' : 'opacity-100'}`}>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <div className="relative group w-full sm:w-auto">
+                <select 
+                  value={selectedLanguage} 
+                  onChange={(e) => setSelectedLanguage(e.target.value)} 
+                  className="appearance-none w-full sm:w-auto p-3.5 pl-5 pr-12 bg-white border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 transition-all outline-none"
+                >
+                  {filterLanguages.map(l => <option key={l} value={l}>{l === 'All' ? '🎨 全部语言' : l}</option>)}
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-300">▼</div>
+              </div>
+              <div className="relative w-full sm:flex-1 sm:max-w-xs">
+                <input 
+                  type="text" 
+                  placeholder="搜寻馆藏记忆..." 
+                  value={searchQuery} 
+                  onChange={(e) => setSearchQuery(e.target.value)} 
+                  className="p-3.5 pl-10 pr-5 bg-white border border-slate-200 rounded-2xl text-xs font-medium w-full shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 transition-all outline-none" 
+                />
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 opacity-30">🔍</span>
+              </div>
             </div>
-            <div className="relative w-full sm:flex-1 sm:max-w-xs">
-              <input 
-                type="text" 
-                placeholder="搜寻馆藏记忆..." 
-                value={searchQuery} 
-                onChange={(e) => setSearchQuery(e.target.value)} 
-                className="p-3.5 pl-10 pr-5 bg-white border border-slate-200 rounded-2xl text-xs font-medium w-full shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 transition-all outline-none" 
-              />
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 opacity-30">🔍</span>
-            </div>
-          </div>
 
-          <div className="flex justify-start">
-            <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shadow-inner">
-              <button 
-                onClick={() => setViewMode('list')}
-                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${viewMode === 'list' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                列表
-              </button>
-              <button 
-                onClick={() => setViewMode('calendar')}
-                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${viewMode === 'calendar' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                日历
-              </button>
+            <div className="flex justify-start">
+              <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shadow-inner">
+                <button 
+                  onClick={() => setViewMode('list')}
+                  className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${viewMode === 'list' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  列表
+                </button>
+                <button 
+                  onClick={() => setViewMode('calendar')}
+                  className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${viewMode === 'calendar' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  日历
+                </button>
+              </div>
             </div>
           </div>
         </div>

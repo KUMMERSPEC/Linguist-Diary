@@ -8,11 +8,11 @@ interface LayoutProps {
   onViewChange: (view: ViewState, vocabId?: string) => void;
   user: { displayName?: string | null, photoURL?: string | null };
   onLogout: () => void;
+  isMenuOpen: boolean;
+  setIsMenuOpen: (open: boolean) => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, user, onLogout }) => {
-  const [isPracticeMenuOpen, setIsPracticeMenuOpen] = useState(false);
-
+const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, user, onLogout, isMenuOpen, setIsMenuOpen }) => {
   const getNavLinkClass = (viewName: ViewState | ViewState[]) => {
     const isActive = Array.isArray(viewName)
       ? viewName.includes(activeView)
@@ -27,7 +27,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
   const NavItem = ({ view, label, icon }: { view: ViewState | ViewState[]; label: string; icon: string }) => (
     <button onClick={() => {
       onViewChange(Array.isArray(view) ? view[0] : view);
-      setIsPracticeMenuOpen(false);
+      setIsMenuOpen(false);
     }} className={getNavLinkClass(view)}>
       <span className="text-xl group-hover:scale-110 transition-transform">{icon}</span>
       <span>{label}</span>
@@ -40,7 +40,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
       <button 
         onClick={() => {
           onViewChange(Array.isArray(views) ? views[0] : views);
-          setIsPracticeMenuOpen(false);
+          setIsMenuOpen(false);
         }}
         className={`flex flex-col items-center justify-center flex-1 py-1 space-y-0.5 transition-all ${isActive ? 'text-indigo-600' : 'text-slate-400'}`}
       >
@@ -101,38 +101,45 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
 
       {/* Main content area */}
       <main className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
-        <div className="flex-1 h-full relative overflow-hidden">
+        <div className="flex-1 h-full relative overflow-hidden z-0">
           {children}
         </div>
 
+        {/* Overlay Backdrop for Menu - Placed here to sit between content and menu */}
+        {isMenuOpen && (
+          <div 
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 animate-in fade-in duration-300" 
+            onClick={() => setIsMenuOpen(false)}
+          ></div>
+        )}
+
         {/* Mobile Bottom Navigation Bar - Optimized for Mobile Screen Bottoms */}
-        <div className="md:hidden shrink-0 bg-white border-t border-slate-100 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+8px)] flex items-center justify-around z-40 shadow-[0_-8px_30px_-10px_rgba(0,0,0,0.12)] overflow-visible min-h-[72px]">
+        <div className="md:hidden shrink-0 bg-white border-t border-slate-100 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+8px)] flex items-center justify-around shadow-[0_-8px_30px_-10px_rgba(0,0,0,0.12)] overflow-visible min-h-[72px] relative">
           <MobileTab views="dashboard" label="主页" icon="🏠" activeIcon="🏠" />
           {/* Swapped: Gems moved to the left of the add button */}
           <MobileTab views={['vocab_list', 'vocab_practice', 'vocab_practice_detail']} label="珍宝" icon="💎" activeIcon="💎" />
           
           <div className="relative flex flex-col items-center justify-center flex-1 h-full overflow-visible min-w-[72px]">
             <button 
-              onClick={() => setIsPracticeMenuOpen(!isPracticeMenuOpen)}
-              className={`w-14 h-14 absolute -top-8 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 z-50 ${isPracticeMenuOpen ? 'bg-indigo-700 text-white rotate-45' : 'bg-indigo-600 text-white'}`}
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className={`w-14 h-14 absolute -top-8 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 z-50 ${isMenuOpen ? 'bg-indigo-700 text-white rotate-45' : 'bg-indigo-600 text-white'}`}
             >
               <span className="text-3xl leading-none">＋</span>
             </button>
             <span className="text-[9px] font-black uppercase tracking-widest mt-6 text-indigo-600">练习</span>
             
-            {isPracticeMenuOpen && (
+            {isMenuOpen && (
               <>
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[45]" onClick={() => setIsPracticeMenuOpen(false)}></div>
                 <div className="absolute bottom-20 left-1/2 -translate-x-1/2 w-48 bg-white rounded-3xl shadow-2xl border border-slate-100 p-2 flex flex-col space-y-1 animate-in slide-in-from-bottom-4 zoom-in-95 z-50">
-                  <button onClick={() => { onViewChange('editor'); setIsPracticeMenuOpen(false); }} className="flex items-center space-x-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors text-slate-700">
+                  <button onClick={() => { onViewChange('editor'); setIsMenuOpen(false); }} className="flex items-center space-x-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors text-slate-700">
                     <span className="text-lg">✍️</span>
                     <span className="text-xs font-bold">自由撰写</span>
                   </button>
-                  <button onClick={() => { onViewChange('chat'); setIsPracticeMenuOpen(false); }} className="flex items-center space-x-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors text-slate-700">
+                  <button onClick={() => { onViewChange('chat'); setIsMenuOpen(false); }} className="flex items-center space-x-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors text-slate-700">
                     <span className="text-lg">💬</span>
                     <span className="text-xs font-bold">启发对话</span>
                   </button>
-                  <button onClick={() => { onViewChange('rehearsal'); setIsPracticeMenuOpen(false); }} className="flex items-center space-x-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors text-slate-700">
+                  <button onClick={() => { onViewChange('rehearsal'); setIsMenuOpen(false); }} className="flex items-center space-x-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors text-slate-700">
                     <span className="text-lg">🎤</span>
                     <span className="text-xs font-bold">展厅演练</span>
                   </button>

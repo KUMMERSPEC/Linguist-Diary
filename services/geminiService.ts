@@ -28,7 +28,7 @@ async function withRetry<T>(fn: (model: string) => Promise<T>, initialModel: str
       
       // If 429, try switching model to a lighter one if we are on the main one
       if (status === 429 && currentModel === 'gemini-3-flash-preview') {
-        currentModel = 'gemini-flash-latest'; // Fallback to standard flash
+        currentModel = 'gemini-flash-lite-latest'; // Fallback to standard flash
       }
 
       if (!isRetryableError(error) || i === maxRetries - 1) throw error;
@@ -148,89 +148,110 @@ export const analyzeDiaryEntryStream = async function* (text: string, language: 
   const ai = getAiInstance();
   const historyContext = history.slice(0, 2).map(e => `- ${e.date}: ${e.analysis?.overallFeedback}`).join('\n');
   
-  const response = await ai.models.generateContentStream({
-    model: 'gemini-3-flash-preview',
-    contents: `Analyze: "${text}". Lang: ${language}.
-    Context: ${historyContext}
-    Task: Correct the text. 
-    IMPORTANT: Maintain the user's original phrasing where it is correct. Only rewrite if necessary for naturalness or grammar. 
-    Provide grammar tips(${language}), advanced vocab, readingPairs(N2+).
-    
-    FOR ALL LANGUAGES:
-    - 'advancedVocab.meaning' MUST be a monolingual definition in the target language (${language}) itself. DO NOT use English or Chinese for meaning.
-    - 'corrections.explanation' MUST be in the target language (${language}).
-    - 'transitionSuggestions.explanation' MUST be in the target language (${language}).
-    
-    FOR JAPANESE:
-    - 'advancedVocab.word' and 'advancedVocab.usage' MUST use the format: [漢字](かんじ).
-    - Ensure 'readingPairs' contains all Kanji from 'advancedVocab'.
-    - 'advancedVocab.meaning' MUST BE PLAIN TEXT without any furigana or parentheses reading.`,
-    config: {
-      thinkingConfig: { thinkingBudget: 0 }, 
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          modifiedText: { type: Type.STRING },
-          overallFeedback: { type: Type.STRING },
-          readingPairs: { 
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                kanji: { type: Type.STRING },
-                reading: { type: Type.STRING }
-              },
-              required: ["kanji", "reading"]
-            }
-          },
-          corrections: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                original: { type: Type.STRING },
-                improved: { type: Type.STRING },
-                explanation: { type: Type.STRING },
-                category: { type: Type.STRING, enum: ['Grammar', 'Vocabulary', 'Style', 'Spelling'] }
-              },
-              required: ["original", "improved", "explanation", "category"]
-            }
-          },
-          advancedVocab: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                word: { type: Type.STRING },
-                meaning: { type: Type.STRING },
-                usage: { type: Type.STRING },
-                phonetic: { type: Type.STRING, description: "Phonetic transcription or IPA. For Japanese, use reading if not already in word." },
-                level: { type: Type.STRING, enum: ['Intermediate', 'Advanced', 'Native'] }
-              },
-              required: ["word", "meaning", "usage", "level"]
-            }
-          },
-          transitionSuggestions: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                word: { type: Type.STRING },
-                explanation: { type: Type.STRING },
-                example: { type: Type.STRING }
-              },
-              required: ["word", "explanation", "example"]
-            }
+  const config = {
+    thinkingConfig: { thinkingBudget: 0 }, 
+    responseMimeType: "application/json",
+    responseSchema: {
+      type: Type.OBJECT,
+      properties: {
+        modifiedText: { type: Type.STRING },
+        overallFeedback: { type: Type.STRING },
+        readingPairs: { 
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              kanji: { type: Type.STRING },
+              reading: { type: Type.STRING }
+            },
+            required: ["kanji", "reading"]
           }
         },
-        required: ["modifiedText", "corrections", "advancedVocab", "transitionSuggestions", "overallFeedback"]
-      }
+        corrections: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              original: { type: Type.STRING },
+              improved: { type: Type.STRING },
+              explanation: { type: Type.STRING },
+              category: { type: Type.STRING, enum: ['Grammar', 'Vocabulary', 'Style', 'Spelling'] }
+            },
+            required: ["original", "improved", "explanation", "category"]
+          }
+        },
+        advancedVocab: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              word: { type: Type.STRING },
+              meaning: { type: Type.STRING },
+              usage: { type: Type.STRING },
+              phonetic: { type: Type.STRING, description: "Phonetic transcription or IPA. For Japanese, use reading if not already in word." },
+              level: { type: Type.STRING, enum: ['Intermediate', 'Advanced', 'Native'] }
+            },
+            required: ["word", "meaning", "usage", "level"]
+          }
+        },
+        transitionSuggestions: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              word: { type: Type.STRING },
+              explanation: { type: Type.STRING },
+              example: { type: Type.STRING }
+            },
+            required: ["word", "explanation", "example"]
+          }
+        }
+      },
+      required: ["modifiedText", "corrections", "advancedVocab", "transitionSuggestions", "overallFeedback"]
     }
-  });
+  };
 
-  for await (const chunk of response) {
-    yield chunk.text;
+  try {
+    const response = await ai.models.generateContentStream({
+      model: 'gemini-3-flash-preview',
+      contents: `Analyze: "${text}". Lang: ${language}.
+      Context: ${historyContext}
+      Task: Correct the text. 
+      IMPORTANT: Maintain the user's original phrasing where it is correct. Only rewrite if necessary for naturalness or grammar. 
+      Provide grammar tips(${language}), advanced vocab, readingPairs(N2+).
+      
+      FOR ALL LANGUAGES:
+      - 'advancedVocab.meaning' MUST be a monolingual definition in the target language (${language}) itself. DO NOT use English or Chinese for meaning.
+      - 'corrections.explanation' MUST be in the target language (${language}).
+      - 'transitionSuggestions.explanation' MUST be in the target language (${language}).
+      
+      FOR JAPANESE:
+      - 'advancedVocab.word' and 'advancedVocab.usage' MUST use the format: [漢字](かんじ).
+      - Ensure 'readingPairs' contains all Kanji from 'advancedVocab'.
+      - 'advancedVocab.meaning' MUST BE PLAIN TEXT without any furigana or parentheses reading.`,
+      config: config as any
+    });
+
+    for await (const chunk of response) {
+      yield chunk.text;
+    }
+  } catch (error: any) {
+    const status = error?.status || error?.code;
+    if (status === 429) {
+      const fallbackResponse = await ai.models.generateContentStream({
+        model: 'gemini-flash-lite-latest' as any,
+        contents: `Analyze: "${text}". Lang: ${language}.
+        Context: ${historyContext}
+        Task: Correct the text. 
+        Provide grammar tips(${language}), advanced vocab, readingPairs(N2+).`,
+        config: config as any
+      });
+      for await (const chunk of fallbackResponse) {
+        yield chunk.text;
+      }
+    } else {
+      throw error;
+    }
   }
 };
 
@@ -322,7 +343,7 @@ export const validateVocabUsageStream = async function* (word: string, meaning: 
     if (status === 429) {
       // Fallback for stream
       const fallbackResponse = await ai.models.generateContentStream({
-        model: 'gemini-flash-latest' as any,
+        model: 'gemini-flash-lite-latest' as any,
         contents: `Word: "${word}". Sentence: "${sentence}". Correct? Feedback(${language}).`,
         config: {
           thinkingConfig: { thinkingBudget: 0 },

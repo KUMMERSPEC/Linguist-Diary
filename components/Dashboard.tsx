@@ -93,6 +93,9 @@ const Dashboard: React.FC<DashboardProps> = ({
     // 53 weeks to cover 365+ days
     for (let w = 0; w < 53; w++) {
       const week: { date: Date; count: number }[] = [];
+      let weekContainsMonthStart = false;
+      let monthName = '';
+
       for (let d = 0; d < 7; d++) {
         const currentDate = new Date(startOfGrid);
         currentDate.setDate(startOfGrid.getDate() + (w * 7) + d);
@@ -102,15 +105,17 @@ const Dashboard: React.FC<DashboardProps> = ({
           count: counts[currentDate.toDateString()] || 0 
         });
         
-        if (d === 0) {
-          const currentMonth = currentDate.getMonth();
-          if (currentMonth !== lastMonth) {
-            labels.push({ 
-              text: currentDate.toLocaleDateString('en-US', { month: 'short' }), 
-              index: w 
-            });
-            lastMonth = currentMonth;
-          }
+        if (currentDate.getDate() === 1) {
+          weekContainsMonthStart = true;
+          monthName = currentDate.toLocaleDateString('en-US', { month: 'short' });
+        }
+      }
+
+      if (weekContainsMonthStart && monthName) {
+        // Only add if it's not too close to the previous label (at least 2 weeks gap)
+        const lastLabel = labels[labels.length - 1];
+        if (!lastLabel || (w - lastLabel.index) >= 2) {
+          labels.push({ text: monthName, index: w });
         }
       }
       cols.push(week);
