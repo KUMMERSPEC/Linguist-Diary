@@ -376,7 +376,26 @@ export const generatePracticeArtifact = async (language: string, keywords: strin
   const ai = getAiInstance();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Topic: ${topicLabel}. Lang: ${language}. Keywords: ${keywords}. Difficulty: ${difficultyId}. Pure text.`,
+    contents: `
+      You are a language content creator. Your task is to generate a short, engaging text based on the user's request.
+      
+      **Request Details:**
+      - **Topic:** ${topicLabel}
+      - **Language:** ${language}
+      - **Keywords to include:** ${keywords}
+      - **Difficulty Level:** ${difficultyId}
+
+      **Strict Output Requirements:**
+      1.  **Content Only:** Provide only the generated text, with no extra commentary, titles, or explanations.
+      2.  **Length Constraint (${difficultyId}):** 
+          - If Difficulty is 'Beginner', the text MUST be between 80 and 120 characters long.
+          - For other difficulties, aim for a concise paragraph (around 150-200 characters).
+      3.  **Japanese Formatting:** 
+          - If the language is Japanese, you MUST use HTML <ruby> tags for Furigana (e.g., <ruby>漢字<rt>かんじ</rt></ruby>).
+          - DO NOT use the format: 漢字(かんじ).
+
+      Begin generating the text now.
+    `,
     config: { thinkingConfig: { thinkingBudget: 0 } }
   });
   return response.text.trim();
@@ -426,6 +445,42 @@ export const generateChatSummaryPrompt = async (messages: ChatMessage[], languag
     config: { thinkingConfig: { thinkingBudget: 0 } }
   });
   return response.text || "";
+};
+
+export const retryEvaluationForGems = async (failedGems: { word: string; }[], language: string): Promise<{ word: string; meaning: string; usage: string; }[]> => {
+  const ai = getAiInstance();
+  const words = failedGems.map(g => g.word).join(', ');
+
+  return withRetry(async (model) => {
+    const response = await ai.models.generateContent({
+      model: model as any,
+      contents: `For the following list of words in ${language}, provide a concise meaning (in ${language}) and a simple usage example sentence for each: ${words}`,
+      config: {
+        thinkingConfig: { thinkingBudget: 0 },
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            correctedGems: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  word: { type: Type.STRING },
+                  meaning: { type: Type.STRING },
+                  usage: { type: Type.STRING }
+                },
+                required: ["word", "meaning", "usage"]
+              }
+            }
+          },
+          required: ["correctedGems"]
+        }
+      }
+    });
+    const result = JSON.parse(response.text) as { correctedGems: { word: string; meaning: string; usage: string; }[] };
+    return result.correctedGems;
+  });
 };
 
 export const enrichFragment = async (content: string, language: string): Promise<{ meaning: string, usage: string }> => {

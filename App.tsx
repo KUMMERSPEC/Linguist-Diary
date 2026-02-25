@@ -38,6 +38,7 @@ import { ViewState, DiaryEntry, ChatMessage, RehearsalEvaluation, DiaryIteration
 import { analyzeDiaryEntry, analyzeDiaryEntryStream, enrichFragment } from './services/geminiService';
 import { stripRuby, weaveRubyMarkdown } from './utils/textHelpers';
 import { calculateDiff } from './utils/diffHelper';
+import { Toaster, toast } from 'react-hot-toast';
 
 const AVATAR_SEEDS = [
   { seed: 'Felix', label: '沉稳博学者' },
@@ -343,6 +344,7 @@ const App: React.FC = () => {
 
       await handleSaveManualVocab(vocab);
       await handleDeleteFragment(fragmentId);
+      toast.success('成功加入珍宝馆！');
     } catch (e) {
       console.error("Promotion failed:", e);
       alert("词汇入库失败，请重试。");
@@ -366,7 +368,7 @@ const App: React.FC = () => {
       const stream = analyzeDiaryEntryStream(text, language, historyContext);
       let accumulatedText = '';
       
-      for await (const chunk of stream) {
+for await (const chunk of stream) {
         accumulatedText += chunk;
         setPartialAnalysis(accumulatedText);
       }
@@ -375,7 +377,6 @@ const App: React.FC = () => {
       const analysis = JSON.parse(accumulatedText);
       
       // Post-processing (same as in analyzeDiaryEntry but we do it here for the stream result)
-      // Note: In a real app, we might want to move this logic into a shared helper
       if (analysis.readingPairs) {
         analysis.advancedVocab = analysis.advancedVocab.map((v: any) => ({
           ...v,
@@ -504,7 +505,8 @@ const App: React.FC = () => {
       setAllAdvancedVocab(finalVocabList);
       localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(finalVocabList));
     } else {
-      const dataToSave = { ...vocab, mastery: 0, timestamp: serverTimestamp(), parentId };
+      const dataToSave: { [key: string]: any } = { ...vocab, mastery: 0, timestamp: serverTimestamp() };
+      if (parentId) dataToSave.parentId = parentId;
       const docRef = await addDoc(collection(db, 'users', user.uid, 'advancedVocab'), dataToSave);
       
       const childrenToUpdate = allAdvancedVocab.filter(v => 
@@ -940,7 +942,9 @@ const App: React.FC = () => {
   };
 
   return (
-    <Layout activeView={view} onViewChange={handleViewChange} user={user} onLogout={handleLogout} isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen}>
+    <div>
+      <Toaster position="bottom-center" toastOptions={{ duration: 3000 }} />
+      <Layout activeView={view} onViewChange={handleViewChange} user={user} onLogout={handleLogout} isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen}>
       {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartSmartReview} entries={entries} allAdvancedVocab={allAdvancedVocab} recommendedIteration={recommendedIteration} onStartIteration={handleStartIteration} onSaveFragment={handleSaveFragment} />}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraft} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} fragments={fragments} onDeleteFragment={handleDeleteFragment} preferredLanguages={preferredLanguages} partialAnalysis={partialAnalysis} />}
       {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} allAdvancedVocab={allAdvancedVocab} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isExistingEntry={isReviewingExisting} />}
@@ -979,6 +983,7 @@ const App: React.FC = () => {
       
       {showProModal && <ProUpgradeModal />}
     </Layout>
+    </div>
   );
 };
 

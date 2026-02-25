@@ -446,7 +446,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
                               <h4
                               className={`text-lg font-black text-slate-900 serif-font tracking-tight ${viewMode === 'dictionary' ? 'leading-tight' : 'leading-relaxed'}`}
                               dangerouslySetInnerHTML={{
-                                __html: viewMode === 'dictionary' ? stripRuby(gem.word) : renderRuby(gem.word),
+                                __html: renderRuby(gem.word),
                               }}
                               data-tooltip-id="vocab-tooltip"
                               data-tooltip-html={renderRuby(gem.word)}
@@ -534,7 +534,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
                                     <span className="text-indigo-300 text-xs mt-1">✦</span>
                                     <div className="flex-1">
                                       <p className="text-sm font-medium text-slate-700 leading-relaxed serif-font">
-                                        {p.betterVersion || p.sentence}
+                                        <div dangerouslySetInnerHTML={{ __html: renderRuby(p.betterVersion || p.sentence) }} />
                                       </p>
                                       {p.originalAttempt && p.originalAttempt !== (p.betterVersion || p.sentence) && (
                                         <p className="text-[10px] text-slate-400 mt-1 line-through opacity-50 italic">

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { RehearsalEvaluation, AdvancedVocab } from '../types';
-import { generatePracticeArtifact, evaluateRetelling, generateDiaryAudio, generateWeavedArtifact } from '../services/geminiService';
+import { generatePracticeArtifact, evaluateRetelling, generateDiaryAudio, generateWeavedArtifact, retryEvaluationForGems } from '../services/geminiService';
 import { decode, decodeAudioData } from '../utils/audioHelpers';
 
 const LANGUAGES = [
@@ -113,6 +113,28 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum, allAdvancedVocab 
       alert("生成失败，请重试。");
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleRetryFailed = async (failedItems: { word: string; meaning: string; usage: string; }[]) => {
+    if (!evaluation) return;
+
+    setIsEvaluating(true);
+    try {
+      const newGems = await retryEvaluationForGems(failedItems, language.code);
+      
+      const updatedGems = (evaluation.recommendedGems || []).map(originalGem => {
+        const newlyEvaluated = newGems.find(ng => ng.word === originalGem.word);
+        return newlyEvaluated || originalGem;
+      });
+
+      const newEvaluation = { ...evaluation, recommendedGems: updatedGems };
+      setEvaluation(newEvaluation);
+
+    } catch (e) {
+      alert("重试失败，请稍后再次尝试。");
+    } finally {
+      setIsEvaluating(false);
     }
   };
 
@@ -345,88 +367,18 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum, allAdvancedVocab 
            </div>
         </div>
       ) : (
-        <div className="max-w-5xl mx-auto bg-slate-900 rounded-[4rem] p-8 md:p-16 text-white shadow-2xl animate-in zoom-in duration-700 relative overflow-hidden">
-           <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl -mr-48 -mt-48 pointer-events-none"></div>
-           
-           <div className="flex items-center justify-between mb-16 relative z-10">
-             <h3 className="text-2xl md:text-3xl font-black serif-font">演练评估结果 REVIEW</h3>
-             <button onClick={() => setSourceText('')} className="bg-white/10 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all border border-white/5">重新开始 NEW SESSION</button>
-           </div>
-           
-           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 md:gap-16 relative z-10">
-              {/* Grading Section */}
-              <div className="lg:col-span-5 space-y-12">
-                <div className="bg-white/5 p-8 rounded-[3rem] border border-white/10 flex items-center justify-around shadow-inner">
-                   <div className="text-center group">
-                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4 block">还原度 ACCURACY</span>
-                     <div className={`w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center text-4xl md:text-5xl font-black serif-font shadow-2xl transition-transform group-hover:scale-110 ${getGrade(evaluation.accuracyScore).bg} ${getGrade(evaluation.accuracyScore).color} border border-white/5`}>
-                       {getGrade(evaluation.accuracyScore).label}
-                     </div>
-                     <span className="text-[10px] font-bold text-slate-500 mt-4 block">{Math.round(evaluation.accuracyScore)}/100</span>
-                   </div>
-                   <div className="w-[1px] h-20 bg-white/10"></div>
-                   <div className="text-center group">
-                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4 block">表现力 QUALITY</span>
-                     <div className={`w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center text-4xl md:text-5xl font-black serif-font shadow-2xl transition-transform group-hover:scale-110 ${getGrade(evaluation.qualityScore).bg} ${getGrade(evaluation.qualityScore).color} border border-white/5`}>
-                       {getGrade(evaluation.qualityScore).label}
-                     </div>
-                     <span className="text-[10px] font-bold text-slate-500 mt-4 block">{Math.round(evaluation.qualityScore)}/100</span>
-                   </div>
-                </div>
-                
-                <div className="space-y-6">
-                   <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/5 hover:bg-white/10 transition-colors">
-                      <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-4">内容反馈 CONTENT FEEDBACK</h4>
-                      <p className="text-sm md:text-base text-slate-300 italic leading-relaxed">{evaluation.contentFeedback}</p>
-                   </div>
-                   <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/5 hover:bg-white/10 transition-colors">
-                      <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-4">语言评析 LANGUAGE NOTES</h4>
-                      <p className="text-sm md:text-base text-slate-300 italic leading-relaxed">{evaluation.languageFeedback}</p>
-                   </div>
-                </div>
-              </div>
-              
-              {/* Content Comparison Section */}
-              <div className="lg:col-span-7 space-y-8">
-                <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/5 mb-4">
-                  <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">源文本对照 SOURCE REF</h4>
-                  <p className="text-base text-slate-400 italic leading-relaxed line-clamp-3">“ {renderRuby(sourceText)} ”</p>
-                </div>
-
-                <div className="bg-white/10 p-8 md:p-12 rounded-[3rem] border border-white/10 shadow-2xl min-h-[300px] flex flex-col">
-                   <div className="flex items-center justify-between mb-8 shrink-0">
-                     <h4 className="text-[11px] font-black text-indigo-400 uppercase tracking-[0.2em]">复述打磨建议 RESTORED RETELLING</h4>
-                     <div className="flex bg-white/5 p-1 rounded-2xl">
-                        <button onClick={() => setViewMode('diff')} className={`px-4 py-1.5 rounded-xl text-[9px] font-black transition-all ${viewMode === 'diff' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>对比</button>
-                        <button onClick={() => setViewMode('final')} className={`px-4 py-1.5 rounded-xl text-[9px] font-black transition-all ${viewMode === 'final' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>最终</button>
-                     </div>
-                   </div>
-                   <div className="flex-1">
-                     {viewMode === 'diff' ? (
-                        renderDiffText(evaluation.diffedRetelling)
-                     ) : (
-                        <p className="text-lg md:text-xl leading-[2.5] italic serif-font text-slate-100">
-                          {renderRuby(evaluation.suggestedVersion)}
-                        </p>
-                     )}
-                   </div>
-                   <div className="mt-8 pt-6 border-t border-white/5 flex justify-end">
-                      <button 
-                        onClick={() => handlePlayAudio(evaluation.suggestedVersion, 'suggested')} 
-                        disabled={isAudioLoading && isPlaying === 'suggested'}
-                        className={`flex items-center space-x-2 px-6 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${isPlaying === 'suggested' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/5 text-slate-400 hover:text-white'}`}
-                      >
-                        {isAudioLoading && isPlaying === 'suggested' ? (
-                          <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin"></div>
-                        ) : (
-                          <span>{isPlaying === 'suggested' ? '⏹ 停止播放' : '🎧 收听打磨版'}</span>
-                        )}
-                      </button>
-                   </div>
-                </div>
-              </div>
-           </div>
-        </div>
+        <RehearsalReport 
+          evaluation={evaluation} 
+          language={language.code} 
+          date={new Date().toLocaleDateString()} 
+          onBack={() => setEvaluation(null)}
+          onSaveVocab={async (vocab) => {
+            // This is a placeholder. In a real app, you'd have a function passed down
+            // to actually save the vocab to a central state/database.
+            console.log('Saving vocab:', vocab);
+          }}
+          onRetryFailed={handleRetryFailed}
+        />
       )}
     </div>
   );
