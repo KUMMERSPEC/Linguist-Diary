@@ -130,7 +130,7 @@ Produce only the JSON output that adheres to the provided schema.`,
 
     analysis.diffedText = calculateDiff(text, analysis.modifiedText, language);
     return analysis;
-  });
+  }, 'gemini-3-flash-preview');
 };
 
 /**
@@ -296,7 +296,7 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
     const result = JSON.parse(response.text) as RehearsalEvaluation;
     result.diffedRetelling = calculateDiff(retelling, result.suggestedVersion, language);
     return result;
-  });
+  }, 'gemini-3-flash-preview');
 };
 
 export const getChatFollowUp = async (messages: ChatMessage[], language: string): Promise<string> => {
@@ -503,7 +503,7 @@ export const retryEvaluationForGems = async (failedGems: { word: string; }[], la
     });
     const result = JSON.parse(response.text) as { correctedGems: { word: string; meaning: string; usage: string; }[] };
     return result.correctedGems;
-  });
+  }, 'gemini-3-flash-preview');
 };
 
 export const enrichFragment = async (content: string, language: string): Promise<{ meaning: string, usage: string }> => {

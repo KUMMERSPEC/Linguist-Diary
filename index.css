@@ -1,12 +1,17 @@
 /* Add this to your global CSS file */
 ruby {
-  font-size: inherit; /* Ensure ruby base text inherits font size */
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+  vertical-align: bottom; /* Aligns the bottom of the kanji with the text baseline */
 }
 
 rt {
-  font-size: 0.6em; /* Make furigana smaller */
-  transform: translateY(-0.2em); /* Adjust vertical position */
-  display: inline-block; /* Ensure proper layout */
-  line-height: 1; /* Prevent extra line spacing */
-  text-align: center; /* Center the furigana */
+  font-size: 0.65rem; /* Smaller font for furigana */
+  line-height: 1;
+  opacity: 0.9;
+  font-weight: 500;
+  display: block; /* Ensures it takes its own line in the flex container */
+  transform: translateY(-0.1em); /* Fine-tune vertical position */
 }
