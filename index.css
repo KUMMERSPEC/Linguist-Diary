@@ -1,17 +1,14 @@
 /* Add this to your global CSS file */
+/* Let the browser handle the complex ruby layout, we just style it. */
 ruby {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  line-height: 1.1;
-  vertical-align: bottom; /* Aligns the bottom of the kanji with the text baseline */
+  display: ruby;
+  vertical-align: middle; /* Better alignment with surrounding text */
 }
 
 rt {
-  font-size: 0.65rem; /* Smaller font for furigana */
-  line-height: 1;
+  font-size: 0.6rem;   /* Make furigana smaller */
   opacity: 0.9;
   font-weight: 500;
-  display: block; /* Ensures it takes its own line in the flex container */
-  transform: translateY(-0.1em); /* Fine-tune vertical position */
+  /* The browser's 'display: ruby-text' handles positioning above the base text. */
+  /* We don't need to force positioning with transforms or flexbox. */
 }

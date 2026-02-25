@@ -397,13 +397,19 @@ export const validateVocabUsageStream = async function* (word: string, meaning: 
 
 export const generatePracticeArtifact = async (language: string, keywords: string, difficultyId: string, topicLabel: string): Promise<string> => {
   const ai = getAiInstance();
+
+  // Logic fix for 'Random' topic to ensure it doesn't just discuss 'randomness'
+  const effectiveTopic = topicLabel === '随机' 
+    ? "Pick an arbitrary, interesting real-life or abstract topic (e.g. coffee culture, city life, star gazing, childhood memories, seasonal changes, or local food) that fits the difficulty level." 
+    : `Topic: ${topicLabel}`;
+
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `
       You are a language content creator. Your task is to generate a short, engaging text based on the user's request.
       
       **Request Details:**
-      - **Topic:** ${topicLabel}
+      - **Topic:** ${effectiveTopic}
       - **Language:** ${language}
       - **Keywords to include:** ${keywords}
       - **Difficulty Level:** ${difficultyId}

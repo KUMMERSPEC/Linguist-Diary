@@ -1,30 +1,22 @@
 
 /**
- * Surgical character-level diffing utility.
- * Optimized for CJK languages by using LCS (Longest Common Subsequence).
+ * Word-level diffing utility.
  * Treats [Kanji](reading) as atomic units to prevent breaking furigana.
+ * Splits text into words, punctuation, and special tokens for a more readable diff.
  */
 export function calculateDiff(oldStr: string, newStr: string, language: string = 'English'): string {
   if (!oldStr) return `<add>${newStr || ''}</add>`;
   if (!newStr) return `<rem>${oldStr || ''}</rem>`;
 
-  // Helper to tokenize into characters, keeping Ruby tags [漢](かん) as single tokens
   const tokenize = (text: string) => {
-    const tokens: string[] = [];
-    let i = 0;
-    while (i < text.length) {
-      if (text[i] === '[') {
-        const match = text.slice(i).match(/^\[.*?\]\(.*?\)/);
-        if (match) {
-          tokens.push(match[0]);
-          i += match[0].length;
-          continue;
-        }
-      }
-      tokens.push(text[i]);
-      i++;
-    }
-    return tokens;
+    // This regex matches:
+    // 1. Furigana blocks: [Kanji](reading)
+    // 2. Sequences of word characters (for English, etc.)
+    // 3. Sequences of CJK characters (for Japanese, Chinese, etc.)
+    // 4. Sequences of whitespace
+    // 5. Single non-word, non-whitespace characters (punctuation)
+    const regex = /(\[.*?\]\(.*?\))|([\w']+|[\u4e00-\u9faf\u3040-\u309f\u30a0-\u30ff]+)|(\s+)|([^\w\s])/g;
+    return text.match(regex) || [];
   };
 
   const a = tokenize(oldStr);
@@ -56,7 +48,7 @@ export function calculateDiff(oldStr: string, newStr: string, language: string =
     } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
       res.unshift({ type: 'add', val: b[j - 1] });
       j--;
-    } else {
+    } else if (i > 0) { // Guard against i becoming negative
       res.unshift({ type: 'rem', val: a[i - 1] });
       i--;
     }
