@@ -364,28 +364,8 @@ const App: React.FC = () => {
     try {
       const historyContext = entries.filter(e => e.language === language && e.analysis).slice(0, 3);
       
-      // Use streaming analysis
-      const stream = analyzeDiaryEntryStream(text, language, historyContext);
-      let accumulatedText = '';
-      
-for await (const chunk of stream) {
-        accumulatedText += chunk;
-        setPartialAnalysis(accumulatedText);
-      }
-
-      // Final parse
-      const analysis = JSON.parse(accumulatedText);
-      
-      // Post-processing (same as in analyzeDiaryEntry but we do it here for the stream result)
-      if (analysis.readingPairs) {
-        analysis.advancedVocab = analysis.advancedVocab.map((v: any) => ({
-          ...v,
-          word: language === 'Japanese' && !v.word.includes('[') ? weaveRubyMarkdown(v.word, analysis.readingPairs, 'Japanese') : v.word,
-          usage: language === 'Japanese' && !v.usage.includes('[') ? weaveRubyMarkdown(v.usage, analysis.readingPairs, 'Japanese') : v.usage,
-          meaning: stripRuby(v.meaning)
-        }));
-        analysis.diffedText = calculateDiff(text, analysis.modifiedText, language);
-      }
+      // Use non-streaming analysis for stability
+      const analysis = await analyzeDiaryEntry(text, language, historyContext);
 
       const clientTimestamp = Date.now();
       const newEntrySkeleton: Omit<DiaryEntry, 'id'> = {

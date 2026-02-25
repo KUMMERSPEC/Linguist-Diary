@@ -241,7 +241,30 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
   return withRetry(async (model) => {
     const response = await ai.models.generateContent({
       model: model as any,
-      contents: `Compare Source/Retelling in ${language}. Score accuracy/quality. Feedbacks(${language}).`,
+      contents: `
+      You are a language evaluation expert. Your task is to compare a user's retelling of a source text and provide a detailed evaluation in ${language}.
+
+      **Source Text:**
+      ---
+      ${source}
+      ---
+
+      **User's Retelling:**
+      ---
+      ${retelling}
+      ---
+
+      **Your Task:**
+      1.  **Score Accuracy (0-100):** How faithfully does the retelling capture the key information and meaning of the source?
+      2.  **Score Quality (0-100):** Evaluate the grammatical correctness, style, and naturalness of the user's language.
+      3.  **Provide Feedback:** Write two distinct feedback paragraphs in ${language}:
+          - **Content Feedback:** Comment on what the user did well and what they missed from the source text.
+          - **Language Feedback:** Comment on grammar, vocabulary, and style in the user's retelling.
+      4.  **Suggest an Improved Version:** Rewrite the user's retelling to be more accurate and natural.
+      5.  **Recommend Vocabulary (Gems):** Extract 3-5 key vocabulary words or phrases from your suggested version that would be beneficial for the user to learn. For each, provide the word, its meaning in ${language}, and a simple usage example.
+
+      **Output MUST be valid JSON that adheres to the schema.**
+    `,
       config: {
         thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: "application/json",
