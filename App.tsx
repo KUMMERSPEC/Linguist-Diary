@@ -181,6 +181,18 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, [loadUserData]);
 
+  const updateUserQuota = useCallback(async (count: number, date: string) => {
+    if (!user) return;
+    const update = { dailyUsageCount: count, lastUsageDate: date };
+    setUser(prev => prev ? { ...prev, ...update } : null);
+    if (!db || user.isMock) {
+       const profile = JSON.parse(localStorage.getItem(`linguist_profile_${user.uid}`) || '{}');
+       localStorage.setItem(`linguist_profile_${user.uid}`, JSON.stringify({ ...profile, ...update }));
+    } else {
+       await updateDoc(doc(db, 'users', user.uid), { profile: { ...user, ...update } });
+    }
+  }, [user]);
+
   const checkQuota = useCallback(() => {
     if (!user) return false;
     if (user.isPro) return true;
@@ -197,25 +209,13 @@ const App: React.FC = () => {
       return false;
     }
     return true;
-  }, [user]);
+  }, [user, updateUserQuota]);
 
   const incrementQuota = useCallback(() => {
     if (!user || user.isPro) return;
     const nextCount = (user.dailyUsageCount || 0) + 1;
     updateUserQuota(nextCount, new Date().toDateString());
-  }, [user]);
-
-  const updateUserQuota = async (count: number, date: string) => {
-    if (!user) return;
-    const update = { dailyUsageCount: count, lastUsageDate: date };
-    setUser(prev => prev ? { ...prev, ...update } : null);
-    if (!db || user.isMock) {
-       const profile = JSON.parse(localStorage.getItem(`linguist_profile_${user.uid}`) || '{}');
-       localStorage.setItem(`linguist_profile_${user.uid}`, JSON.stringify({ ...profile, ...update }));
-    } else {
-       await updateDoc(doc(db, 'users', user.uid), { profile: { ...user, ...update } });
-    }
-  };
+  }, [user, updateUserQuota]);
 
   const handleActivatePro = async (inputCode: string): Promise<boolean> => {
     if (!user) return false;
@@ -298,7 +298,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDeleteFragment = async (id: string) => {
+    const handleDeleteFragment = useCallback(async (id: string) => {
     if (!user) return;
     setFragments(prev => prev.filter(f => f.id !== id));
     if (!db || user.isMock) {
@@ -306,6 +306,89 @@ const App: React.FC = () => {
       localStorage.setItem(`linguist_fragments_${user.uid}`, JSON.stringify(local.filter((f: any) => f.id !== id)));
     } else {
       await deleteDoc(doc(db, 'users', user.uid, 'fragments', id));
+    }
+  }, [user]);
+
+    const handleSaveDraft = useCallback(async (text: string, language: string) => {
+    if (!user) return;
+    setIsLoading(true);
+    try {
+      const draft: Omit<DiaryEntry, 'id'> = { timestamp: Date.now(), date: new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }), originalText: text, language, type: 'diary', iterationCount: 0 };
+      if (!db || user.isMock) {
+        const finalDraft = { ...draft, id: uuidv4() } as DiaryEntry;
+        const updatedEntries = [finalDraft, ...entries];
+        setEntries(updatedEntries);
+        localStorage.setItem(`linguist_entries_${user.uid}`, JSON.stringify(updatedEntries));
+      } else {
+        const docRef = await addDoc(collection(db, 'users', user.uid, 'diaryEntries'), { ...draft, timestamp: serverTimestamp() });
+        const finalDraft = { ...draft, id: docRef.id } as DiaryEntry;
+        setEntries(prev => [finalDraft, ...prev]);
+      }
+      setView('history');
+    } catch (e) { setError("保存草稿失败。"); } finally { setIsLoading(false); }
+  }, [user, entries]);
+
+    const handleSaveManualVocab = async (vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>) => {
+    if (!user) return;
+    const normalizedNewWord = stripRuby(vocab.word).trim().toLowerCase();
+    const isExisting = allAdvancedVocab.some(v => stripRuby(v.word).trim().toLowerCase() === normalizedNewWord && v.language === vocab.language);
+    if (isExisting) {
+      alert("该词汇已在馆藏中。");
+      return;
+    }
+
+    const cleanWord = normalizedNewWord;
+
+    const potentialParents = allAdvancedVocab
+      .filter(v => v.language === vocab.language)
+      .filter(v => {
+        const cleanExisting = stripRuby(v.word).toLowerCase().trim();
+        return cleanWord.includes(cleanExisting) && cleanWord !== cleanExisting;
+      })
+      .sort((a, b) => stripRuby(b.word).length - stripRuby(a.word).length);
+    
+    const parentId = potentialParents[0]?.id;
+
+    if (!db || user.isMock) {
+      const newVocab: AdvancedVocab = { ...vocab, id: uuidv4(), mastery: 0, practices: [], timestamp: Date.now(), parentId };
+      
+      const currentVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
+      
+      const listWithUpdatedChildren = currentVocab.map((v: AdvancedVocab) => {
+        if (v.language === vocab.language && !v.parentId) {
+          const cleanExisting = stripRuby(v.word).toLowerCase().trim();
+          if (cleanExisting.includes(cleanWord) && cleanExisting !== cleanWord) {
+            return { ...v, parentId: newVocab.id };
+          }
+        }
+        return v;
+      });
+
+      const finalVocabList = [newVocab, ...listWithUpdatedChildren];
+      
+      setAllAdvancedVocab(finalVocabList);
+      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(finalVocabList));
+    } else {
+      const dataToSave: { [key: string]: any } = { ...vocab, mastery: 0, timestamp: serverTimestamp() };
+      if (parentId) dataToSave.parentId = parentId;
+      const docRef = await addDoc(collection(db, 'users', user.uid, 'advancedVocab'), dataToSave);
+      
+      const childrenToUpdate = allAdvancedVocab.filter(v => 
+        v.language === vocab.language && 
+        !v.parentId && 
+        stripRuby(v.word).toLowerCase().trim().includes(cleanWord) && 
+        stripRuby(v.word).toLowerCase().trim() !== cleanWord
+      );
+
+      if (childrenToUpdate.length > 0) {
+        const batch = writeBatch(db);
+        for (const child of childrenToUpdate) {
+          batch.update(doc(db, 'users', user.uid, 'advancedVocab', child.id), { parentId: docRef.id });
+        }
+        await batch.commit();
+      }
+      
+      await loadUserData(user.uid, false);
     }
   };
 
@@ -353,7 +436,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAnalyze = async (text: string, language: string, usedFragmentIds: string[]) => {
+    const handleAnalyze = useCallback(async (text: string, language: string, usedFragmentIds: string[]) => {
     if (!user) return;
     if (!checkQuota()) return;
 
@@ -442,92 +525,13 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user, entries, allAdvancedVocab, checkQuota, incrementQuota, handleSaveDraft, handleDeleteFragment, loadUserData]);
 
-    const handleSaveManualVocab = async (vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>) => {
-    if (!user) return;
-    const normalizedNewWord = stripRuby(vocab.word).trim().toLowerCase();
-    const isExisting = allAdvancedVocab.some(v => stripRuby(v.word).trim().toLowerCase() === normalizedNewWord && v.language === vocab.language);
-    if (isExisting) {
-      alert("该词汇已在馆藏中。");
-      return;
-    }
 
-    const cleanWord = normalizedNewWord;
 
-    const potentialParents = allAdvancedVocab
-      .filter(v => v.language === vocab.language)
-      .filter(v => {
-        const cleanExisting = stripRuby(v.word).toLowerCase().trim();
-        return cleanWord.includes(cleanExisting) && cleanWord !== cleanExisting;
-      })
-      .sort((a, b) => stripRuby(b.word).length - stripRuby(a.word).length);
-    
-    const parentId = potentialParents[0]?.id;
 
-    if (!db || user.isMock) {
-      const newVocab: AdvancedVocab = { ...vocab, id: uuidv4(), mastery: 0, practices: [], timestamp: Date.now(), parentId };
-      
-      const currentVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
-      
-      const listWithUpdatedChildren = currentVocab.map((v: AdvancedVocab) => {
-        if (v.language === vocab.language && !v.parentId) {
-          const cleanExisting = stripRuby(v.word).toLowerCase().trim();
-          if (cleanExisting.includes(cleanWord) && cleanExisting !== cleanWord) {
-            return { ...v, parentId: newVocab.id };
-          }
-        }
-        return v;
-      });
 
-      const finalVocabList = [newVocab, ...listWithUpdatedChildren];
-      
-      setAllAdvancedVocab(finalVocabList);
-      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(finalVocabList));
-    } else {
-      const dataToSave: { [key: string]: any } = { ...vocab, mastery: 0, timestamp: serverTimestamp() };
-      if (parentId) dataToSave.parentId = parentId;
-      const docRef = await addDoc(collection(db, 'users', user.uid, 'advancedVocab'), dataToSave);
-      
-      const childrenToUpdate = allAdvancedVocab.filter(v => 
-        v.language === vocab.language && 
-        !v.parentId && 
-        stripRuby(v.word).toLowerCase().trim().includes(cleanWord) && 
-        stripRuby(v.word).toLowerCase().trim() !== cleanWord
-      );
-
-      if (childrenToUpdate.length > 0) {
-        const batch = writeBatch(db);
-        for (const child of childrenToUpdate) {
-          batch.update(doc(db, 'users', user.uid, 'advancedVocab', child.id), { parentId: docRef.id });
-        }
-        await batch.commit();
-      }
-      
-      await loadUserData(user.uid, false);
-    }
-  };
-
-  const handleSaveDraft = async (text: string, language: string) => {
-    if (!user) return;
-    setIsLoading(true);
-    try {
-      const draft: Omit<DiaryEntry, 'id'> = { timestamp: Date.now(), date: new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }), originalText: text, language, type: 'diary', iterationCount: 0 };
-      if (!db || user.isMock) {
-        const finalDraft = { ...draft, id: uuidv4() } as DiaryEntry;
-        const updatedEntries = [finalDraft, ...entries];
-        setEntries(updatedEntries);
-        localStorage.setItem(`linguist_entries_${user.uid}`, JSON.stringify(updatedEntries));
-      } else {
-        const docRef = await addDoc(collection(db, 'users', user.uid, 'diaryEntries'), { ...draft, timestamp: serverTimestamp() });
-        const finalDraft = { ...draft, id: docRef.id } as DiaryEntry;
-        setEntries(prev => [finalDraft, ...prev]);
-      }
-      setView('history');
-    } catch (e) { setError("保存草稿失败。"); } finally { setIsLoading(false); }
-  };
-
-  const handleAnalyzeExistingEntry = async (entry: DiaryEntry) => {
+    const handleAnalyzeExistingEntry = useCallback(async (entry: DiaryEntry) => {
     if (!user) return;
     if (!checkQuota()) return;
     setAnalyzingId(entry.id);
@@ -548,7 +552,7 @@ const App: React.FC = () => {
       setIsReviewingExisting(true);
       setView('review');
     } catch (e) { setError("分析失败。"); } finally { setAnalyzingId(null); }
-  };
+  }, [user, entries, checkQuota, incrementQuota]);
 
   const handleUpdateEntryLanguage = async (id: string, language: string) => {
     if (!user) return;

@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { RehearsalEvaluation, AdvancedVocab } from '../types';
 import { generatePracticeArtifact, evaluateRetelling, generateDiaryAudio, generateWeavedArtifact, retryEvaluationForGems } from '../services/geminiService';
 import { decode, decodeAudioData } from '../utils/audioHelpers';
+import RehearsalReport from './RehearsalReport';
 
 const LANGUAGES = [
   { code: 'English', label: 'English', flag: '🇬🇧' },
