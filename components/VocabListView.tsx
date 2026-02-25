@@ -241,16 +241,16 @@ const VocabListView: React.FC<VocabListViewProps> = ({
     <div 
       ref={containerRef}
       
-      className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 animate-in fade-in duration-700 relative"
+      className="h-full overflow-y-auto no-scrollbar pb-32 animate-in fade-in duration-700 relative"
     >
-      <header className="mb-8 text-left">
+      <header className="mb-8 text-left px-4 md:px-8 pt-6 md:pt-10">
         <h2 className="text-3xl md:text-5xl font-black text-slate-900 serif-font tracking-tight">馆藏珍宝 <span className="text-indigo-600">Gems & Shards</span></h2>
         <p className="text-slate-400 text-sm md:text-base mt-2 italic">在这里查看每一件被打磨出的语言珍宝。</p>
       </header>
 
       {/* Sticky Search & Controls Bar */}
-      <div className={`sticky top-0 z-50 bg-white/95 backdrop-blur-md transition-all duration-300 py-4 border-b border-slate-200/80 shadow-sm -mx-4 px-4 md:-mx-8 md:px-8 ${isMenuOpen ? 'opacity-30 grayscale pointer-events-none' : 'opacity-100'}`}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 md:gap-4">
+      <div className={`sticky top-0 z-50 bg-white transition-all duration-300 py-4 border-b border-slate-200 shadow-sm ${isMenuOpen ? 'opacity-30 grayscale pointer-events-none' : 'opacity-100'}`}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 md:gap-4 px-4 md:px-8">
           <div className={`w-full sm:flex-1 flex items-center space-x-3 px-4 py-2.5 rounded-2xl border transition-all duration-200 ${
             isFilterOpen 
               ? 'bg-slate-100 border-transparent opacity-50 pointer-events-none shadow-none' 
@@ -379,7 +379,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
       </div>
 
       {/* Items List/Grid */}
-      <div key={`${activeTab}-${selectedLangs.join('-')}-${viewMode}-${searchQuery}-${sortMode}`} className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div key={`${activeTab}-${selectedLangs.join('-')}-${viewMode}-${searchQuery}-${sortMode}`} className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-700 px-4 md:px-8">
         {activeTab === 'gems' ? (
           viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -449,7 +449,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
                                 __html: viewMode === 'dictionary' ? stripRuby(gem.word) : renderRuby(gem.word),
                               }}
                               data-tooltip-id="vocab-tooltip"
-                              data-tooltip-content={renderRuby(gem.word)}
+                              data-tooltip-html={renderRuby(gem.word)}
                             ></h4>
                               {gem.phonetic && (
                                 <span className="text-[10px] text-slate-400 font-mono tracking-wider">{gem.phonetic}</span>

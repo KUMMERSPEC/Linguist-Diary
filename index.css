@@ -1,0 +1,12 @@
+/* Add this to your global CSS file */
+ruby {
+  font-size: inherit; /* Ensure ruby base text inherits font size */
+}
+
+rt {
+  font-size: 0.6em; /* Make furigana smaller */
+  transform: translateY(-0.2em); /* Adjust vertical position */
+  display: inline-block; /* Ensure proper layout */
+  line-height: 1; /* Prevent extra line spacing */
+  text-align: center; /* Center the furigana */
+}

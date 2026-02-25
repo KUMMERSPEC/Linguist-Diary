@@ -46,21 +46,25 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
   return withRetry(async (model) => {
     const response = await ai.models.generateContent({
       model: model as any,
-      contents: `Analyze: "${text}". Lang: ${language}.
-      Context: ${historyContext}
-      Task: Correct the text. 
-      IMPORTANT: Maintain the user's original phrasing where it is correct. Only rewrite if necessary for naturalness or grammar. 
-      Provide grammar tips(${language}), advanced vocab, readingPairs(N2+).
-      
-      FOR ALL LANGUAGES:
-      - 'advancedVocab.meaning' MUST be a monolingual definition in the target language (${language}) itself. DO NOT use English or Chinese for meaning.
-      - 'corrections.explanation' MUST be in the target language (${language}).
-      - 'transitionSuggestions.explanation' MUST be in the target language (${language}).
-      
-      FOR JAPANESE:
-      - 'advancedVocab.word' and 'advancedVocab.usage' MUST use the format: [漢字](かんじ).
-      - Ensure 'readingPairs' contains all Kanji from 'advancedVocab'.
-      - 'advancedVocab.meaning' MUST BE PLAIN TEXT without any furigana or parentheses reading.`,
+      contents: `You are an expert language tutor. Analyze the following text written in ${language}.
+Your task is to provide a comprehensive analysis based on the JSON schema.
+
+User's Text:
+---
+${text}
+---
+
+Recent Feedback Context (for personalization):
+---
+${historyContext || 'No recent history.'}
+---
+
+Key Instructions:
+1.  **Correction Style**: Only correct grammatical errors or unnatural phrasing. Preserve the user's original style and voice.
+2.  **Monolingual Definitions**: All explanations and definitions ('advancedVocab.meaning', 'corrections.explanation') must be in ${language}.
+3.  **Japanese Specifics**: For Japanese text, 'advancedVocab.word' and 'advancedVocab.usage' must use Furigana markdown format, e.g., [漢字](かんじ). Ensure 'readingPairs' is complete for all Kanji in the vocab. 'advancedVocab.meaning' must be plain text.
+
+Produce only the JSON output that adheres to the provided schema.`,
       config: {
         thinkingConfig: { thinkingBudget: 0 }, 
         responseMimeType: "application/json",
@@ -107,20 +111,8 @@ export const analyzeDiaryEntry = async (text: string, language: string, history:
                 required: ["word", "meaning", "usage", "level"]
               }
             },
-            transitionSuggestions: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  word: { type: Type.STRING },
-                  explanation: { type: Type.STRING },
-                  example: { type: Type.STRING }
-                },
-                required: ["word", "explanation", "example"]
-              }
-            }
-          },
-          required: ["modifiedText", "corrections", "advancedVocab", "transitionSuggestions", "overallFeedback"]
+                      },
+          required: ["modifiedText", "corrections", "advancedVocab", "overallFeedback"]
         }
       }
     });
@@ -194,41 +186,33 @@ export const analyzeDiaryEntryStream = async function* (text: string, language: 
             required: ["word", "meaning", "usage", "level"]
           }
         },
-        transitionSuggestions: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              word: { type: Type.STRING },
-              explanation: { type: Type.STRING },
-              example: { type: Type.STRING }
-            },
-            required: ["word", "explanation", "example"]
-          }
-        }
-      },
-      required: ["modifiedText", "corrections", "advancedVocab", "transitionSuggestions", "overallFeedback"]
+              },
+      required: ["modifiedText", "corrections", "advancedVocab", "overallFeedback"]
     }
   };
 
   try {
     const response = await ai.models.generateContentStream({
       model: 'gemini-3-flash-preview',
-      contents: `Analyze: "${text}". Lang: ${language}.
-      Context: ${historyContext}
-      Task: Correct the text. 
-      IMPORTANT: Maintain the user's original phrasing where it is correct. Only rewrite if necessary for naturalness or grammar. 
-      Provide grammar tips(${language}), advanced vocab, readingPairs(N2+).
-      
-      FOR ALL LANGUAGES:
-      - 'advancedVocab.meaning' MUST be a monolingual definition in the target language (${language}) itself. DO NOT use English or Chinese for meaning.
-      - 'corrections.explanation' MUST be in the target language (${language}).
-      - 'transitionSuggestions.explanation' MUST be in the target language (${language}).
-      
-      FOR JAPANESE:
-      - 'advancedVocab.word' and 'advancedVocab.usage' MUST use the format: [漢字](かんじ).
-      - Ensure 'readingPairs' contains all Kanji from 'advancedVocab'.
-      - 'advancedVocab.meaning' MUST BE PLAIN TEXT without any furigana or parentheses reading.`,
+      contents: `You are an expert language tutor. Analyze the following text written in ${language}.
+Your task is to provide a comprehensive analysis based on the JSON schema.
+
+User's Text:
+---
+${text}
+---
+
+Recent Feedback Context (for personalization):
+---
+${historyContext || 'No recent history.'}
+---
+
+Key Instructions:
+1.  **Correction Style**: Only correct grammatical errors or unnatural phrasing. Preserve the user's original style and voice.
+2.  **Monolingual Definitions**: All explanations and definitions ('advancedVocab.meaning', 'corrections.explanation') must be in ${language}.
+3.  **Japanese Specifics**: For Japanese text, 'advancedVocab.word' and 'advancedVocab.usage' must use Furigana markdown format, e.g., [漢字](かんじ). Ensure 'readingPairs' is complete for all Kanji in the vocab. 'advancedVocab.meaning' must be plain text.
+
+Produce only the JSON output that adheres to the provided schema.`,
       config: config as any
     });
 
@@ -240,10 +224,7 @@ export const analyzeDiaryEntryStream = async function* (text: string, language: 
     if (status === 429) {
       const fallbackResponse = await ai.models.generateContentStream({
         model: 'gemini-flash-lite-latest' as any,
-        contents: `Analyze: "${text}". Lang: ${language}.
-        Context: ${historyContext}
-        Task: Correct the text. 
-        Provide grammar tips(${language}), advanced vocab, readingPairs(N2+).`,
+        contents: `Analyze this ${language} text and provide corrections, feedback, and vocabulary based on the schema. Text: "${text}"`,
         config: config as any
       });
       for await (const chunk of fallbackResponse) {

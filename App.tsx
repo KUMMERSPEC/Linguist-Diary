@@ -463,14 +463,17 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveManualVocab = async (vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>) => {
+    const handleSaveManualVocab = async (vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>) => {
     if (!user) return;
     const normalizedNewWord = stripRuby(vocab.word).trim().toLowerCase();
     const isExisting = allAdvancedVocab.some(v => stripRuby(v.word).trim().toLowerCase() === normalizedNewWord && v.language === vocab.language);
-    if (isExisting) { alert("该词汇已在馆藏中。"); return; }
+    if (isExisting) {
+      alert("该词汇已在馆藏中。");
+      return;
+    }
 
-    // Find Parent
     const cleanWord = normalizedNewWord;
+
     const potentialParents = allAdvancedVocab
       .filter(v => v.language === vocab.language)
       .filter(v => {
@@ -481,25 +484,12 @@ const App: React.FC = () => {
     
     const parentId = potentialParents[0]?.id;
 
-    const newVocab: AdvancedVocab = { ...vocab, id: uuidv4(), mastery: 0, practices: [], timestamp: Date.now(), parentId };
-    
-    // Update existing items that might be children of this new word
-    setAllAdvancedVocab(prev => {
-      const updatedPrev = prev.map(v => {
-        if (v.language === vocab.language && !v.parentId) {
-          const cleanExisting = stripRuby(v.word).toLowerCase().trim();
-          if (cleanExisting.includes(cleanWord) && cleanExisting !== cleanWord) {
-            return { ...v, parentId: newVocab.id };
-          }
-        }
-        return v;
-      });
-      return [newVocab, ...updatedPrev];
-    });
-
     if (!db || user.isMock) {
+      const newVocab: AdvancedVocab = { ...vocab, id: uuidv4(), mastery: 0, practices: [], timestamp: Date.now(), parentId };
+      
       const currentVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
-      const updatedVocab = currentVocab.map((v: any) => {
+      
+      const listWithUpdatedChildren = currentVocab.map((v: AdvancedVocab) => {
         if (v.language === vocab.language && !v.parentId) {
           const cleanExisting = stripRuby(v.word).toLowerCase().trim();
           if (cleanExisting.includes(cleanWord) && cleanExisting !== cleanWord) {
@@ -508,12 +498,15 @@ const App: React.FC = () => {
         }
         return v;
       });
-      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify([newVocab, ...updatedVocab]));
-    } else {
-      const { id, practices, ...data } = newVocab;
-      const docRef = await addDoc(collection(db, 'users', user.uid, 'advancedVocab'), { ...data, timestamp: serverTimestamp() });
+
+      const finalVocabList = [newVocab, ...listWithUpdatedChildren];
       
-      // Update existing children in Firebase
+      setAllAdvancedVocab(finalVocabList);
+      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(finalVocabList));
+    } else {
+      const dataToSave = { ...vocab, mastery: 0, timestamp: serverTimestamp(), parentId };
+      const docRef = await addDoc(collection(db, 'users', user.uid, 'advancedVocab'), dataToSave);
+      
       const childrenToUpdate = allAdvancedVocab.filter(v => 
         v.language === vocab.language && 
         !v.parentId && 
@@ -521,9 +514,15 @@ const App: React.FC = () => {
         stripRuby(v.word).toLowerCase().trim() !== cleanWord
       );
 
-      for (const child of childrenToUpdate) {
-        await updateDoc(doc(db, 'users', user.uid, 'advancedVocab', child.id), { parentId: docRef.id });
+      if (childrenToUpdate.length > 0) {
+        const batch = writeBatch(db);
+        for (const child of childrenToUpdate) {
+          batch.update(doc(db, 'users', user.uid, 'advancedVocab', child.id), { parentId: docRef.id });
+        }
+        await batch.commit();
       }
+      
+      await loadUserData(user.uid, false);
     }
   };
 
@@ -972,7 +971,7 @@ const App: React.FC = () => {
         />
       )}
       {view === 'vocab_practice_detail' && selectedVocabForPracticeId && (
-        <VocabPracticeDetailView selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onBackToPracticeHistory={() => setView('vocab_list')} onUpdateLanguage={handleUpdateVocabLanguage} preferredLanguages={preferredLanguages} />
+        <VocabPracticeDetailView selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onBackToPracticeHistory={() => setView('vocab_list')} onUpdateLanguage={handleUpdateVocabLanguage} preferredLanguages={preferredLanguages} onDeletePractice={handleDeletePractice} onBatchDeletePractices={handleBatchDeletePractices} />
       )}
       {view === 'rehearsal' && <Rehearsal allAdvancedVocab={allAdvancedVocab} preferredLanguages={preferredLanguages} />}
       {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} onSaveVocab={handleSaveManualVocab} />}

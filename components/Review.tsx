@@ -189,7 +189,7 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, allAdva
                 </p>
               </div>
             </div>
-            <div className="bg-indigo-50/50 p-8 rounded-[2rem] border border-indigo-100">
+            <div className="bg-indigo-50/50 p-8 rounded-[2rem] border border-indigo-100 max-h-96 overflow-y-auto">
               <h3 className="text-[10px] font-black text-indigo-900 uppercase tracking-widest mb-4 flex items-center space-x-2"><span>💡</span><span>馆长点评</span></h3>
               <p className="text-indigo-800/80 text-base md:text-lg leading-relaxed serif-font italic">“ {analysis.overallFeedback} ”</p>
             </div>
