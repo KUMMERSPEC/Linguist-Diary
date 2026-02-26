@@ -1,12 +1,8 @@
 /* Add this to your global CSS file */
 /* Let the browser handle the complex ruby layout, we just style it. */
 ruby {
-  position: relative;
-  display: inline-block;
-  vertical-align: baseline; /* This is critical for aligning with surrounding text */
+  position: relative; /* Establishes a positioning context for the furigana */
 }
-
-/* The span is no longer needed for special styling */
 
 rt {
   position: absolute;
@@ -15,8 +11,8 @@ rt {
   transform: translateX(-50%);
   white-space: nowrap;
   font-size: 0.65rem;
-  line-height: 1;
+  line-height: 1; /* Keep the furigana line-height compact */
   user-select: none;
   opacity: 0.9;
-  margin-bottom: 0.1em; /* Adds a small gap above the kanji */
+  padding-bottom: 0.1em; /* Use padding for a small gap that doesn't affect layout */
 }
