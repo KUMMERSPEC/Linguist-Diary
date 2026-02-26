@@ -2,7 +2,7 @@
 /* Let the browser handle the complex ruby layout, we just style it. */
 ruby {
   display: ruby;
-  vertical-align: middle; /* Better alignment with surrounding text */
+  vertical-align: bottom; /* Better alignment with surrounding text */
 }
 
 rt {
