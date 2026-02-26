@@ -2,7 +2,7 @@
 /* Let the browser handle the complex ruby layout, we just style it. */
 ruby {
   position: relative;
-  display: inline-table;
+  display: inline-block;
   vertical-align: baseline; /* This is critical for aligning with surrounding text */
 }
 
@@ -15,7 +15,7 @@ rt {
   transform: translateX(-50%);
   white-space: nowrap;
   font-size: 0.65rem;
-  line-height: 1.2;
+  line-height: 1;
   user-select: none;
   opacity: 0.9;
   margin-bottom: 0.1em; /* Adds a small gap above the kanji */
