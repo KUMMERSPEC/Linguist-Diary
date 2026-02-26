@@ -1,18 +1,21 @@
 /* Add this to your global CSS file */
 /* Let the browser handle the complex ruby layout, we just style it. */
 ruby {
-  position: relative; /* Establishes a positioning context for the furigana */
-  display: inline-block; /* Allows for positioning while maintaining inline flow */
+  display: inline-flex;
+  flex-direction: column-reverse; /* Stacks rt above the base text */
+  vertical-align: baseline;
+  line-height: 1;
+}
+
+ruby > span {
+  line-height: 1.5; /* Provides space for the furigana above */
+  display: inline-block;
 }
 
 rt {
-  position: absolute;
-  bottom: 1.2em; /* Provides a small, clean gap above the kanji */
-  left: 50%;
-  transform: translateX(-50%); /* Horizontally centers the furigana */
-  font-size: 0.6rem;
-  opacity: 0.9;
-  font-weight: 500;
-  white-space: nowrap; /* Prevents the furigana from wrapping */
+  font-size: 0.65rem;
+  line-height: 1.1;
+  text-align: center;
   user-select: none;
+  opacity: 0.8;
 }

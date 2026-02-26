@@ -71,13 +71,13 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum, allAdvancedVocab 
 
   const renderRuby = (text: string) => {
     if (!text) return '';
-    const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
+    const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby><span>$1</span><rt>$2</rt></ruby>');
     return <span dangerouslySetInnerHTML={{ __html: html }} />;
   };
 
   const renderDiffText = (diff?: string) => {
     if (!diff) return null;
-    let processed = diff.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
+    let processed = diff.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby><span>$1</span><rt>$2</rt></ruby>');
     processed = processed
       .replace(/<add>(.*?)<\/add>/g, '<span class="text-emerald-400 font-bold bg-emerald-500/10 px-1 rounded mx-0.5">$1</span>')
       .replace(/<rem>(.*?)<\/rem>/g, '<span class="text-rose-400 line-through opacity-60 mx-0.5">$1</span>');
@@ -195,7 +195,7 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum, allAdvancedVocab 
   };
 
   return (
-    <div className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 animate-in fade-in duration-500">
+    <div className="w-full max-w-7xl mx-auto pt-6 md:pt-10 px-4 md:px-8 pb-32 animate-in fade-in duration-500">
       <header className="mb-10 max-w-6xl mx-auto flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div className="text-center md:text-left">
           <h2 className="text-3xl md:text-4xl font-black text-slate-900 serif-font tracking-tight">展厅演练 Rehearsal</h2>

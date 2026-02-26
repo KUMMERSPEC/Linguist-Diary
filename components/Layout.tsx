@@ -51,9 +51,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
   };
 
   return (
-    <div className="flex h-[100dvh] w-full bg-slate-50 overflow-hidden">
+    <div className="flex w-full bg-slate-50 min-h-screen">
       {/* Desktop & Tablet Sidebar */}
-      <aside className="hidden md:flex flex-col md:w-60 lg:w-64 bg-white border-r border-slate-100 p-6 space-y-6 shrink-0 h-full z-30">
+      <aside className="hidden md:flex flex-col md:w-60 lg:w-64 bg-white border-r border-slate-100 p-6 shrink-0 h-screen sticky top-0 z-30">
         <div className="flex items-center space-x-3 pb-4 border-b border-slate-100">
           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-xl">🖋️</div>
           <h1 className="text-lg font-bold text-slate-900 serif-font">Linguist Diary</h1>
@@ -100,8 +100,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
       </aside>
 
       {/* Main content area */}
-      <main className="flex-1 flex flex-col h-full min-w-0 overflow-y-auto relative">
-        <div className="flex-1 h-full relative overflow-hidden z-0">
+      <main className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 relative">
           {children}
         </div>
 

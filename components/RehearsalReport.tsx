@@ -23,13 +23,13 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
 
   const renderRuby = (text?: string) => {
     if (!text || typeof text !== 'string') return null;
-    const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
+    const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby><span>$1</span><rt>$2</rt></ruby>');
     return <span dangerouslySetInnerHTML={{ __html: html }} />;
   };
 
   const renderDiffText = (diff?: string) => {
     if (!diff || typeof diff !== 'string') return null;
-    let processed = diff.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
+    let processed = diff.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby><span>$1</span><rt>$2</rt></ruby>');
     processed = processed
       .replace(/<add>(.*?)<\/add>/g, '<span class="text-emerald-400 font-bold bg-emerald-500/10 px-1 rounded mx-0.5">$1</span>')
       .replace(/<rem>(.*?)<\/rem>/g, '<span class="text-rose-400 line-through opacity-60 mx-0.5">$1</span>');
