@@ -148,7 +148,7 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveRehearsal, onSaveVocab, set
       const result = await evaluateRetelling(sourceText, userRetelling, language.code);
       const fullResult: RehearsalEvaluation = {
         ...result,
-        id: '', // This will be replaced by the parent component
+        id: `temp-${Date.now()}`,
         timestamp: Date.now(),
         sourceText,
         userRetelling,

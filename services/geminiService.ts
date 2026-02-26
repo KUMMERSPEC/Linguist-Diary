@@ -358,7 +358,7 @@ export const validateVocabUsageStream = async function* (word: string, meaning: 
 export const generatePracticeArtifact = async (language: string, keywords: string, difficultyId: string, topicLabel: string): Promise<string> => {
   // Logic fix for 'Random' topic to ensure it doesn't just discuss 'randomness'
   const effectiveTopic = topicLabel === '随机' 
-    ? "Pick an arbitrary, interesting real-life or abstract topic (e.g. coffee culture, city life, star gazing, childhood memories, seasonal changes, or local food) that fits the difficulty level." 
+    ? "Pick a random, engaging topic suitable for a language learner, covering themes of daily life, travel, or work. Examples: describing a favorite local cafe, planning a weekend trip, discussing a recent project at work, talking about a hobby."
     : `Topic: ${topicLabel}`;
 
   const contents = `
