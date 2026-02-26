@@ -100,8 +100,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
       </aside>
 
       {/* Main content area */}
-      <main className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
-        <div className="flex-1 h-full relative z-0 flex flex-col">
+      <main className="flex-1 flex flex-col h-full min-w-0 overflow-y-auto relative">
+        <div className="flex-1 h-full relative overflow-hidden z-0">
           {children}
         </div>
 
