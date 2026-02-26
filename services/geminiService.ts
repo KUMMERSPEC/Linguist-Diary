@@ -77,9 +77,11 @@ async function* generateContentStreamWrapper(contents: any, config: any, initial
   }
 }
 
-export const analyzeDiaryEntry = async (text: string, language: string, history: DiaryEntry[] = []): Promise<DiaryAnalysis> => {
-  const historyContext = history.slice(0, 2).map(e => `- ${e.date}: ${e.analysis?.overallFeedback}`).join('\n');
-  const contents = `You are an expert language tutor. Analyze the following text written in ${language}.
+const getAnalysisPrompt = (language: string, text: string, historyContext: string) => {
+  const japaneseInstruction = `3.  **Japanese Specifics**: For Japanese text, 'advancedVocab.word' and 'advancedVocab.usage' must use Furigana markdown format, e.g., [漢字](かんじ). Ensure 'readingPairs' is complete for all Kanji in the vocab. 'advancedVocab.meaning' must be plain text.`;
+  const defaultInstruction = `3.  **Vocabulary Formatting**: For 'advancedVocab.word' and 'advancedVocab.usage', present the terms and sentences as plain text without any special formatting.`;
+
+  return `You are an expert language tutor. Analyze the following text written in ${language}.
 Your task is to provide a comprehensive analysis based on the JSON schema.
 
 User's Text:
@@ -95,9 +97,14 @@ ${historyContext || 'No recent history.'}
 Key Instructions:
 1.  **Correction Style**: Only correct grammatical errors or unnatural phrasing. Preserve the user's original style and voice.
 2.  **Monolingual Definitions**: All explanations and definitions ('advancedVocab.meaning', 'corrections.explanation') must be in ${language}.
-3.  **Japanese Specifics**: For Japanese text, 'advancedVocab.word' and 'advancedVocab.usage' must use Furigana markdown format, e.g., [漢字](かんじ). Ensure 'readingPairs' is complete for all Kanji in the vocab. 'advancedVocab.meaning' must be plain text.
+${language === 'Japanese' ? japaneseInstruction : defaultInstruction}
 
 Produce only the JSON output that adheres to the provided schema.`;
+};
+
+export const analyzeDiaryEntry = async (text: string, language: string, history: DiaryEntry[] = []): Promise<DiaryAnalysis> => {
+  const historyContext = history.slice(0, 2).map(e => `- ${e.date}: ${e.analysis?.overallFeedback}`).join('\n');
+  const contents = getAnalysisPrompt(language, text, historyContext);
   const config = {
     thinkingConfig: { thinkingBudget: 0 }, 
     responseMimeType: "application/json",
@@ -171,25 +178,7 @@ Produce only the JSON output that adheres to the provided schema.`;
 export const analyzeDiaryEntryStream = async function* (text: string, language: string, history: DiaryEntry[] = []) {
   const historyContext = history.slice(0, 2).map(e => `- ${e.date}: ${e.analysis?.overallFeedback}`).join('\n');
   
-  const contents = `You are an expert language tutor. Analyze the following text written in ${language}.
-Your task is to provide a comprehensive analysis based on the JSON schema.
-
-User's Text:
----
-${text}
----
-
-Recent Feedback Context (for personalization):
----
-${historyContext || 'No recent history.'}
----
-
-Key Instructions:
-1.  **Correction Style**: Only correct grammatical errors or unnatural phrasing. Preserve the user's original style and voice.
-2.  **Monolingual Definitions**: All explanations and definitions ('advancedVocab.meaning', 'corrections.explanation') must be in ${language}.
-3.  **Japanese Specifics**: For Japanese text, 'advancedVocab.word' and 'advancedVocab.usage' must use Furigana markdown format, e.g., [漢字](かんじ). Ensure 'readingPairs' is complete for all Kanji in the vocab. 'advancedVocab.meaning' must be plain text.
-
-Produce only the JSON output that adheres to the provided schema.`;
+  const contents = getAnalysisPrompt(language, text, historyContext);
 
   const config = {
     thinkingConfig: { thinkingBudget: 0 }, 

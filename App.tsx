@@ -451,7 +451,15 @@ const App: React.FC = () => {
       const historyContext = entries.filter(e => e.language === language && e.analysis).slice(0, 3);
       
       // Use non-streaming analysis for stability
-      const analysis = await analyzeDiaryEntry(text, language, historyContext);
+      const analysisStream = analyzeDiaryEntryStream(text, language, historyContext);
+      let finalAnalysisJson = {};
+      for await (const chunk of analysisStream) {
+        try {
+          finalAnalysisJson = JSON.parse(chunk);
+        } catch (e) { /* Incomplete JSON */ }
+        setPartialAnalysis(chunk);
+      }
+      const analysis = finalAnalysisJson as DiaryAnalysis;
 
       const clientTimestamp = Date.now();
       const newEntrySkeleton: Omit<DiaryEntry, 'id'> = {
