@@ -76,6 +76,7 @@ const App: React.FC = () => {
   const [selectedVocabForPracticeId, setSelectedVocabForPracticeId] = useState<string | null>(null);
   const [isPracticeActive, setIsPracticeActive] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+
   const [promotingFragmentId, setPromotingFragmentId] = useState<string | null>(null);
 
   const [practiceQueue, setPracticeQueue] = useState<string[]>([]);
@@ -125,12 +126,14 @@ const App: React.FC = () => {
         const fragmentsColRef = collection(db, 'users', userId, 'fragments');
         const fragmentsQuery = query(fragmentsColRef, orderBy('timestamp', 'desc'));
         const fragmentsSnapshot = await getDocs(fragmentsQuery);
-        setFragments(fragmentsSnapshot.docs.map(d => ({
+                setFragments(fragmentsSnapshot.docs.map(d => ({
             ...d.data(),
             id: d.id, 
             timestamp: (d.data().timestamp as Timestamp).toMillis(),
             fragmentType: d.data().fragmentType || 'transient'
         })) as InspirationFragment[]);
+
+
 
         const advancedVocabColRef = collection(db, 'users', userId, 'advancedVocab');
         const vocabSnapshot = await getDocs(advancedVocabColRef);
@@ -761,6 +764,32 @@ const App: React.FC = () => {
     }
   };
 
+    const handleSaveRehearsal = async (rehearsalData: RehearsalEvaluation) => {
+    if (!user) return;
+
+    const newEntry: Omit<DiaryEntry, 'id'> = {
+      timestamp: rehearsalData.timestamp,
+      date: new Date(rehearsalData.timestamp).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
+      originalText: rehearsalData.sourceText,
+      language: rehearsalData.language,
+      type: 'rehearsal',
+      rehearsal: rehearsalData,
+      iterationCount: 0
+    };
+
+    if (!db || user.isMock) {
+      const finalEntry = { ...newEntry, id: uuidv4() } as DiaryEntry;
+      const updatedEntries = [finalEntry, ...entries];
+      setEntries(updatedEntries);
+      localStorage.setItem(`linguist_entries_${user.uid}`, JSON.stringify(updatedEntries));
+    } else {
+      const entryToSave = { ...newEntry, timestamp: serverTimestamp() };
+      const docRef = await addDoc(collection(db, 'users', user.uid, 'diaryEntries'), entryToSave);
+      const finalEntry = { ...newEntry, id: docRef.id } as DiaryEntry;
+      setEntries(prev => [finalEntry, ...prev]);
+    }
+  };
+
   const handleViewChange = (v: ViewState, vocabId?: string, isPracticeActive?: boolean) => {
     setView(v);
     if (vocabId) setSelectedVocabForPracticeId(vocabId);
@@ -961,8 +990,8 @@ const App: React.FC = () => {
       {view === 'vocab_practice_detail' && selectedVocabForPracticeId && (
         <VocabPracticeDetailView selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onBackToPracticeHistory={() => setView('vocab_list')} onUpdateLanguage={handleUpdateVocabLanguage} preferredLanguages={preferredLanguages} onDeletePractice={handleDeletePractice} onBatchDeletePractices={handleBatchDeletePractices} />
       )}
-      {view === 'rehearsal' && <Rehearsal allAdvancedVocab={allAdvancedVocab} preferredLanguages={preferredLanguages} />}
-      {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} onSaveVocab={handleSaveManualVocab} />}
+      {view === 'rehearsal' && <Rehearsal allAdvancedVocab={allAdvancedVocab} preferredLanguages={preferredLanguages} onSaveRehearsal={handleSaveRehearsal} onSaveVocab={handleSaveManualVocab} setView={setView} />}
+      {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} onSaveVocab={handleSaveManualVocab} isArchived={true} />}
       {view === 'profile' && <ProfileView user={user} editName={editName} setEditName={setEditName} editPhoto={editPhoto} setEditPhoto={setEditPhoto} isAvatarPickerOpen={isAvatarPickerOpen} setIsAvatarPickerOpen={setIsAvatarPickerOpen} avatarSeeds={AVATAR_SEEDS} onSaveProfile={handleSaveProfile} isLoading={isLoading} iterationDay={user.iterationDay ?? 0} onSetIterationDay={handleSetIterationDay} preferredLanguages={preferredLanguages} onSetPreferredLanguages={handleSetPreferredLanguages} onActivatePro={handleActivatePro} />}
       
       {showProModal && <ProUpgradeModal />}

@@ -163,7 +163,7 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
              </div>
            </div>
 
-           <div className="flex-1 cursor-pointer" onClick={() => !isDraft && onSelect(entry)}>
+           <div className="flex-1 cursor-pointer" onClick={() => onSelect(entry)}>
              <p className={`line-clamp-5 serif-font mb-8 italic text-base md:text-lg leading-[2.2] transition-colors ${isDraft ? 'text-slate-400' : 'text-slate-600 group-hover:text-slate-900'}`}>
                “ {renderRuby(entry.originalText)} ”
              </p>

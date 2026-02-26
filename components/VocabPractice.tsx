@@ -70,7 +70,27 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
   const [savedPhrases, setSavedPhrases] = useState<Set<string>>(new Set());
   const [loadingMessage, setLoadingMessage] = useState('');
   const [partialFeedback, setPartialFeedback] = useState('');
-  const [partialBetterVersion, setPartialBetterVersion] = useState('');
+      const [partialBetterVersion, setPartialBetterVersion] = useState('');
+
+  const handleSavePhrase = async (phrase: string, explanation: string) => {
+    if (!currentVocab || savedPhrases.has(phrase)) return;
+
+    try {
+        await onSaveFragment(
+            phrase,
+            currentVocab.language,
+            'seed',
+            `打磨笔记：${explanation}`,
+            `源自打磨练习：${lastFeedback?.betterVersion || practiceInput}`
+        );
+        setSavedPhrases(prev => new Set(prev).add(phrase));
+    } catch (e) {
+        console.error("Failed to save phrase:", phrase, e);
+        alert(`收藏 "${stripRuby(phrase)}" 失败。`);
+    }
+  };
+  const [isGemModalOpen, setIsGemModalOpen] = useState(false);
+  const [selectedGems, setSelectedGems] = useState<Set<string>>(new Set());
 
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const validationRequestsRef = useRef<Set<string>>(new Set());
@@ -82,7 +102,29 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
   const parentVocab = useMemo(() => {
     if (!currentVocab?.parentId) return null;
     return allAdvancedVocab.find(v => v.id === currentVocab.parentId);
-  }, [currentVocab, allAdvancedVocab]);
+    }, [currentVocab, allAdvancedVocab]);
+
+  const allGems = useMemo(() => {
+    const gems: { phrase: string; explanation: string; language: string; source: string; }[] = [];
+    const uniquePhrases = new Set<string>();
+
+    Object.values(sessionResults).forEach(res => {
+        if (res.keyPhrases) {
+            res.keyPhrases.forEach(kp => {
+                if (!uniquePhrases.has(kp.phrase)) {
+                    gems.push({
+                        phrase: kp.phrase,
+                        explanation: kp.explanation,
+                        language: res.language,
+                        source: res.betterVersion || res.input,
+                    });
+                    uniquePhrases.add(kp.phrase);
+                }
+            });
+        }
+    });
+    return gems;
+  }, [sessionResults]);
 
   useEffect(() => {
     setLastFeedback(null);
@@ -266,31 +308,41 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
     })();
   };
 
-  const handleCollectAllGems = async () => {
-    const results = Object.values(sessionResults).filter(r => r.keyPhrases && r.keyPhrases.length > 0);
-    let count = 0;
-    for (const res of results) {
-      if (res.keyPhrases) {
-        for (const kp of res.keyPhrases) {
-          if (!savedPhrases.has(kp.phrase)) {
-            try {
-              await onSaveFragment(
-                kp.phrase, 
-                res.language, 
-                'seed',
-                `打磨笔记：${kp.explanation}`, 
-                `源自打磨总结：${res.betterVersion || res.input}`
-              );
-              setSavedPhrases(prev => new Set(prev).add(kp.phrase));
-              count++;
-            } catch (e) {
-              console.error("Failed to save gem:", kp.phrase);
-            }
-          }
+    const handleOpenGemModal = () => {
+    const initialSelection = new Set<string>();
+    allGems.forEach(gem => {
+        if (!savedPhrases.has(gem.phrase)) {
+            initialSelection.add(gem.phrase);
         }
-      }
+    });
+    setSelectedGems(initialSelection);
+    setIsGemModalOpen(true);
+  };
+
+  const handleSaveSelectedGems = async () => {
+    let count = 0;
+    for (const phrase of selectedGems) {
+        const gemData = allGems.find(g => g.phrase === phrase);
+        if (gemData && !savedPhrases.has(phrase)) {
+            try {
+                await onSaveFragment(
+                    gemData.phrase,
+                    gemData.language,
+                    'seed',
+                    `打磨笔记：${gemData.explanation}`,
+                    `源自打磨总结：${gemData.source}`
+                );
+                setSavedPhrases(prev => new Set(prev).add(phrase));
+                count++;
+            } catch (e) {
+                console.error("Failed to save gem:", phrase);
+            }
+        }
     }
-    if (count > 0) alert(`成功收藏 ${count} 个建议表达！`);
+    if (count > 0) {
+        alert(`成功收藏 ${count} 个建议表达！`);
+    }
+    setIsGemModalOpen(false);
   };
 
   if (showSummary) {
@@ -299,6 +351,88 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
 
     return (
       <div className="flex flex-col h-full animate-in fade-in duration-500 overflow-hidden w-full relative p-4 md:p-8">
+        {isGemModalOpen && (
+          <div className="absolute inset-0 bg-black/40 z-50 flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+                <header className="p-6 border-b border-slate-100">
+                    <h3 className="text-lg font-bold text-slate-900 serif-font">收藏建议表达</h3>
+                    <p className="text-xs text-slate-400 mt-1">选择你想要加入「珍宝阁」的表达方式。</p>
+                </header>
+                <div className="flex-1 overflow-y-auto p-6 space-y-3">
+                    {allGems.map((gem, idx) => {
+                        const isSelected = selectedGems.has(gem.phrase);
+                        const isAlreadySaved = savedPhrases.has(gem.phrase);
+                        return (
+                            <button
+                                key={idx}
+                                disabled={isAlreadySaved}
+                                onClick={() => {
+                                    const newSelection = new Set(selectedGems);
+                                    if (isSelected) {
+                                        newSelection.delete(gem.phrase);
+                                    } else {
+                                        newSelection.add(gem.phrase);
+                                    }
+                                    setSelectedGems(newSelection);
+                                }}
+                                className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center space-x-4 ${
+                                    isAlreadySaved
+                                        ? 'bg-slate-50 text-slate-400 cursor-not-allowed'
+                                        : isSelected
+                                        ? 'bg-indigo-50 border-indigo-200 ring-2 ring-indigo-200'
+                                        : 'bg-white border-slate-200 hover:bg-slate-50'
+                                }`}
+                            >
+                                <div className={`w-5 h-5 rounded-md flex items-center justify-center text-white text-xs ${
+                                    isAlreadySaved ? 'bg-slate-300' : isSelected ? 'bg-indigo-600' : 'bg-slate-200'
+                                }`}>
+                                    {isAlreadySaved ? '✓' : isSelected ? '✓' : ''}
+                                </div>
+                                <div>
+                                    <p className="font-bold text-slate-800 serif-font">{renderRuby(gem.phrase)}</p>
+                                    <p className="text-xs text-slate-500 mt-1">{gem.explanation}</p>
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
+                <footer className="p-6 border-t border-slate-100 flex justify-between items-center">
+                    <div className="flex items-center space-x-2">
+                        <button
+                            onClick={() => {
+                                const allUnsavedGems = new Set(allGems.filter(g => !savedPhrases.has(g.phrase)).map(g => g.phrase));
+                                setSelectedGems(allUnsavedGems);
+                            }}
+                            className="text-xs font-bold text-indigo-600 hover:underline"
+                        >
+                            全选
+                        </button>
+                        <span className="text-slate-200">|</span>
+                        <button
+                            onClick={() => setSelectedGems(new Set())}
+                            className="text-xs font-bold text-indigo-600 hover:underline"
+                        >
+                            全部取消
+                        </button>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                        <button
+                            onClick={() => setIsGemModalOpen(false)}
+                            className="px-5 py-2.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                        >
+                            取消
+                        </button>
+                        <button
+                            onClick={handleSaveSelectedGems}
+                            className="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                        >
+                            收藏 {selectedGems.size} 个表达
+                        </button>
+                    </div>
+                </footer>
+            </div>
+        </div>
+        )}
         <header className="flex flex-col md:flex-row md:items-center justify-between mb-8 shrink-0">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold text-slate-900 serif-font tracking-tight">练习结算报告 <span className="text-indigo-600">Summary</span></h2>
@@ -306,7 +440,7 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
           </div>
           <div className="flex items-center space-x-3 mt-4 md:mt-0">
             <button 
-              onClick={handleCollectAllGems}
+              onClick={handleOpenGemModal}
               className="bg-emerald-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95"
             >
               💎 全部收藏建议表达

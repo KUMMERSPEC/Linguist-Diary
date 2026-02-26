@@ -29,12 +29,14 @@ const TOPICS = [
 ];
 
 interface RehearsalProps {
-  onSaveToMuseum?: (language: string, result: RehearsalEvaluation) => void;
+  onSaveRehearsal: (evaluation: RehearsalEvaluation) => void;
+  onSaveVocab: (vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>) => void;
+  setView: (view: ViewState) => void;
   allAdvancedVocab?: AdvancedVocab[];
   preferredLanguages: string[];
 }
 
-const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum, allAdvancedVocab = [], preferredLanguages }) => {
+const Rehearsal: React.FC<RehearsalProps> = ({ onSaveRehearsal, onSaveVocab, setView, allAdvancedVocab = [], preferredLanguages }) => {
   const filteredLangs = useMemo(() => LANGUAGES.filter(l => preferredLanguages.includes(l.code)), [preferredLanguages]);
   const [mode, setMode] = useState<'normal' | 'weave'>('normal');
   const [language, setLanguage] = useState(filteredLangs[0] || LANGUAGES[0]);
@@ -144,9 +146,16 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum, allAdvancedVocab 
     setIsEvaluating(true);
     try {
       const result = await evaluateRetelling(sourceText, userRetelling, language.code);
-      const fullResult = { ...result, sourceText, userRetelling };
+      const fullResult: RehearsalEvaluation = {
+        ...result,
+        id: '', // This will be replaced by the parent component
+        timestamp: Date.now(),
+        sourceText,
+        userRetelling,
+        language: language.code,
+        mode: mode
+      };
       setEvaluation(fullResult);
-      onSaveToMuseum?.(language.code, fullResult);
     } catch (e) {
       alert("评估失败。");
     } finally {
@@ -372,12 +381,11 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveToMuseum, allAdvancedVocab 
             evaluation={evaluation} 
             language={language.code} 
             date={new Date().toLocaleDateString()} 
-            onBack={() => setEvaluation(null)}
-            onSaveVocab={async (vocab) => {
-              // This is a placeholder. In a real app, you'd have a function passed down
-              // to actually save the vocab to a central state/database.
-              console.log('Saving vocab:', vocab);
+            onBack={() => {
+              onSaveRehearsal(evaluation);
+              setView('history');
             }}
+            onSaveVocab={onSaveVocab}
             onRetryFailed={handleRetryFailed}
           />
       )}

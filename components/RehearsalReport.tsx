@@ -11,9 +11,10 @@ interface RehearsalReportProps {
   onBack: () => void;
   onSaveVocab: (vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>) => Promise<void>;
   onRetryFailed?: (failedItems: { word: string; meaning: string; usage: string; }[]) => void;
+  isArchived?: boolean;
 }
 
-const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language, date, onBack, onSaveVocab, onRetryFailed }) => {
+const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language, date, onBack, onSaveVocab, onRetryFailed, isArchived = false }) => {
   const [isPlaying, setIsPlaying] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'diff' | 'final'>('diff');
   const [savedGems, setSavedGems] = useState<Set<string>>(new Set());
@@ -117,7 +118,7 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
                 {viewMode === 'diff' ? renderDiffText(evaluation.diffedRetelling) : <p className="text-lg md:text-xl leading-[2.5] text-slate-100 serif-font italic">{renderRuby(evaluation.suggestedVersion)}</p>}
               </div>
               
-              {evaluation.recommendedGems && evaluation.recommendedGems.length > 0 && !isGemModalOpen && (
+              {!isArchived && evaluation.recommendedGems && evaluation.recommendedGems.length > 0 && !isGemModalOpen && (
                 <div className="mt-6 pt-6 border-t border-white/10">
                   <h4 className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-4">入馆推荐 RECOMMENDED GEMS</h4>
                   <button 
