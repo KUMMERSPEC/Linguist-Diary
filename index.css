@@ -1,21 +1,22 @@
 /* Add this to your global CSS file */
 /* Let the browser handle the complex ruby layout, we just style it. */
 ruby {
-  display: inline-flex;
-  flex-direction: column-reverse; /* Stacks rt above the base text */
-  vertical-align: baseline;
-  line-height: 1;
+  position: relative;
+  display: inline-block;
+  vertical-align: bottom; /* Ensures the element aligns with the bottom of the text line */
 }
 
-ruby > span {
-  line-height: 1.5; /* Provides space for the furigana above */
-  display: inline-block;
-}
+/* The span is no longer needed for special styling */
 
 rt {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
   font-size: 0.65rem;
-  line-height: 1.1;
-  text-align: center;
+  line-height: 1.2;
   user-select: none;
-  opacity: 0.8;
+  opacity: 0.9;
+  margin-bottom: 0.1em; /* Adds a small gap above the kanji */
 }
