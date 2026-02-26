@@ -2,8 +2,8 @@
 /* Let the browser handle the complex ruby layout, we just style it. */
 ruby {
   position: relative;
-  display: inline-block;
-  vertical-align: bottom; /* Ensures the element aligns with the bottom of the text line */
+  display: inline-table;
+  vertical-align: baseline; /* This is critical for aligning with surrounding text */
 }
 
 /* The span is no longer needed for special styling */
