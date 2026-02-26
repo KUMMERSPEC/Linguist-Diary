@@ -1,14 +1,18 @@
 /* Add this to your global CSS file */
 /* Let the browser handle the complex ruby layout, we just style it. */
 ruby {
-  display: ruby;
-  vertical-align: bottom; /* Better alignment with surrounding text */
+  position: relative; /* Establishes a positioning context for the furigana */
+  display: inline-block; /* Allows for positioning while maintaining inline flow */
 }
 
 rt {
-  font-size: 0.6rem;   /* Make furigana smaller */
+  position: absolute;
+  bottom: 100%; /* Places the furigana directly above the base text */
+  left: 50%;
+  transform: translateX(-50%); /* Horizontally centers the furigana */
+  font-size: 0.6rem;
   opacity: 0.9;
   font-weight: 500;
-  /* The browser's 'display: ruby-text' handles positioning above the base text. */
-  /* We don't need to force positioning with transforms or flexbox. */
+  white-space: nowrap; /* Prevents the furigana from wrapping */
+  user-select: none;
 }

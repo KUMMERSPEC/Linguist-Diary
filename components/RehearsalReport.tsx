@@ -73,7 +73,7 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
   const failedGems = (evaluation.recommendedGems || []).filter(gem => !gem.meaning || !gem.usage);
 
   return (
-    <>
+    <div className="flex-1 flex flex-col min-h-0">
       <header className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
         <div>
           <button onClick={onBack} className="text-slate-400 hover:text-indigo-600 text-[10px] font-black uppercase tracking-widest mb-1 flex items-center group">
@@ -88,10 +88,10 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
         </div>
       </header>
 
-      <div className="bg-slate-900 rounded-[2.5rem] md:rounded-[4rem] p-8 md:p-14 text-white shadow-2xl relative overflow-hidden mb-12 overflow-y-auto">
+      <div className="bg-slate-900 rounded-[2.5rem] md:rounded-[4rem] p-8 md:p-14 text-white shadow-2xl relative overflow-hidden mb-12 flex-1 flex flex-col min-h-0">
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl -mr-48 -mt-48 pointer-events-none"></div>
         
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 relative z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 relative z-10 overflow-y-auto flex-1 pr-4 -mr-4">
           {/* Detailed Content Column */}
           <div className="lg:col-span-8 space-y-8">
             <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/5 relative group">
@@ -234,7 +234,7 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };
 
