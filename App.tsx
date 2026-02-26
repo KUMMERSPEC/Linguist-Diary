@@ -926,7 +926,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div>
+    <div className="h-screen flex flex-col">
       <Toaster position="bottom-center" toastOptions={{ duration: 3000 }} />
       <Layout activeView={view} onViewChange={handleViewChange} user={user} onLogout={handleLogout} isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen}>
       {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartSmartReview} entries={entries} allAdvancedVocab={allAdvancedVocab} recommendedIteration={recommendedIteration} onStartIteration={handleStartIteration} onSaveFragment={handleSaveFragment} />}

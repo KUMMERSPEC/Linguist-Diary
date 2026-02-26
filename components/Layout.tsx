@@ -101,7 +101,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
 
       {/* Main content area */}
       <main className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
-        <div className="flex-1 h-full relative overflow-hidden z-0">
+        <div className="flex-1 h-full relative z-0 flex flex-col">
           {children}
         </div>
 

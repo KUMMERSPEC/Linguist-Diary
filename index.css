@@ -7,7 +7,7 @@ ruby {
 
 rt {
   position: absolute;
-  bottom: 100%; /* Places the furigana directly above the base text */
+  bottom: 0.9em; /* Adjust this value to bring furigana closer */
   left: 50%;
   transform: translateX(-50%); /* Horizontally centers the furigana */
   font-size: 0.6rem;
