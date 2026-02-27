@@ -34,8 +34,8 @@ async function generateContentWrapper(contents: any, config: any, initialModel =
       const status = error?.status || error?.code;
 
       if (status === 429 && currentModel === 'gemini-3-flash-preview') {
-        console.log('Model gemini-3-flash-preview failed, falling back to gemini-1.5-flash');
-        currentModel = 'gemini-1.5-flash'; 
+        console.log('Model gemini-3-flash-preview failed, falling back to gemini-flash-lite-latest');
+        currentModel = 'gemini-flash-lite-latest'; 
       }
 
       if (!isRetryableError(error) || i === maxRetries - 1) throw error;

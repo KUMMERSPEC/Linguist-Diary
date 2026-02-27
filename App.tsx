@@ -538,6 +538,48 @@ const App: React.FC = () => {
     }
   }, [user, entries, allAdvancedVocab, checkQuota, incrementQuota, handleSaveDraft, handleDeleteFragment, loadUserData]);
 
+  const handleRetryFailedGems = useCallback(async (failedItems: { word: string; meaning: string; usage: string; }[]) => {
+    if (!user || !currentEntry) return;
+    setIsLoading(true);
+    try {
+      for (const item of failedItems) {
+        const enrichment = await enrichFragment(item.word, currentEntry.language || 'English');
+        await handleSaveManualVocab({
+          word: item.word,
+          meaning: enrichment.meaning || item.meaning,
+          usage: enrichment.usage || item.usage,
+          level: 'Intermediate',
+          language: currentEntry.language || 'English',
+          timestamp: Date.now()
+        });
+      }
+      toast.success('失败词条已重新分析并入馆！');
+
+      // Update currentEntry and entries to reflect the changes
+      if (currentEntry) {
+        const updatedRecommendedGems = (currentEntry.rehearsal?.recommendedGems || []).filter(gem => 
+          !failedItems.some(failed => failed.word === gem.word)
+        );
+        const updatedRehearsal = {
+          ...currentEntry.rehearsal,
+          recommendedGems: updatedRecommendedGems
+        };
+        const updatedEntry = {
+          ...currentEntry,
+          rehearsal: updatedRehearsal
+        };
+        setCurrentEntry(updatedEntry);
+        setEntries(prev => prev.map(entry => entry.id === updatedEntry.id ? updatedEntry : entry));
+      }
+
+    } catch (e) {
+      console.error('Failed to retry gems:', e);
+      toast.error('重新分析失败。');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user, currentEntry, handleSaveManualVocab, setEntries, setCurrentEntry]);
+
 
 
 
@@ -999,7 +1041,7 @@ const App: React.FC = () => {
         <VocabPracticeDetailView selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onBackToPracticeHistory={() => setView('vocab_list')} onUpdateLanguage={handleUpdateVocabLanguage} preferredLanguages={preferredLanguages} onDeletePractice={handleDeletePractice} onBatchDeletePractices={handleBatchDeletePractices} />
       )}
       {view === 'rehearsal' && <Rehearsal allAdvancedVocab={allAdvancedVocab} preferredLanguages={preferredLanguages} onSaveRehearsal={handleSaveRehearsal} onSaveVocab={handleSaveManualVocab} setView={setView} />}
-      {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} onSaveVocab={handleSaveManualVocab} isArchived={true} />}
+      {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} onSaveVocab={handleSaveManualVocab} onRetryFailed={handleRetryFailedGems} isArchived={true} existingVocab={allAdvancedVocab} />}
       {view === 'profile' && <ProfileView user={user} editName={editName} setEditName={setEditName} editPhoto={editPhoto} setEditPhoto={setEditPhoto} isAvatarPickerOpen={isAvatarPickerOpen} setIsAvatarPickerOpen={setIsAvatarPickerOpen} avatarSeeds={AVATAR_SEEDS} onSaveProfile={handleSaveProfile} isLoading={isLoading} iterationDay={user.iterationDay ?? 0} onSetIterationDay={handleSetIterationDay} preferredLanguages={preferredLanguages} onSetPreferredLanguages={handleSetPreferredLanguages} onActivatePro={handleActivatePro} />}
       
       {showProModal && <ProUpgradeModal />}

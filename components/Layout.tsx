@@ -100,7 +100,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
       </aside>
 
       {/* Main content area */}
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 pb-20 md:pb-0">
         <div className="flex-1 relative">
           {children}
         </div>
@@ -114,7 +114,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onViewChange, use
         )}
 
         {/* Mobile Bottom Navigation Bar - Optimized for Mobile Screen Bottoms */}
-        <div className="md:hidden shrink-0 bg-white border-t border-slate-100 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+8px)] flex items-center justify-around shadow-[0_-8px_30px_-10px_rgba(0,0,0,0.12)] overflow-visible min-h-[72px] relative">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+8px)] flex items-center justify-around shadow-[0_-8px_30px_-10px_rgba(0,0,0,0.12)] overflow-visible min-h-[72px] z-40">
           <MobileTab views="dashboard" label="主页" icon="🏠" activeIcon="🏠" />
           {/* Swapped: Gems moved to the left of the add button */}
           <MobileTab views={['vocab_list', 'vocab_practice', 'vocab_practice_detail']} label="珍宝" icon="💎" activeIcon="💎" />

@@ -12,9 +12,10 @@ interface RehearsalReportProps {
   onSaveVocab: (vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>) => Promise<void>;
   onRetryFailed?: (failedItems: { word: string; meaning: string; usage: string; }[]) => void;
   isArchived?: boolean;
+  existingVocab: AdvancedVocab[];
 }
 
-const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language, date, onBack, onSaveVocab, onRetryFailed, isArchived = false }) => {
+const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language, date, onBack, onSaveVocab, onRetryFailed, isArchived = false, existingVocab }) => {
   const [isPlaying, setIsPlaying] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'diff' | 'final'>('diff');
   const [savedGems, setSavedGems] = useState<Set<string>>(new Set());
@@ -71,7 +72,10 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
 
   if (!evaluation) return null;
 
-  const failedGems = (evaluation.recommendedGems || []).filter(gem => !gem.meaning || !gem.usage);
+  const existingVocabWords = new Set(existingVocab.map(v => v.word.toLowerCase()));
+  const filteredRecommendedGems = (evaluation.recommendedGems || []).filter(gem => !existingVocabWords.has(gem.word.toLowerCase()));
+
+  const failedGems = filteredRecommendedGems.filter(gem => !gem.meaning || !gem.usage);
 
   return (
     <>
@@ -118,18 +122,18 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
                 {viewMode === 'diff' ? renderDiffText(evaluation.diffedRetelling) : <p className="text-lg md:text-xl leading-[2.5] text-slate-100 serif-font italic">{renderRuby(evaluation.suggestedVersion)}</p>}
               </div>
               
-              {!isArchived && evaluation.recommendedGems && evaluation.recommendedGems.length > 0 && !isGemModalOpen && (
+              {!isArchived && filteredRecommendedGems && filteredRecommendedGems.length > 0 && !isGemModalOpen && (
                 <div className="mt-6 pt-6 border-t border-white/10">
                   <h4 className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-4">入馆推荐 RECOMMENDED GEMS</h4>
                   <button 
                     onClick={() => {
                       setIsGemModalOpen(true);
-                      const allGemWords = new Set(evaluation.recommendedGems.map(g => g.word));
+                      const allGemWords = new Set(filteredRecommendedGems.map(g => g.word));
                       setSelectedGemsInModal(allGemWords);
                     }}
                     className="w-full bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-bold py-3 rounded-2xl transition-all shadow-lg"
                   >
-                    查看建议表达 ({evaluation.recommendedGems.length})
+                    查看建议表达 ({filteredRecommendedGems.length})
                   </button>
                 </div>
               )}
@@ -181,13 +185,14 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
       </div>
 
       {isGemModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-8 shadow-2xl relative z-10 animate-in zoom-in-95 duration-300 flex flex-col max-h-[80vh]">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setIsGemModalOpen(false)}></div>
+          <div className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 flex flex-col max-h-[80vh]">
             <h3 className="text-xl font-black text-slate-900 serif-font mb-2">收藏建议表达</h3>
             <p className="text-xs text-slate-400 mb-6">请选择您希望加入珍宝馆的词汇：</p>
             
             <div className="flex-1 overflow-y-auto -mr-4 pr-4 space-y-3">
-              {(evaluation.recommendedGems || []).map((gem, index) => (
+              {filteredRecommendedGems.map((gem, index) => (
                 <label key={index} className={`flex items-start space-x-4 p-4 rounded-2xl cursor-pointer transition-all border ${selectedGemsInModal.has(gem.word) ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
                   <input 
                     type="checkbox" 
@@ -220,7 +225,7 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
               </button>
               <button 
                 onClick={async () => {
-                  const gemsToSave = (evaluation.recommendedGems || []).filter(g => selectedGemsInModal.has(g.word));
+                  const gemsToSave = filteredRecommendedGems.filter(g => selectedGemsInModal.has(g.word));
                   for (const gem of gemsToSave) {
                     await onSaveVocab({ word: gem.word, meaning: gem.meaning, usage: gem.usage, language, level: 'Intermediate', timestamp: Date.now() });
                     setSavedGems(prev => new Set(prev).add(gem.word));
