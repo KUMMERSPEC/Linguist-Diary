@@ -156,6 +156,7 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveRehearsal, onSaveVocab, set
         mode: mode
       };
       setEvaluation(fullResult);
+      onSaveRehearsal(fullResult);
     } catch (e) {
       alert("评估失败。");
     } finally {
