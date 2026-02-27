@@ -21,6 +21,7 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
   const [savedGems, setSavedGems] = useState<Set<string>>(new Set());
   const [isGemModalOpen, setIsGemModalOpen] = useState(false);
   const [selectedGemsInModal, setSelectedGemsInModal] = useState<Set<string>>(new Set());
+  const [isSavingGems, setIsSavingGems] = useState(false);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   const renderRuby = (text?: string) => {
@@ -185,7 +186,7 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
       </div>
 
       {isGemModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setIsGemModalOpen(false)}></div>
           <div className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 flex flex-col max-h-[80vh]">
             <h3 className="text-xl font-black text-slate-900 serif-font mb-2">收藏建议表达</h3>
@@ -225,16 +226,27 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
               </button>
               <button 
                 onClick={async () => {
-                  const gemsToSave = filteredRecommendedGems.filter(g => selectedGemsInModal.has(g.word));
-                  for (const gem of gemsToSave) {
-                    await onSaveVocab({ word: gem.word, meaning: gem.meaning, usage: gem.usage, language, level: 'Intermediate', timestamp: Date.now() });
-                    setSavedGems(prev => new Set(prev).add(gem.word));
+                  setIsSavingGems(true);
+                  const toastId = toast.loading('正在收藏珍宝...');
+                  try {
+                    const gemsToSave = filteredRecommendedGems.filter(g => selectedGemsInModal.has(g.word));
+                    for (const gem of gemsToSave) {
+                      await onSaveVocab({ word: gem.word, meaning: gem.meaning, usage: gem.usage, language, level: 'Intermediate', timestamp: Date.now() });
+                      setSavedGems(prev => new Set(prev).add(gem.word));
+                    }
+                    toast.success('珍宝收藏成功！', { id: toastId });
+                    setIsGemModalOpen(false);
+                  } catch (e) {
+                    console.error('Failed to save gems:', e);
+                    toast.error('收藏失败，请重试。', { id: toastId });
+                  } finally {
+                    setIsSavingGems(false);
                   }
-                  setIsGemModalOpen(false);
                 }}
-                className="bg-indigo-600 text-white px-8 py-3 rounded-2xl text-sm font-bold shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 transition-all"
+                disabled={isSavingGems}
+                className="bg-indigo-600 text-white px-8 py-3 rounded-2xl text-sm font-bold shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                批量收藏 ({selectedGemsInModal.size})
+                {isSavingGems ? '收藏中...' : `批量收藏 (${selectedGemsInModal.size})`}
               </button>
             </div>
           </div>

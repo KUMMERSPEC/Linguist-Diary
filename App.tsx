@@ -70,7 +70,7 @@ const App: React.FC = () => {
   const [summaryPrompt, setSummaryPrompt] = useState<string>('');
   const [isReviewingExisting, setIsReviewingExisting] = useState(false); 
   const [showProModal, setShowProModal] = useState(false);
-  const [partialAnalysis, setPartialAnalysis] = useState<string>('');
+
 
   const [allAdvancedVocab, setAllAdvancedVocab] = useState<AdvancedVocab[]>([]); 
   const [selectedVocabForPracticeId, setSelectedVocabForPracticeId] = useState<string | null>(null);
@@ -445,21 +445,12 @@ const App: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
-    setPartialAnalysis('');
+
     
     try {
       const historyContext = entries.filter(e => e.language === language && e.analysis).slice(0, 3);
       
-      // Use non-streaming analysis for stability
-      const analysisStream = analyzeDiaryEntryStream(text, language, historyContext);
-      let finalAnalysisJson = {};
-      for await (const chunk of analysisStream) {
-        try {
-          finalAnalysisJson = JSON.parse(chunk);
-        } catch (e) { /* Incomplete JSON */ }
-        setPartialAnalysis(chunk);
-      }
-      const analysis = finalAnalysisJson as DiaryAnalysis;
+      const analysis = await analyzeDiaryEntry(text, language, historyContext);
 
       const clientTimestamp = Date.now();
       const newEntrySkeleton: Omit<DiaryEntry, 'id'> = {
