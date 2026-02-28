@@ -36,8 +36,8 @@ interface RehearsalProps {
   preferredLanguages: string[];
 }
 
-const Rehearsal: React.FC<RehearsalProps> = ({ onSaveRehearsal, onSaveVocab, setView, allAdvancedVocab = [], preferredLanguages }) => {
-  const filteredLangs = useMemo(() => LANGUAGES.filter(l => preferredLanguages.includes(l.code)), [preferredLanguages]);
+const Rehearsal: React.FC<RehearsalProps> = ({ onSaveRehearsal, onSaveVocab, setView, allAdvancedVocab = [], preferredLanguages = [] }) => {
+  const filteredLangs = useMemo(() => LANGUAGES.filter(l => (preferredLanguages ?? []).includes(l.code)), [preferredLanguages]);
   const [mode, setMode] = useState<'normal' | 'weave'>('normal');
   const [language, setLanguage] = useState(filteredLangs[0] || LANGUAGES[0]);
   const [difficulty, setDifficulty] = useState(DIFFICULTIES[1]);

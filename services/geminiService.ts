@@ -376,11 +376,14 @@ export const generatePracticeArtifact = async (language: string, keywords: strin
 };
 
 export const generateWeavedArtifact = async (language: string, gems: any[]): Promise<string> => {
+  const japaneseInstruction = `
+2.  **Japanese Formatting:** You MUST use HTML <ruby> tags for Furigana (e.g., <ruby>漢字<rt>かんじ</rt></ruby>). DO NOT use the format: 漢字(かんじ).`;
+
   const contents = `You are a language content creator. Your task is to generate a short, engaging text in ${language} that naturally incorporates the following words: ${gems.map(g => g.word).join(', ')}.
 
 **Strict Output Requirements:**
-1.  **Content Only:** Provide only the generated Japanese text, with no extra commentary, titles, or explanations (e.g., no "こちらが..." or English translations).
-2.  **Japanese Formatting:** You MUST use HTML <ruby> tags for Furigana (e.g., <ruby>漢字<rt>かんじ</rt></ruby>). DO NOT use the format: 漢字(かんじ).
+1.  **Content Only:** Provide only the generated ${language} text, with no extra commentary, titles, or explanations.
+${language === 'Japanese' ? japaneseInstruction : ''}
 
 Begin generating the text now.`;
   const config = { thinkingConfig: { thinkingBudget: 0 } };

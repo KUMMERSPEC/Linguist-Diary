@@ -160,11 +160,12 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
     if (m >= 4) return '✨';
   };
 
-    const safeGetDate = (timestamp: number | undefined) => {
-    if (timestamp && !isNaN(timestamp)) {
-      return new Date(timestamp);
-    }
-    return new Date(); // Fallback to now
+  const safeGetDate = (timestamp: any) => {
+    if (!timestamp) return new Date();
+    if (typeof timestamp === 'number') return new Date(timestamp);
+    if (timestamp.toMillis) return new Date(timestamp.toMillis());
+    if (timestamp.seconds) return new Date(timestamp.seconds * 1000);
+    return new Date();
   };
 
   const sortedPractices = useMemo(() => {
@@ -251,10 +252,10 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
           </div>
         </div>
 
-        {/* Practice Timeline */}
-        <div className="max-w-3xl mx-auto space-y-8">
+        {/* Practice List */}
+        <div className="max-w-4xl mx-auto space-y-8">
           <div className="flex items-center space-x-4 px-2">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Timeline</h3>
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">打磨足迹 FOOTPRINTS</h3>
             <div className="flex-1 h-[1px] bg-slate-100"></div>
           </div>
 
@@ -264,9 +265,7 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">正在调取打磨足迹...</p>
             </div>
           ) : sortedPractices.length > 0 ? (
-            <div className="space-y-6 relative">
-              <div className="absolute left-5 top-2 bottom-2 w-[1px] bg-slate-100 hidden md:block"></div>
-
+            <div className="space-y-4">
               {sortedPractices.map((practice, pIdx) => {
                 const isSelected = selectedIds.has(practice.id);
 
@@ -277,52 +276,55 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
                     className="relative group/pitem animate-in fade-in slide-in-from-bottom-2"
                     style={{ animationDelay: `${pIdx * 30}ms` }}
                   >
-                    <div className="flex items-center justify-between mb-2 px-1">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 rounded-full bg-white border border-slate-100 shadow-sm flex items-center justify-center shrink-0 z-10 transition-transform group-hover/pitem:scale-110">
-                          <span className="text-[9px] font-black text-slate-400">{safeGetDate(practice.timestamp).getDate()}</span>
-                        </div>
-                        <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest">
-                          {safeGetDate(practice.timestamp).toLocaleDateString('zh-CN', { month: 'short' })}
-                        </span>
+                    <div className="flex items-start space-x-4 px-2">
+                      <div className="flex flex-col items-center pt-2">
+                        <span className="text-[10px] font-black text-slate-300">{pIdx + 1}</span>
+                        {isManageMode && (
+                          <div className={`mt-2 w-4 h-4 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600 shadow-md' : 'bg-white border-slate-200'}`}>
+                            {isSelected && <span className="text-white text-[8px]">✓</span>}
+                          </div>
+                        )}
                       </div>
-                      {isManageMode && (
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600 shadow-md' : 'bg-white border-slate-200'}`}>
-                          {isSelected && <span className="text-white text-[8px]">✓</span>}
-                        </div>
-                      )}
-                    </div>
 
-                    <div className={`ml-4 md:ml-14 p-5 md:py-6 md:px-8 rounded-[2rem] border transition-all duration-300 relative flex flex-col ${
-                      isManageMode ? (isSelected ? 'bg-indigo-50 border-indigo-200 shadow-lg' : 'bg-white border-slate-100 shadow-sm') : 
-                      'bg-white border-slate-100 shadow-sm hover:shadow-xl hover:shadow-slate-200/30 hover:-translate-y-0.5'
-                    }`}>
-                      {!isManageMode && (
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); handleDeleteSingle(practice.id); }}
-                          className="absolute top-5 right-6 text-slate-100 hover:text-rose-400 transition-colors p-1 opacity-0 group-hover/pitem:opacity-100"
-                        >
-                          ✕
-                        </button>
-                      )}
-
-                      <p className="text-slate-400 italic text-sm mb-3 leading-relaxed serif-font opacity-60">
-                        “ {renderRuby(practice.originalAttempt || practice.sentence)} ”
-                      </p>
-                      
-                      {practice.betterVersion && (
-                        <div className="pt-3 border-t border-slate-50 flex items-center justify-between space-x-4">
-                          <p className="text-base md:text-lg text-slate-800 leading-snug serif-font font-medium flex-1">
-                            “ {renderRuby(practice.betterVersion)} ”
-                          </p>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handlePlayAudio(practice.betterVersion!, `refined-${pIdx}`); }}
-                            className={`flex-shrink-0 w-8 h-8 rounded-lg inline-flex items-center justify-center transition-all ${playingAudioId === `refined-${pIdx}` ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-50 text-slate-300 hover:text-indigo-600'}`}
-                          >
-                            {playingAudioId === `refined-${pIdx}` ? '⏹' : '🎧'}
-                          </button>
+                      <div className={`flex-1 p-6 rounded-[2rem] border transition-all duration-300 relative flex flex-col ${
+                        isManageMode ? (isSelected ? 'bg-indigo-50 border-indigo-200 shadow-lg' : 'bg-white border-slate-100 shadow-sm') : 
+                        'bg-white border-slate-100 shadow-sm hover:shadow-xl hover:shadow-slate-200/20'
+                      }`}>
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <p className="text-lg md:text-xl text-slate-900 font-medium leading-relaxed serif-font">
+                              {renderRuby(practice.betterVersion || practice.sentence)}
+                            </p>
+                            <p className="text-sm text-slate-400 mt-2 italic serif-font opacity-80">
+                              {renderRuby(practice.originalAttempt || practice.sentence)}
+                            </p>
+                          </div>
+                          <div className="flex flex-col items-end space-y-2 ml-4">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handlePlayAudio(practice.betterVersion || practice.sentence, `refined-${pIdx}`); }}
+                              className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${playingAudioId === `refined-${pIdx}` ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-50 text-slate-300 hover:text-indigo-600 border border-slate-100'}`}
+                            >
+                              {playingAudioId === `refined-${pIdx}` ? '⏹' : '🎧'}
+                            </button>
+                            {!isManageMode && (
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleDeleteSingle(practice.id); }}
+                                className="text-slate-200 hover:text-rose-400 transition-colors p-1"
+                              >
+                                <span className="text-[10px]">✕</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      )}
+                        <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
+                           <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest">
+                             {safeGetDate(practice.timestamp).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                           </span>
+                           <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${practice.status === 'Perfect' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                             {practice.status}
+                           </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 );

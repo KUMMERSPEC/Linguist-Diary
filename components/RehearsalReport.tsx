@@ -72,8 +72,8 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
   };
 
   if (!evaluation) return null;
-
-  const existingVocabWords = new Set(existingVocab.map(v => v.word.toLowerCase()));
+  const safeExistingVocab = existingVocab ?? [];
+  const existingVocabWords = new Set(safeExistingVocab.map(v => v.word.toLowerCase()));
   const filteredRecommendedGems = (evaluation.recommendedGems ?? []).filter(gem => !existingVocabWords.has(gem.word.toLowerCase()));
 
   const failedGems = filteredRecommendedGems.filter(gem => !gem.meaning || !gem.usage);

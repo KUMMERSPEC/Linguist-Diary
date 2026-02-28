@@ -280,32 +280,34 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
           ))}
         </div>
       ) : (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-5xl mx-auto space-y-10">
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-7xl mx-auto lg:grid lg:grid-cols-12 lg:gap-10 lg:items-start space-y-10 lg:space-y-0">
            {/* Calendar UI */}
-           <div className="bg-white p-6 md:p-12 rounded-[2.5rem] md:rounded-[3.5rem] border border-slate-200 shadow-2xl relative overflow-hidden">
+           <div className="lg:col-span-5 bg-white p-6 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] border border-slate-200 shadow-2xl relative overflow-hidden">
               <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl -mr-32 -mt-32"></div>
               
-              <div className="flex flex-col md:flex-row items-center justify-between mb-8 md:mb-10 relative z-10 gap-4">
-                <div className="flex items-center space-x-6">
-                  <h3 className="text-2xl md:text-3xl font-black text-slate-900 serif-font tracking-tight">
-                    {calendarDate.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' })}
-                  </h3>
-                  <div className="flex items-center space-x-2">
-                    <button onClick={() => changeMonth(-1)} className="w-10 h-10 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-indigo-600 hover:text-white transition-all shadow-sm">←</button>
-                    <button onClick={() => changeMonth(1)} className="w-10 h-10 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-indigo-600 hover:text-white transition-all shadow-sm">→</button>
+              <div className="flex flex-col items-center justify-between mb-8 relative z-10 gap-4">
+                <div className="flex flex-col items-center space-y-4 w-full">
+                  <div className="flex items-center justify-between w-full">
+                    <h3 className="text-xl md:text-2xl font-black text-slate-900 serif-font tracking-tight">
+                      {calendarDate.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' })}
+                    </h3>
+                    <div className="flex items-center space-x-2">
+                      <button onClick={() => changeMonth(-1)} className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-indigo-600 hover:text-white transition-all shadow-sm text-xs">←</button>
+                      <button onClick={() => changeMonth(1)} className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-indigo-600 hover:text-white transition-all shadow-sm text-xs">→</button>
+                    </div>
                   </div>
+                  <button 
+                    onClick={() => { setCalendarDate(new Date()); setSelectedDateStr(new Date().toDateString()); }}
+                    className="w-full text-[9px] font-black uppercase text-indigo-600 tracking-widest bg-indigo-50 px-4 py-2 rounded-xl text-center"
+                  >
+                    回到今天 TODAY
+                  </button>
                 </div>
-                <button 
-                  onClick={() => { setCalendarDate(new Date()); setSelectedDateStr(new Date().toDateString()); }}
-                  className="text-[10px] font-black uppercase text-indigo-600 tracking-widest bg-indigo-50 px-4 py-2 rounded-xl"
-                >
-                  回到今天 TODAY
-                </button>
               </div>
 
-              <div className="grid grid-cols-7 gap-1 md:gap-3 relative z-10">
+              <div className="grid grid-cols-7 gap-1 md:gap-2 relative z-10">
                 {['日', '一', '二', '三', '四', '五', '六'].map(d => (
-                  <div key={d} className="text-center py-2 text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                  <div key={d} className="text-center py-2 text-[9px] font-black text-slate-300 uppercase tracking-widest">
                     {d}
                   </div>
                 ))}
@@ -322,15 +324,15 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
                       key={dStr}
                       onClick={() => setSelectedDateStr(dStr)}
                       className={`
-                        aspect-square rounded-[1rem] md:rounded-[2rem] flex flex-col items-center justify-center transition-all relative
+                        aspect-square rounded-[1rem] md:rounded-[1.5rem] flex flex-col items-center justify-center transition-all relative
                         ${isSelected ? 'bg-slate-900 text-white shadow-xl scale-105' : 'bg-slate-50/50 hover:bg-indigo-50'}
                       `}
                     >
-                      <span className={`text-[15px] md:text-lg font-bold ${isToday && !isSelected ? 'text-indigo-600 underline underline-offset-4' : ''}`}>
+                      <span className={`text-sm md:text-base font-bold ${isToday && !isSelected ? 'text-indigo-600 underline underline-offset-4' : ''}`}>
                         {day.getDate()}
                       </span>
                       {hasEntries && (
-                        <div className={`mt-0.5 md:mt-1 flex gap-0.5`}>
+                        <div className={`mt-0.5 flex gap-0.5`}>
                            {calendarEntryMap[dStr].slice(0, 3).map((_, i) => (
                              <span key={i} className={`w-0.5 h-0.5 md:w-1 md:h-1 rounded-full ${isSelected ? 'bg-indigo-400' : 'bg-indigo-600'}`}></span>
                            ))}
@@ -344,29 +346,31 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
            </div>
 
            {/* Entries for selected day */}
-           <section className="space-y-8">
-              <div className="flex items-center space-x-4">
-                <h3 className="text-xl font-black text-slate-800 serif-font tracking-tight">
-                  {selectedDateStr ? new Date(selectedDateStr).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }) : '选中记录'}
-                </h3>
-                <div className="flex-1 h-[1px] bg-slate-200/60"></div>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  {selectedDateStr ? (calendarEntryMap[selectedDateStr]?.length || 0) : 0} ITEMS
-                </span>
-              </div>
+           <div className="lg:col-span-7">
+             <section className="space-y-8">
+                <div className="flex items-center space-x-4">
+                  <h3 className="text-xl font-black text-slate-800 serif-font tracking-tight">
+                    {selectedDateStr ? new Date(selectedDateStr).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }) : '选中记录'}
+                  </h3>
+                  <div className="flex-1 h-[1px] bg-slate-200/60"></div>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    {selectedDateStr ? (calendarEntryMap[selectedDateStr]?.length || 0) : 0} ITEMS
+                  </span>
+                </div>
 
-              {selectedDateStr && calendarEntryMap[selectedDateStr] && calendarEntryMap[selectedDateStr].length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-                  {calendarEntryMap[selectedDateStr].map(entry => renderEntryCard(entry))}
-                </div>
-              ) : (
-                <div className="bg-white p-12 md:p-16 rounded-[2.5rem] md:rounded-[3rem] border border-dashed border-slate-200 text-center">
-                   <span className="text-4xl mb-4 block grayscale opacity-30">🕳️</span>
-                   <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">当天下暂无馆藏记录</p>
-                   <p className="text-slate-300 text-[10px] mt-2 italic">NO RECORDS FOUND FOR THIS DATE</p>
-                </div>
-              )}
-           </section>
+                {selectedDateStr && calendarEntryMap[selectedDateStr] && calendarEntryMap[selectedDateStr].length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {calendarEntryMap[selectedDateStr].map(entry => renderEntryCard(entry))}
+                  </div>
+                ) : (
+                  <div className="bg-white p-12 md:p-16 rounded-[2.5rem] md:rounded-[3rem] border border-dashed border-slate-200 text-center">
+                     <span className="text-4xl mb-4 block grayscale opacity-30">🕳️</span>
+                     <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">当天下暂无馆藏记录</p>
+                     <p className="text-slate-300 text-[10px] mt-2 italic">NO RECORDS FOUND FOR THIS DATE</p>
+                  </div>
+                )}
+             </section>
+           </div>
         </div>
       )}
     </div>
