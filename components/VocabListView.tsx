@@ -18,6 +18,7 @@ interface VocabListViewProps {
   onDeleteFragment?: (id: string) => void;
   onPromoteFragment?: (id: string) => void;
   onPromoteToSeed?: (id: string) => void;
+  onBulkPromoteFragments?: (ids: string[]) => void;
   isMenuOpen?: boolean;
   onBulkUpdateLanguage?: (vocabIds: string[], language: string) => void;
   promotingFragmentId?: string | null;
@@ -39,11 +40,13 @@ const VocabListView: React.FC<VocabListViewProps> = ({
   onDeleteFragment, 
   onPromoteFragment, 
   onPromoteToSeed,
+  onBulkPromoteFragments,
   isMenuOpen,
   onBulkUpdateLanguage,
   promotingFragmentId
 }) => {
   const [activeTab, setActiveTab] = useState<'gems' | 'shards'>('gems');
+  const [shardFilter, setShardFilter] = useState<'all' | 'seed' | 'transient'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'dictionary'>('dictionary');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortMode, setSortMode] = useState<'date' | 'mastery' | 'language'>('date');
@@ -55,6 +58,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   
   const [selectedVocabIds, setSelectedVocabIds] = useState<Set<string>>(new Set());
+  const [selectedShardIds, setSelectedShardIds] = useState<Set<string>>(new Set());
   const [isBulkLanguageModalOpen, setIsBulkLanguageModalOpen] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
@@ -186,8 +190,16 @@ const VocabListView: React.FC<VocabListViewProps> = ({
     if (selectedLangs.length > 0) {
       list = list.filter(f => selectedLangs.includes(f.language));
     }
+
+    // Shard type filter
+    if (shardFilter === 'seed') {
+      list = list.filter(f => f.fragmentType === 'seed');
+    } else if (shardFilter === 'transient') {
+      list = list.filter(f => f.fragmentType === 'transient');
+    }
+
     return list.sort((a, b) => b.timestamp - a.timestamp);
-  }, [fragments, selectedLangs, searchQuery]);
+  }, [fragments, selectedLangs, searchQuery, shardFilter]);
 
   const handlePlayAudio = async (e: React.MouseEvent, text: string, id: string) => {
     e.stopPropagation();
@@ -216,6 +228,15 @@ const VocabListView: React.FC<VocabListViewProps> = ({
 
   const toggleVocabSelection = (id: string) => {
     setSelectedVocabIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleShardSelection = (id: string) => {
+    setSelectedShardIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -283,6 +304,30 @@ const VocabListView: React.FC<VocabListViewProps> = ({
                 SHARDS ({filteredShards.length})
               </button>
             </div>
+
+            {/* Shard Sub-filter */}
+            {activeTab === 'shards' && (
+              <div className="bg-white p-1 rounded-xl border border-slate-100 shadow-sm flex shrink-0">
+                <button 
+                  onClick={() => setShardFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${shardFilter === 'all' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  全部
+                </button>
+                <button 
+                  onClick={() => setShardFilter('seed')}
+                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${shardFilter === 'seed' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-emerald-600'}`}
+                >
+                  种子
+                </button>
+                <button 
+                  onClick={() => setShardFilter('transient')}
+                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${shardFilter === 'transient' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-indigo-600'}`}
+                >
+                  随笔
+                </button>
+              </div>
+            )}
 
             {/* View Mode Switcher (Only for Gems) */}
             {activeTab === 'gems' && (
@@ -575,9 +620,17 @@ const VocabListView: React.FC<VocabListViewProps> = ({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {filteredShards.length > 0 ? filteredShards.map((f) => (
-              <div key={f.id} className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative group flex flex-col h-full hover:shadow-xl transition-all">
+              <div key={f.id} className={`bg-white p-6 rounded-[2rem] border shadow-sm relative group flex flex-col h-full hover:shadow-xl transition-all ${selectedShardIds.has(f.id) ? 'border-indigo-200 ring-2 ring-indigo-500/10 bg-indigo-50/10' : 'border-slate-200'}`}>
                  <div className="flex items-center justify-between mb-4">
                    <div className="flex items-center space-x-2">
+                     <div onClick={(e) => e.stopPropagation()} className="mr-1">
+                       <input 
+                         type="checkbox" 
+                         checked={selectedShardIds.has(f.id)}
+                         onChange={() => toggleShardSelection(f.id)}
+                         className="w-4 h-4 rounded border-slate-200 text-indigo-600 focus:ring-indigo-500/20"
+                       />
+                     </div>
                      <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg ${f.fragmentType === 'seed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-indigo-50 text-indigo-400'}`}>
                        {f.fragmentType === 'seed' ? '🌱 种子' : '📜 随笔'}
                      </span>
@@ -658,6 +711,42 @@ const VocabListView: React.FC<VocabListViewProps> = ({
              </button>
              <button 
                onClick={() => setSelectedVocabIds(new Set())}
+               className="text-slate-400 hover:text-white text-[9px] font-black uppercase tracking-widest px-4"
+             >
+               取消
+             </button>
+           </div>
+        </div>
+      )}
+
+      {selectedShardIds.size > 0 && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-8 py-5 rounded-[2.5rem] shadow-2xl flex items-center space-x-8 z-[60] animate-in slide-in-from-bottom-10">
+           <div className="flex flex-col">
+             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">SELECTED</span>
+             <span className="text-lg font-bold">{selectedShardIds.size} 项碎片</span>
+           </div>
+           <div className="flex items-center space-x-3">
+             {Array.from(selectedShardIds).every(id => fragments.find(f => f.id === id)?.fragmentType === 'seed') && (
+               <button 
+                 onClick={async () => {
+                   const ids = Array.from(selectedShardIds);
+                   if (onBulkPromoteFragments) {
+                     await onBulkPromoteFragments(ids);
+                   } else {
+                     for (const id of ids) {
+                       await onPromoteFragment?.(id);
+                     }
+                   }
+                   setSelectedShardIds(new Set());
+                 }}
+                 disabled={promotingFragmentId !== null}
+                 className="bg-emerald-600 text-white px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-xl shadow-emerald-600/20 active:scale-95 disabled:opacity-50"
+               >
+                 {promotingFragmentId ? '升级中...' : '💎 批量升级为珍宝'}
+               </button>
+             )}
+             <button 
+               onClick={() => setSelectedShardIds(new Set())}
                className="text-slate-400 hover:text-white text-[9px] font-black uppercase tracking-widest px-4"
              >
                取消

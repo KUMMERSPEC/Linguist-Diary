@@ -395,6 +395,92 @@ const App: React.FC = () => {
     }
   };
 
+  const handleBulkPromoteFragments = async (fragmentIds: string[]) => {
+    if (!user || promotingFragmentId) return;
+    
+    setPromotingFragmentId('bulk');
+    const toastId = toast.loading(`正在批量升级 ${fragmentIds.length} 项记录...`);
+    
+    try {
+      for (const id of fragmentIds) {
+        const fragment = fragments.find(f => f.id === id);
+        if (!fragment) continue;
+
+        let finalMeaning = fragment.meaning;
+        let finalUsage = fragment.usage;
+
+        if (!finalMeaning || !finalUsage || finalMeaning.trim() === "" || finalUsage.trim() === "") {
+          try {
+            const enrichment = await enrichFragment(fragment.content, fragment.language);
+            finalMeaning = finalMeaning || enrichment.meaning;
+            finalUsage = finalUsage || enrichment.usage;
+          } catch (aiError) {
+            console.warn("AI enrichment failed for", fragment.content, aiError);
+          }
+        }
+
+        const vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'> = {
+          word: fragment.content,
+          meaning: finalMeaning || "未命名珍宝",
+          usage: finalUsage || "暂无例句",
+          level: 'Intermediate',
+          language: fragment.language,
+          timestamp: Date.now()
+        };
+
+        // We use a simplified version of handleSaveManualVocab here to avoid repeated state updates
+        const normalizedNewWord = stripRuby(vocab.word).trim().toLowerCase();
+        const isExisting = allAdvancedVocab.some(v => stripRuby(v.word).trim().toLowerCase() === normalizedNewWord && v.language === vocab.language);
+        
+        if (!isExisting) {
+          const cleanWord = normalizedNewWord;
+          const potentialParents = allAdvancedVocab
+            .filter(v => v.language === vocab.language)
+            .filter(v => {
+              const cleanExisting = stripRuby(v.word).toLowerCase().trim();
+              return cleanWord.includes(cleanExisting) && cleanWord !== cleanExisting;
+            })
+            .sort((a, b) => stripRuby(b.word).length - stripRuby(a.word).length);
+          
+          const parentId = potentialParents[0]?.id;
+
+          if (!db || user.isMock) {
+            const newVocab: AdvancedVocab = { ...vocab, id: uuidv4(), mastery: 0, practices: [], timestamp: Date.now(), parentId };
+            setAllAdvancedVocab(prev => [newVocab, ...prev]);
+            setFragments(prev => prev.filter(f => f.id !== id));
+          } else {
+            const dataToSave: { [key: string]: any } = { ...vocab, mastery: 0, timestamp: serverTimestamp() };
+            if (parentId) dataToSave.parentId = parentId;
+            await addDoc(collection(db, 'users', user.uid, 'advancedVocab'), dataToSave);
+            await deleteDoc(doc(db, 'users', user.uid, 'fragments', id));
+          }
+        } else {
+          // If already exists, just delete the fragment
+          if (!db || user.isMock) {
+            setFragments(prev => prev.filter(f => f.id !== id));
+          } else {
+            await deleteDoc(doc(db, 'users', user.uid, 'fragments', id));
+          }
+        }
+      }
+      
+      if (db && !user.isMock) {
+        await loadUserData(user.uid, false);
+      } else {
+        // Sync local storage
+        localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(allAdvancedVocab));
+        localStorage.setItem(`linguist_fragments_${user.uid}`, JSON.stringify(fragments));
+      }
+      
+      toast.success('批量升级成功！', { id: toastId });
+    } catch (e) {
+      console.error("Bulk promotion failed:", e);
+      toast.error('批量升级失败，请重试。', { id: toastId });
+    } finally {
+      setPromotingFragmentId(null);
+    }
+  };
+
   /**
    * 优化后的升级函数：增加 AI 智能补全逻辑
    */
@@ -1005,7 +1091,7 @@ const App: React.FC = () => {
       {/* // FIX: Updated function name from handleUpdateLanguage to handleUpdateEntryLanguage */}
       {view === 'history' && <History entries={entries} isAnalyzingId={analyzingId} onAnalyzeDraft={handleAnalyzeExistingEntry} onUpdateLanguage={handleUpdateEntryLanguage} onSelect={(e) => { setCurrentEntry(e); setIsReviewingExisting(true); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); setEntries(prev => prev.filter(e => e.id !== id)); }} onRewrite={(e) => { handleStartIteration(e); }} preferredLanguages={preferredLanguages} isMenuOpen={isMenuOpen} />}
       {view === 'chat' && <ChatEditor onFinish={(msgs, lang, summary) => { setChatLanguage(lang); setPrefilledEditorText(''); setSummaryPrompt(summary); setView('editor'); }} allGems={allAdvancedVocab} preferredLanguages={preferredLanguages} />}
-      {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} fragments={fragments} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} onDeleteVocab={handleDeleteVocab} onDeleteFragment={handleDeleteFragment} onPromoteFragment={handlePromoteFragment} onPromoteToSeed={handlePromoteToSeed} isMenuOpen={isMenuOpen} onBulkUpdateLanguage={handleBulkUpdateVocabLanguage} />}
+      {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} fragments={fragments} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} onDeleteVocab={handleDeleteVocab} onDeleteFragment={handleDeleteFragment} onPromoteFragment={handlePromoteFragment} onPromoteToSeed={handlePromoteToSeed} onBulkPromoteFragments={handleBulkPromoteFragments} isMenuOpen={isMenuOpen} onBulkUpdateLanguage={handleBulkUpdateVocabLanguage} promotingFragmentId={promotingFragmentId} />}
       {view === 'vocab_practice' && selectedVocabForPracticeId && (
         <VocabPractice 
           selectedVocabId={selectedVocabForPracticeId} 
