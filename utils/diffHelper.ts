@@ -15,7 +15,7 @@ export function calculateDiff(oldStr: string, newStr: string, language: string =
     // 3. Sequences of CJK characters (for Japanese, Chinese, etc.)
     // 4. Sequences of whitespace
     // 5. Single non-word, non-whitespace characters (punctuation)
-    const regex = /(\[.*?\]\(.*?\))|([\w']+|[\u4e00-\u9faf\u3040-\u309f\u30a0-\u30ff]+)|(\s+)|([^\w\s])/g;
+    const regex = /(\[.*?\]\(.*?\))|([\w']+)|(\s+)|(.)/g;
     return text.match(regex) || [];
   };
 

@@ -587,7 +587,10 @@ const VocabListView: React.FC<VocabListViewProps> = ({
                  </div>
                  
                  <div className="flex-1 space-y-3">
-                   <p className="text-base font-bold text-slate-800 leading-relaxed serif-font">“ {renderRuby(f.content)} ”</p>
+                   <p 
+                    className="text-base font-bold text-slate-800 leading-relaxed serif-font"
+                    dangerouslySetInnerHTML={{ __html: `“ ${renderRuby(f.content)} ”` }}
+                  />
                    {f.meaning && f.meaning.trim() !== '' && (
                      <p className="text-[11px] text-slate-500 font-medium bg-slate-50 p-2 rounded-xl">意思：{stripRuby(f.meaning)}</p>
                    )}

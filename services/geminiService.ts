@@ -258,7 +258,7 @@ export const evaluateRetelling = async (source: string, retelling: string, langu
       3.  **Provide Feedback:** Write two distinct feedback paragraphs in ${language}:
           - **Content Feedback:** Comment on what the user did well and what they missed from the source text.
           - **Language Feedback:** Comment on grammar, vocabulary, and style in the user's retelling.
-      4.  **Suggest an Improved Version:** Rewrite the user's retelling to be more accurate and natural.
+      4.  **Suggest an Improved Version:** Rewrite the user's retelling to be more accurate and natural. Preserve as much of the user's original phrasing as possible if it is already correct and natural.
       5.  **Recommend Vocabulary (Gems):** Extract 3-5 key vocabulary words or phrases from your suggested version that would be beneficial for the user to learn. For each, provide the word, its meaning in ${language}, and a simple usage example.
 
       **Output MUST be valid JSON that adheres to the schema.**
