@@ -205,7 +205,7 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveRehearsal, onSaveVocab, set
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto pt-6 md:pt-10 px-4 md:px-8 pb-32 animate-in fade-in duration-500">
+    <div className="w-full max-w-7xl mx-auto pt-6 md:pt-10 px-4 md:px-8 pb-32">
       <header className="mb-10 max-w-6xl mx-auto flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div className="text-center md:text-left">
           <h2 className="text-3xl md:text-4xl font-black text-slate-900 serif-font tracking-tight">展厅演练 Rehearsal</h2>

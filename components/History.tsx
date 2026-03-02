@@ -33,23 +33,24 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
   const [fixingEntryId, setFixingEntryId] = useState<string | null>(null);
   const [isScrolled, setIsScrolled] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!hasMore || isLoadingMore || viewMode !== 'list') return;
 
+    const currentRef = loadMoreRef.current;
+    if (!currentRef) return;
+
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting) {
+        if (entries[0].isIntersecting && hasMore && !isLoadingMore) {
           onLoadMore?.();
         }
       },
       { threshold: 0.1 }
     );
 
-    if (loadMoreRef.current) {
-      observer.observe(loadMoreRef.current);
-    }
-
+    observer.observe(currentRef);
     return () => observer.disconnect();
   }, [hasMore, isLoadingMore, onLoadMore, viewMode]);
 
@@ -305,8 +306,9 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
 
   return (
     <div 
+      ref={containerRef}
       onScroll={handleScroll}
-      className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-8"
+      className="h-full overflow-y-auto no-scrollbar pt-6 md:pt-10 px-4 md:px-8 pb-32 space-y-8"
     >
       <header className="space-y-6">
         <div>
@@ -362,7 +364,7 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
       </header>
 
       {viewMode === 'list' ? (
-        <div className="space-y-16 animate-in fade-in duration-500">
+        <div className="space-y-16">
           {(Object.entries(groupedEntries) as [string, DiaryEntry[]][]).map(([monthYear, monthEntries]) => (
             <section key={monthYear} className="space-y-10">
               <div className="flex items-center space-x-4">

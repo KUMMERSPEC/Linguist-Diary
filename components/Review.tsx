@@ -97,7 +97,7 @@ const Review: React.FC<ReviewProps> = ({ analysis, language, iterations, allAdva
   };
 
   return (
-    <div className="flex flex-col h-full animate-in fade-in duration-500 overflow-hidden w-full relative pb-10 md:pb-8">
+    <div className="flex flex-col h-full overflow-hidden w-full relative pb-10 md:pb-8">
       <header className="flex flex-col md:flex-row md:items-end justify-between mb-8 px-2 md:px-0 gap-4">
         <div className="flex-1">
           <button onClick={onBack} className="text-slate-400 hover:text-indigo-600 text-[10px] font-black uppercase tracking-widest mb-1 flex items-center group">

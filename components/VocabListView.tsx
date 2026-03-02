@@ -521,6 +521,9 @@ const VocabListView: React.FC<VocabListViewProps> = ({
 
   // Infinite Scroll Observer
   useEffect(() => {
+    const currentRef = loadMoreRef.current;
+    if (!currentRef) return;
+
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
@@ -530,12 +533,9 @@ const VocabListView: React.FC<VocabListViewProps> = ({
       { threshold: 0.1 }
     );
 
-    if (loadMoreRef.current) {
-      observer.observe(loadMoreRef.current);
-    }
-
+    observer.observe(currentRef);
     return () => observer.disconnect();
-  }, [visibleCount, activeTab, filteredGems.length, filteredShards.length]);
+  }, [activeTab]); // Only re-run when tab changes, visibleCount updates internally
 
   const handlePlayAudio = async (e: React.MouseEvent, text: string, id: string) => {
     e.stopPropagation();
@@ -597,8 +597,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
   return (
     <div 
       ref={containerRef}
-      
-      className="h-full overflow-y-auto no-scrollbar pb-32 animate-in fade-in duration-700 relative"
+      className="h-full overflow-y-auto no-scrollbar pb-32 relative"
     >
       <header className="mb-8 text-left px-4 md:px-8 pt-6 md:pt-10">
         <h2 className="text-3xl md:text-5xl font-black text-slate-900 serif-font tracking-tight">馆藏珍宝 <span className="text-indigo-600">Gems & Shards</span></h2>
@@ -760,7 +759,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
       </div>
 
       {/* Items List/Grid */}
-      <div key={`${activeTab}-${selectedLangs.join('-')}-${viewMode}-${debouncedSearchQuery}-${sortMode}`} className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-700 px-4 md:px-8">
+      <div key={`${activeTab}-${selectedLangs.join('-')}-${viewMode}-${debouncedSearchQuery}-${sortMode}`} className="mt-8 px-4 md:px-8">
         {activeTab === 'gems' ? (
           viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
