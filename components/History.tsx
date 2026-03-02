@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { DiaryEntry } from '../types';
 import { renderRuby } from '../utils/textHelpers'; 
 
@@ -13,6 +13,9 @@ interface HistoryProps {
   isAnalyzingId?: string | null; 
   preferredLanguages: string[];
   isMenuOpen?: boolean;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
+  isLoadingMore?: boolean;
 }
 
 const LANGUAGES = [
@@ -23,12 +26,32 @@ const LANGUAGES = [
   { code: 'German', label: 'Deutsch', flag: '🇩🇪' },
 ];
 
-const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrite, onAnalyzeDraft, onUpdateLanguage, isAnalyzingId, preferredLanguages, isMenuOpen }) => {
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrite, onAnalyzeDraft, onUpdateLanguage, isAnalyzingId, preferredLanguages, isMenuOpen, hasMore, onLoadMore, isLoadingMore }) => {
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('All');
   const [fixingEntryId, setFixingEntryId] = useState<string | null>(null);
   const [isScrolled, setIsScrolled] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!hasMore || isLoadingMore || viewMode !== 'list') return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          onLoadMore?.();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, onLoadMore, viewMode]);
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     setIsScrolled(e.currentTarget.scrollTop > 10);
@@ -38,14 +61,29 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(new Date().toDateString());
 
-  const filteredEntries = useMemo(() => {
-    return entries.filter(e => {
+  const filteredEntriesWithIndex = useMemo(() => {
+    const sorted = [...entries].sort((a, b) => a.timestamp - b.timestamp); // Sort ascending to assign indices
+    const dateGroups: Record<string, number> = {};
+    
+    const withIndex = sorted.map(entry => {
+      const dateStr = new Date(entry.timestamp).toLocaleDateString('zh-CN', { year: '2-digit', month: 'numeric', day: 'numeric' });
+      dateGroups[dateStr] = (dateGroups[dateStr] || 0) + 1;
+      return {
+        ...entry,
+        displayTitle: `${dateStr}-${dateGroups[dateStr]}`
+      };
+    });
+
+    // Now filter and sort descending for display
+    return withIndex.filter(e => {
       const latestText = e.originalText;
       const matchesSearch = (latestText && latestText.toLowerCase().includes(searchQuery.toLowerCase())) || (e.date && e.date.includes(searchQuery));
       const matchesLanguage = selectedLanguage === 'All' || e.language === selectedLanguage;
       return matchesSearch && matchesLanguage;
     }).sort((a, b) => b.timestamp - a.timestamp);
   }, [entries, searchQuery, selectedLanguage]);
+
+  const filteredEntries = filteredEntriesWithIndex;
 
   // Calendar specific grouping
   const calendarEntryMap = useMemo(() => {
@@ -59,7 +97,7 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
   }, [filteredEntries]);
 
   const groupedEntries = useMemo(() => {
-    const groups: { [key: string]: DiaryEntry[] } = {};
+    const groups: { [key: string]: (DiaryEntry & { displayTitle?: string })[] } = {};
     filteredEntries.forEach(entry => {
       const date = new Date(entry.timestamp);
       const monthYear = date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' });
@@ -97,6 +135,64 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
 
   const changeMonth = (offset: number) => {
     setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + offset, 1));
+  };
+
+  const renderNotionRow = (entry: DiaryEntry & { displayTitle?: string }) => {
+    const iterCount = entry.iterationCount || 0;
+    const isRehearsal = entry.type === 'rehearsal';
+    const isDraft = !isRehearsal && !entry.analysis;
+    const isAnalyzing = isAnalyzingId === entry.id;
+
+    return (
+      <div 
+        key={entry.id} 
+        onClick={() => onSelect(entry)}
+        className="group flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl transition-all cursor-pointer border-b border-slate-50 last:border-0"
+      >
+        <div className="flex items-center space-x-4 flex-1 min-w-0">
+          <span className="text-xl grayscale group-hover:grayscale-0 transition-all">
+            {isDraft ? '📄' : isRehearsal ? '🎭' : '💎'}
+          </span>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 overflow-hidden">
+            <span className="text-sm font-bold text-slate-700 serif-font truncate">
+              {entry.displayTitle || entry.date}
+            </span>
+            <div className="flex items-center space-x-2">
+              {entry.language && (
+                <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[8px] font-black rounded uppercase tracking-widest">
+                  {entry.language}
+                </span>
+              )}
+              <span className={`text-[8px] font-black uppercase tracking-widest ${isDraft ? 'text-slate-400' : 'text-indigo-500'}`}>
+                {isDraft ? 'Draft' : (isRehearsal ? 'Rehearsal' : (iterCount > 0 ? `Refined ${iterCount}x` : 'Archived'))}
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-4 shrink-0">
+          <span className="hidden md:block text-[10px] font-medium text-slate-400">
+            {new Date(entry.timestamp).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+          </span>
+          <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+            {!isRehearsal && (
+              <button 
+                onClick={(e) => { e.stopPropagation(); onRewrite(entry); }} 
+                className="p-2 hover:bg-indigo-50 text-indigo-400 rounded-lg transition-colors"
+              >
+                🖋️
+              </button>
+            )}
+            <button 
+              onClick={(e) => { e.stopPropagation(); onDelete(entry.id); }} 
+              className="p-2 hover:bg-rose-50 text-rose-300 rounded-lg transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const renderEntryCard = (entry: DiaryEntry) => {
@@ -274,11 +370,30 @@ const History: React.FC<HistoryProps> = ({ entries, onSelect, onDelete, onRewrit
                 <div className="flex-1 h-[1px] bg-slate-200/60"></div>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{monthEntries.length} ITEMS</span>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-                {monthEntries.map(entry => renderEntryCard(entry))}
+              <div className="grid grid-cols-1 gap-2">
+                {monthEntries.map(entry => renderNotionRow(entry))}
               </div>
             </section>
           ))}
+          
+          {hasMore && (
+            <div ref={loadMoreRef} className="py-12 flex flex-col items-center justify-center space-y-4">
+              <div className="w-8 h-8 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">
+                正在从馆藏深处调取更多记录...
+              </p>
+            </div>
+          )}
+          
+          {!hasMore && entries.length > 0 && (
+            <div className="py-12 text-center">
+              <div className="inline-block px-6 py-2 bg-slate-50 rounded-full border border-slate-100">
+                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                  已经到达馆藏尽头 END OF EXHIBIT
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-7xl mx-auto lg:grid lg:grid-cols-12 lg:gap-10 lg:items-start space-y-10 lg:space-y-0">

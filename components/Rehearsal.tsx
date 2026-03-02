@@ -272,7 +272,7 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveRehearsal, onSaveVocab, set
                            <h4 className="text-lg font-black text-slate-900 serif-font">
                              {renderRuby(gem.word)}
                            </h4>
-                           <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest">Mastery {gem.mastery || 0}</p>
+                           <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest">Mastery {Number(gem.mastery || 0).toFixed(1)}</p>
                         </div>
                       )) : (
                         <div className="col-span-full py-12 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">

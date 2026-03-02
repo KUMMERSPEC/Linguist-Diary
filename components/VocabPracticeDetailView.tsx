@@ -199,7 +199,7 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
                onClick={() => setIsLanguagePickerOpen(!isLanguagePickerOpen)}
                className={`px-4 py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest flex items-center space-x-2 border shadow-sm transition-all hover:border-indigo-300 ${getMasteryColor(currentVocab.mastery)}`}
              >
-                 <span>{getMasteryIcon(currentVocab.mastery)} Mastery {currentVocab.mastery || 0}</span>
+                 <span>{getMasteryIcon(currentVocab.mastery)} Mastery {Number(currentVocab.mastery || 0).toFixed(1)}</span>
                  <span>|</span>
                  <span>{LANGUAGE_FLAGS[currentVocab.language] || '🌐'} {currentVocab.language}</span>
                  <span className="text-[8px] opacity-40">▼</span>

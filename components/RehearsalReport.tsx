@@ -3,6 +3,7 @@ import React, { useState, useRef } from 'react';
 import { RehearsalEvaluation, AdvancedVocab } from '../types';
 import { generateDiaryAudio } from '../services/geminiService';
 import { decode, decodeAudioData } from '../utils/audioHelpers';
+import toast from 'react-hot-toast';
 
 interface RehearsalReportProps {
   evaluation: RehearsalEvaluation;
@@ -186,43 +187,49 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
       </div>
 
       {isGemModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setIsGemModalOpen(false)}></div>
-          <div className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 flex flex-col max-h-[80vh]">
-            <h3 className="text-xl font-black text-slate-900 serif-font mb-2">收藏建议表达</h3>
-            <p className="text-xs text-slate-400 mb-6">请选择您希望加入珍宝馆的词汇：</p>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6">
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-xl animate-in fade-in duration-300" onClick={() => setIsGemModalOpen(false)}></div>
+          <div className="relative bg-white w-full max-w-xl rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 flex flex-col max-h-[85vh]">
+            <header className="p-8 md:p-10 pb-6 border-b border-slate-50">
+              <h3 className="text-2xl font-black text-slate-900 serif-font mb-2">收藏建议表达 COLLECT GEMS</h3>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">请选择您希望加入珍宝馆的词汇：</p>
+            </header>
             
-            <div className="flex-1 overflow-y-auto -mr-4 pr-4 space-y-3">
+            <div className="flex-1 overflow-y-auto p-8 md:p-10 space-y-4 no-scrollbar">
               {filteredRecommendedGems.map((gem, index) => (
-                <label key={index} className={`flex items-start space-x-4 p-4 rounded-2xl cursor-pointer transition-all border ${selectedGemsInModal.has(gem.word) ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
-                  <input 
-                    type="checkbox" 
-                    checked={selectedGemsInModal.has(gem.word)}
-                    onChange={() => {
-                      setSelectedGemsInModal(prev => {
-                        const next = new Set(prev);
-                        if (next.has(gem.word)) next.delete(gem.word);
-                        else next.add(gem.word);
-                        return next;
-                      });
-                    }}
-                    className="w-5 h-5 rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500/50 mt-1"
-                  />
+                <label key={index} className={`flex items-start space-x-5 p-6 rounded-[2rem] cursor-pointer transition-all border-2 ${selectedGemsInModal.has(gem.word) ? 'bg-indigo-50/50 border-indigo-200 ring-4 ring-indigo-500/5' : 'bg-slate-50 border-transparent hover:bg-slate-100/80'}`}>
+                  <div className="relative flex items-center mt-1">
+                    <input 
+                      type="checkbox" 
+                      checked={selectedGemsInModal.has(gem.word)}
+                      onChange={() => {
+                        setSelectedGemsInModal(prev => {
+                          const next = new Set(prev);
+                          if (next.has(gem.word)) next.delete(gem.word);
+                          else next.add(gem.word);
+                          return next;
+                        });
+                      }}
+                      className="peer w-6 h-6 rounded-lg border-slate-300 text-indigo-600 focus:ring-indigo-500/50 transition-all cursor-pointer"
+                    />
+                  </div>
                   <div className="flex-1">
-                    <h5 className="font-bold text-slate-800">{gem.word}</h5>
-                    <p className="text-xs text-slate-500">{gem.meaning}</p>
-                    <p className="text-xs text-slate-400 italic mt-1">e.g., "{gem.usage}"</p>
+                    <h5 className="text-lg font-black text-slate-800 serif-font mb-1">{gem.word}</h5>
+                    <p className="text-xs text-slate-500 font-medium leading-relaxed mb-2">{gem.meaning}</p>
+                    <div className="bg-white/50 p-3 rounded-xl border border-slate-100/50">
+                      <p className="text-[10px] text-slate-400 italic leading-relaxed">“ {gem.usage} ”</p>
+                    </div>
                   </div>
                 </label>
               ))}
             </div>
 
-            <div className="mt-8 flex items-center justify-between gap-4">
+            <footer className="p-8 md:p-10 pt-6 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between gap-6">
               <button 
                 onClick={() => setIsGemModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 text-[10px] font-black uppercase tracking-widest"
+                className="text-slate-400 hover:text-slate-600 text-[10px] font-black uppercase tracking-widest transition-colors"
               >
-                取消
+                取消 CANCEL
               </button>
               <button 
                 onClick={async () => {
@@ -243,12 +250,12 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
                     setIsSavingGems(false);
                   }
                 }}
-                disabled={isSavingGems}
-                className="bg-indigo-600 text-white px-8 py-3 rounded-2xl text-sm font-bold shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isSavingGems || selectedGemsInModal.size === 0}
+                className="bg-indigo-600 text-white px-10 py-4 rounded-[1.5rem] text-xs font-black uppercase tracking-widest shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
               >
-                {isSavingGems ? '收藏中...' : `批量收藏 (${selectedGemsInModal.size})`}
+                {isSavingGems ? '收藏中...' : `批量收藏 COLLECT (${selectedGemsInModal.size})`}
               </button>
-            </div>
+            </footer>
           </div>
         </div>
       )}

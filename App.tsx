@@ -16,6 +16,8 @@ import {
   serverTimestamp,
   Timestamp,
   writeBatch,
+  limit,
+  startAfter,
 } from 'firebase/firestore';
 import { onAuthStateChanged, User as FirebaseAuthUser, updateProfile, signOut } from 'firebase/auth';
 import { v4 as uuidv4 } from 'uuid';
@@ -59,6 +61,9 @@ const App: React.FC = () => {
   const [isAuthInitializing, setIsAuthInitializing] = useState(true); 
   const [view, setView] = useState<ViewState>('dashboard');
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
+  const [lastEntryDoc, setLastEntryDoc] = useState<any>(null);
+  const [hasMoreEntries, setHasMoreEntries] = useState(true);
+  const [isFetchingMoreEntries, setIsFetchingMoreEntries] = useState(false);
   const [fragments, setFragments] = useState<InspirationFragment[]>([]);
   const [currentEntry, setCurrentEntry] = useState<DiaryEntry | null>(null); 
   const [currentEntryIterations, setCurrentEntryIterations] = useState<DiaryIteration[]>([]); 
@@ -88,6 +93,49 @@ const App: React.FC = () => {
 
   const preferredLanguages = useMemo(() => user?.preferredLanguages || DEFAULT_LANGS, [user]);
 
+  const fetchEntries = useCallback(async (userId: string, isFirstPage: boolean = false) => {
+    if (!db || isFetchingMoreEntries || (!isFirstPage && !hasMoreEntries)) return;
+
+    setIsFetchingMoreEntries(true);
+    try {
+      const diaryEntriesColRef = collection(db, 'users', userId, 'diaryEntries');
+      let diaryEntriesQuery = query(
+        diaryEntriesColRef, 
+        orderBy('timestamp', 'desc'), 
+        limit(12)
+      );
+
+      if (!isFirstPage && lastEntryDoc) {
+        diaryEntriesQuery = query(
+          diaryEntriesColRef, 
+          orderBy('timestamp', 'desc'), 
+          startAfter(lastEntryDoc),
+          limit(12)
+        );
+      }
+
+      const diaryEntriesSnapshot = await getDocs(diaryEntriesQuery);
+      const newEntries = diaryEntriesSnapshot.docs.map(d => ({ 
+        ...d.data(), 
+        id: d.id, 
+        timestamp: (d.data().timestamp as Timestamp).toMillis() 
+      })) as DiaryEntry[];
+
+      if (isFirstPage) {
+        setEntries(newEntries);
+      } else {
+        setEntries(prev => [...prev, ...newEntries]);
+      }
+
+      setLastEntryDoc(diaryEntriesSnapshot.docs[diaryEntriesSnapshot.docs.length - 1] || null);
+      setHasMoreEntries(diaryEntriesSnapshot.docs.length === 12);
+    } catch (e) {
+      console.error("Error fetching entries:", e);
+    } finally {
+      setIsFetchingMoreEntries(false);
+    }
+  }, [lastEntryDoc, hasMoreEntries, isFetchingMoreEntries]);
+
   const loadUserData = useCallback(async (userId: string, isMock: boolean) => {
     setIsLoading(true);
     setError(null);
@@ -95,6 +143,7 @@ const App: React.FC = () => {
       if (!db || isMock) {
         const localEntries = localStorage.getItem(`linguist_entries_${userId}`);
         if (localEntries) setEntries(JSON.parse(localEntries));
+        setHasMoreEntries(false); // No pagination for mock/local
         const localVocab = localStorage.getItem(`linguist_vocab_${userId}`);
         if (localVocab) setAllAdvancedVocab(JSON.parse(localVocab));
         const localFragments = localStorage.getItem(`linguist_fragments_${userId}`);
@@ -114,14 +163,8 @@ const App: React.FC = () => {
           }
         }
         
-        const diaryEntriesColRef = collection(db, 'users', userId, 'diaryEntries');
-        const diaryEntriesQuery = query(diaryEntriesColRef, orderBy('timestamp', 'desc'));
-        const diaryEntriesSnapshot = await getDocs(diaryEntriesQuery);
-        setEntries(diaryEntriesSnapshot.docs.map(d => ({ 
-            ...d.data(), 
-            id: d.id, 
-            timestamp: (d.data().timestamp as Timestamp).toMillis() 
-        })) as DiaryEntry[]);
+        // Initial fetch of entries
+        await fetchEntries(userId, true);
 
         const fragmentsColRef = collection(db, 'users', userId, 'fragments');
         const fragmentsQuery = query(fragmentsColRef, orderBy('timestamp', 'desc'));
@@ -132,8 +175,6 @@ const App: React.FC = () => {
             timestamp: (d.data().timestamp as Timestamp).toMillis(),
             fragmentType: d.data().fragmentType || 'transient'
         })) as InspirationFragment[]);
-
-
 
         const advancedVocabColRef = collection(db, 'users', userId, 'advancedVocab');
         const vocabSnapshot = await getDocs(advancedVocabColRef);
@@ -150,7 +191,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [fetchEntries]);
 
   useEffect(() => {
     if (!auth) {
@@ -779,7 +820,8 @@ const App: React.FC = () => {
         next = next.map(v => {
           if (v.id === parentId) {
             const currentMastery = v.mastery || 0;
-            return { ...v, mastery: Math.min(5, currentMastery + 0.2) };
+            const boostedMastery = Math.min(5, Number((currentMastery + 0.2).toFixed(2)));
+            return { ...v, mastery: boostedMastery };
           }
           return v;
         });
@@ -797,7 +839,7 @@ const App: React.FC = () => {
       } : v);
 
       if (parentId) {
-        updated = updated.map((v: any) => v.id === parentId ? { ...v, mastery: Math.min(5, (v.mastery || 0) + 0.2) } : v);
+        updated = updated.map((v: any) => v.id === parentId ? { ...v, mastery: Math.min(5, Number(((v.mastery || 0) + 0.2).toFixed(2))) } : v);
       }
 
       localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
@@ -1089,7 +1131,7 @@ const App: React.FC = () => {
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraft} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} fragments={fragments} onDeleteFragment={handleDeleteFragment} preferredLanguages={preferredLanguages} />}
       {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} allAdvancedVocab={allAdvancedVocab} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isExistingEntry={isReviewingExisting} />}
       {/* // FIX: Updated function name from handleUpdateLanguage to handleUpdateEntryLanguage */}
-      {view === 'history' && <History entries={entries} isAnalyzingId={analyzingId} onAnalyzeDraft={handleAnalyzeExistingEntry} onUpdateLanguage={handleUpdateEntryLanguage} onSelect={(e) => { setCurrentEntry(e); setIsReviewingExisting(true); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); setEntries(prev => prev.filter(e => e.id !== id)); }} onRewrite={(e) => { handleStartIteration(e); }} preferredLanguages={preferredLanguages} isMenuOpen={isMenuOpen} />}
+      {view === 'history' && <History entries={entries} isAnalyzingId={analyzingId} onAnalyzeDraft={handleAnalyzeExistingEntry} onUpdateLanguage={handleUpdateEntryLanguage} onSelect={(e) => { setCurrentEntry(e); setIsReviewingExisting(true); setView(e.type === 'rehearsal' ? 'rehearsal_report' : 'review'); }} onDelete={(id) => { if (!user.isMock && db) deleteDoc(doc(db, 'users', user.uid, 'diaryEntries', id)); setEntries(prev => prev.filter(e => e.id !== id)); }} onRewrite={(e) => { handleStartIteration(e); }} preferredLanguages={preferredLanguages} isMenuOpen={isMenuOpen} hasMore={hasMoreEntries} onLoadMore={() => user && fetchEntries(user.uid)} isLoadingMore={isFetchingMoreEntries} />}
       {view === 'chat' && <ChatEditor onFinish={(msgs, lang, summary) => { setChatLanguage(lang); setPrefilledEditorText(''); setSummaryPrompt(summary); setView('editor'); }} allGems={allAdvancedVocab} preferredLanguages={preferredLanguages} />}
       {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} fragments={fragments} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} onDeleteVocab={handleDeleteVocab} onDeleteFragment={handleDeleteFragment} onPromoteFragment={handlePromoteFragment} onPromoteToSeed={handlePromoteToSeed} onBulkPromoteFragments={handleBulkPromoteFragments} isMenuOpen={isMenuOpen} onBulkUpdateLanguage={handleBulkUpdateVocabLanguage} promotingFragmentId={promotingFragmentId} />}
       {view === 'vocab_practice' && selectedVocabForPracticeId && (
