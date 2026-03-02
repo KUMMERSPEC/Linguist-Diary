@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { RehearsalEvaluation, AdvancedVocab } from '../types';
+import { motion, AnimatePresence } from 'framer-motion';
+import { RefreshCw } from 'lucide-react';
+import { RehearsalEvaluation, AdvancedVocab, ViewState } from '../types';
 import { generatePracticeArtifact, evaluateRetelling, generateDiaryAudio, generateWeavedArtifact, retryEvaluationForGems } from '../services/geminiService';
 import { decode, decodeAudioData } from '../utils/audioHelpers';
 import RehearsalReport from './RehearsalReport';
@@ -52,16 +54,29 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveRehearsal, onSaveVocab, set
   const [isPlaying, setIsPlaying] = useState<string | null>(null);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'diff' | 'final'>('diff');
+  const [shuffleSeed, setShuffleSeed] = useState(0);
 
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   const weavingGems = useMemo(() => {
     if (mode !== 'weave') return [];
-    return allAdvancedVocab
+    // Get all gems for this language, sorted by mastery
+    const pool = allAdvancedVocab
       .filter(v => v.language === language.code)
       .sort((a, b) => (b.mastery || 0) - (a.mastery || 0)) 
-      .slice(0, 3);
-  }, [mode, allAdvancedVocab, language]);
+      .slice(0, 15); // Take top 15 as the pool
+
+    if (pool.length <= 3) return pool;
+
+    // Randomly pick 3 from the pool
+    // We use shuffleSeed to trigger re-calculation
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 3);
+  }, [mode, allAdvancedVocab, language, shuffleSeed]);
+
+  const handleShuffle = () => {
+    setShuffleSeed(prev => prev + 1);
+  };
 
   // Utility to clean Markdown if AI doesn't follow instructions
   const cleanMarkdown = (text: string) => {
@@ -263,22 +278,43 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveRehearsal, onSaveVocab, set
               
               <div className="lg:col-span-9 flex flex-col">
                 {mode === 'weave' ? (
-                  <div className="flex-1 flex flex-col">
-                    <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-6">即将编织的馆藏珍宝 WEAVING GEMS</label>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                      {weavingGems.length > 0 ? weavingGems.map((gem, idx) => (
-                        <div key={idx} className="bg-indigo-50/50 p-6 rounded-3xl border border-indigo-100 flex flex-col items-center text-center space-y-2">
-                           <span className="text-2xl">💎</span>
-                           <h4 className="text-lg font-black text-slate-900 serif-font">
-                             {renderRuby(gem.word)}
-                           </h4>
-                           <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest">Mastery {Number(gem.mastery || 0).toFixed(1)}</p>
-                        </div>
-                      )) : (
-                        <div className="col-span-full py-12 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
-                          <p className="text-slate-400 text-xs italic">当前语言下没有可编织的珍宝。</p>
-                        </div>
+                  <div className="lg:col-span-9 flex flex-col">
+                    <div className="flex items-center justify-between mb-6">
+                      <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">即将编织的馆藏珍宝 WEAVING GEMS</label>
+                      {weavingGems.length > 0 && (
+                        <button 
+                          onClick={handleShuffle}
+                          className="flex items-center space-x-1.5 text-[9px] font-black text-indigo-500 uppercase tracking-widest hover:text-indigo-700 transition-colors group/shuffle"
+                        >
+                          <RefreshCw className="w-3 h-3 group-hover:rotate-180 transition-transform duration-500" />
+                          <span>换一批灵感 SHUFFLE</span>
+                        </button>
                       )}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                      <AnimatePresence mode="popLayout">
+                        {weavingGems.length > 0 ? weavingGems.map((gem, idx) => (
+                          <motion.div 
+                            key={gem.id} 
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            transition={{ duration: 0.3, delay: idx * 0.05 }}
+                            className="bg-indigo-50/50 p-6 rounded-3xl border border-indigo-100 flex flex-col items-center text-center space-y-2 relative overflow-hidden group/gem"
+                          >
+                             <div className="absolute top-0 right-0 w-12 h-12 bg-indigo-500/5 rounded-bl-full -mr-4 -mt-4 group-hover/gem:scale-150 transition-transform duration-500"></div>
+                             <span className="text-2xl relative z-10">💎</span>
+                             <h4 className="text-lg font-black text-slate-900 serif-font relative z-10">
+                               {renderRuby(gem.word)}
+                             </h4>
+                             <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest relative z-10">Mastery {Number(gem.mastery || 0).toFixed(1)}</p>
+                          </motion.div>
+                        )) : (
+                          <div className="col-span-full py-12 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                            <p className="text-slate-400 text-xs italic">当前语言下没有可编织的珍宝。</p>
+                          </div>
+                        )}
+                      </AnimatePresence>
                     </div>
                     <div className="bg-indigo-50 p-6 rounded-3xl border border-indigo-100 flex items-start space-x-4">
                       <span className="text-2xl">🕸️</span>

@@ -354,7 +354,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [visibleCount, setVisibleCount] = useState(20);
-  const [sortMode, setSortMode] = useState<'date' | 'mastery' | 'language'>('date');
+  const [sortMode, setSortMode] = useState<'date' | 'mastery_desc' | 'mastery_asc' | 'language'>('date');
   const [expandedGems, setExpandedGems] = useState<Set<string>>(new Set());
   const [gemPractices, setGemPractices] = useState<Record<string, PracticeRecord[]>>({});
   const [loadingPractices, setLoadingPractices] = useState<Set<string>>(new Set());
@@ -474,7 +474,8 @@ const VocabListView: React.FC<VocabListViewProps> = ({
 
     // Sort
     list.sort((a, b) => {
-      if (sortMode === 'mastery') return (b.mastery || 0) - (a.mastery || 0);
+      if (sortMode === 'mastery_desc') return (b.mastery || 0) - (a.mastery || 0);
+      if (sortMode === 'mastery_asc') return (a.mastery || 0) - (b.mastery || 0);
       if (sortMode === 'language') return a.language.localeCompare(b.language);
       return b.timestamp - a.timestamp;
     });
@@ -605,7 +606,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
       </header>
 
       {/* Sticky Search & Controls Bar */}
-      <div className={`sticky top-0 z-50 bg-white transition-all duration-300 py-4 border-b border-slate-200 shadow-sm ${isMenuOpen ? 'opacity-30 grayscale pointer-events-none' : 'opacity-100'}`}>
+      <div className={`sticky top-0 z-50 bg-white/80 backdrop-blur-md transition-all duration-300 py-4 border-b border-slate-200 shadow-sm ${isMenuOpen ? 'opacity-30 grayscale pointer-events-none' : 'opacity-100'}`}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 md:gap-4 px-4 md:px-8">
           <div className={`w-full sm:flex-1 flex items-center space-x-3 px-4 py-2.5 rounded-2xl border transition-all duration-200 ${
             isFilterOpen 
@@ -692,7 +693,8 @@ const VocabListView: React.FC<VocabListViewProps> = ({
                 className="appearance-none bg-white border border-slate-100 rounded-xl px-4 py-2 pr-10 text-[10px] font-black uppercase tracking-widest text-slate-500 shadow-sm focus:ring-4 focus:ring-indigo-500/5 outline-none cursor-pointer"
               >
                 <option value="date">按日期排序</option>
-                <option value="mastery">按熟练度</option>
+                <option value="mastery_desc">熟练度：高 → 低</option>
+                <option value="mastery_asc">熟练度：低 → 高</option>
                 <option value="language">按语种</option>
               </select>
               <ArrowUpDown className="w-3 h-3 text-slate-300 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
