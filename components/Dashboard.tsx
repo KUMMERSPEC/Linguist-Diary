@@ -6,7 +6,7 @@ import { renderRuby, detectLanguage } from '../utils/textHelpers';
 
 interface DashboardProps {
   onNewEntry: () => void;
-  onStartReview: () => void; 
+  onStartReview: (mode: 'single' | 'combo') => void; 
   entries: DiaryEntry[];
   allAdvancedVocab: AdvancedVocab[]; 
   recommendedIteration?: DiaryEntry | null;
@@ -32,6 +32,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [fragmentText, setFragmentText] = useState('');
   const [fragmentType, setFragmentType] = useState<'transient' | 'seed'>('transient');
   const [isSavingFragment, setIsSavingFragment] = useState(false);
+  const [isReviewMenuOpen, setIsReviewMenuOpen] = useState(false);
 
   // Daily Spotlight: Choose a high-mastery gem or a polished sentence from history
   const spotlight = useMemo(() => {
@@ -177,17 +178,47 @@ const Dashboard: React.FC<DashboardProps> = ({
             <span className="text-2xl group-hover:translate-x-1.5 transition-transform relative z-10">→</span>
           </button>
           
-          <button 
-            onClick={onStartReview} 
-            className="group relative bg-slate-900 p-5 md:p-6 rounded-[1.8rem] md:rounded-[2.2rem] text-white flex items-center justify-between shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-[0.98] overflow-hidden"
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110 pointer-events-none"></div>
-            <div className="text-left relative z-10">
-              <h5 className="text-lg font-bold serif-font">打磨馆藏珍宝</h5>
-              <p className="text-slate-400 text-[9px] mt-0.5 opacity-70 uppercase tracking-widest font-black">Review & Refine</p>
-            </div>
-            <span className="text-2xl group-hover:translate-x-1.5 transition-transform relative z-10">→</span>
-          </button>
+          <div className="relative group">
+            <button 
+              onClick={() => setIsReviewMenuOpen(!isReviewMenuOpen)} 
+              className={`w-full group relative p-5 md:p-6 rounded-[1.8rem] md:rounded-[2.2rem] text-white flex items-center justify-between shadow-xl transition-all active:scale-[0.98] overflow-hidden ${isReviewMenuOpen ? 'bg-slate-800 ring-4 ring-slate-200' : 'bg-slate-900 shadow-slate-200 hover:bg-slate-800'}`}
+            >
+              <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110 pointer-events-none"></div>
+              <div className="text-left relative z-10">
+                <h5 className="text-lg font-bold serif-font">打磨馆藏珍宝</h5>
+                <p className="text-slate-400 text-[9px] mt-0.5 opacity-70 uppercase tracking-widest font-black">Review & Refine</p>
+              </div>
+              <span className={`text-2xl transition-transform relative z-10 ${isReviewMenuOpen ? 'rotate-90' : 'group-hover:translate-x-1.5'}`}>
+                {isReviewMenuOpen ? '✕' : '→'}
+              </span>
+            </button>
+
+            {isReviewMenuOpen && (
+              <div className="absolute top-full left-0 right-0 mt-3 bg-white rounded-[1.8rem] shadow-2xl border border-slate-100 p-2 z-50 animate-in slide-in-from-top-2 flex flex-col space-y-1">
+                <button 
+                  onClick={() => { onStartReview('single'); setIsReviewMenuOpen(false); }}
+                  className="flex items-center justify-between p-4 rounded-2xl hover:bg-slate-50 transition-colors group/opt"
+                >
+                  <div className="text-left">
+                    <span className="block text-sm font-bold text-slate-900 serif-font">单词造句 Normal Mode</span>
+                    <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Focus on one gem at a time</span>
+                  </div>
+                  <span className="text-xl opacity-0 group-hover/opt:opacity-100 transition-opacity">🖋️</span>
+                </button>
+                <div className="h-[1px] bg-slate-50 mx-4"></div>
+                <button 
+                  onClick={() => { onStartReview('combo'); setIsReviewMenuOpen(false); }}
+                  className="flex items-center justify-between p-4 rounded-2xl hover:bg-indigo-50 transition-colors group/opt"
+                >
+                  <div className="text-left">
+                    <span className="block text-sm font-bold text-indigo-600 serif-font">多词造句 Combo Challenge</span>
+                    <span className="block text-[8px] font-black text-indigo-400 uppercase tracking-widest mt-0.5">Weave multiple gems together</span>
+                  </div>
+                  <span className="text-xl opacity-0 group-hover/opt:opacity-100 transition-opacity">✨</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Daily Spotlight Component - Minimized Height */}
