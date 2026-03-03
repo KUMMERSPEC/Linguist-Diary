@@ -310,16 +310,32 @@ export const getChatFollowUp = async (messages: ChatMessage[], language: string)
   return response.text || "";
 };
 
-export const validateVocabUsageStream = async function* (word: string, meaning: string, sentence: string, language: string) {
-  const contents = `Word: "${word}". Sentence: "${sentence}". Correct? Feedback(${language}).`;
+export const validateVocabUsageStream = async function* (words: { word: string, meaning: string, history?: string }[], sentence: string, language: string) {
+  const wordsContext = words.map(w => `Word: "${w.word}" (Meaning: ${w.meaning})${w.history ? `. Past feedback: ${w.history}` : ''}`).join('\n');
+  
+  const contents = `
+    Target Words:
+    ${wordsContext}
+
+    User's Sentence: "${sentence}"
+
+    Task:
+    1. Check if the user used the target words correctly and naturally in the sentence.
+    2. Provide feedback in ${language}.
+    3. If the user has a history of errors provided, check if they repeated them.
+    4. Suggest a better, more natural version of the sentence.
+    5. Extract 1-2 high-quality phrases or collocations from your suggested version as "keyPhrases".
+  `;
+
   const config = {
     thinkingConfig: { thinkingBudget: 0 },
     responseMimeType: "application/json",
     responseSchema: {
       type: Type.OBJECT,
       properties: {
-        isCorrect: { type: Type.BOOLEAN },
-        feedback: { type: Type.STRING },
+        isCorrect: { type: Type.BOOLEAN, description: "True if ALL target words are used correctly and naturally." },
+        feedback: { type: Type.STRING, description: "Overall feedback on the sentence and specific feedback for each target word." },
+        usageInsight: { type: Type.STRING, description: "A concise summary of the user's usage pattern or common errors for these words (e.g., 'You often confuse this with X')." },
         betterVersion: { type: Type.STRING },
         keyPhrases: {
           type: Type.ARRAY,

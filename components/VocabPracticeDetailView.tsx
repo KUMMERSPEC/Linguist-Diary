@@ -246,6 +246,18 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
           </div>
           <p className="text-slate-500 text-base italic leading-relaxed serif-font relative z-10" dangerouslySetInnerHTML={{ __html: rubyUtil(currentVocab.meaning) }} />
           
+          {currentVocab.aiSummary && (
+            <div className="mt-6 p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100/50 relative z-10 animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center space-x-2 mb-2">
+                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">AI 诊疗建议 INSIGHT</span>
+                <div className="h-[1px] flex-1 bg-indigo-100/50"></div>
+              </div>
+              <p className="text-xs md:text-sm text-indigo-900 leading-relaxed serif-font">
+                {currentVocab.aiSummary}
+              </p>
+            </div>
+          )}
+
           <div className="mt-6 pt-6 border-t border-slate-50 text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-2">
             <span>💡 提示：</span>
             <span>独立精准造句 (Perfect) 提升掌握度，否则视为仍需磨练。</span>

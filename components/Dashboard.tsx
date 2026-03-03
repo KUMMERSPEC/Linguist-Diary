@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { DiaryEntry, AdvancedVocab } from '../types';
-import { renderRuby } from '../utils/textHelpers';
+import { DiaryEntry, AdvancedVocab, InspirationFragment } from '../types';
+import { renderRuby, detectLanguage } from '../utils/textHelpers';
 
 interface DashboardProps {
   onNewEntry: () => void;
@@ -12,6 +12,8 @@ interface DashboardProps {
   recommendedIteration?: DiaryEntry | null;
   onStartIteration?: (entry: DiaryEntry) => void;
   onSaveFragment: (content: string, language: string, type: 'transient' | 'seed') => Promise<void>;
+  onPromoteFragment?: (id: string) => Promise<void>;
+  fragments?: InspirationFragment[];
   preferredLanguages?: string[];
 }
 
@@ -23,6 +25,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   recommendedIteration,
   onStartIteration,
   onSaveFragment,
+  onPromoteFragment,
+  fragments = [],
   preferredLanguages = ['English']
 }) => {
   const [fragmentText, setFragmentText] = useState('');
@@ -143,8 +147,8 @@ const Dashboard: React.FC<DashboardProps> = ({
     if (!fragmentText.trim() || isSavingFragment) return;
     setIsSavingFragment(true);
     try {
-      // Use the first preferred language as default
-      const lang = preferredLanguages[0] || 'English';
+      // Auto-detect language
+      const lang = detectLanguage(fragmentText);
       await onSaveFragment(fragmentText, lang, fragmentType); 
       setFragmentText('');
     } finally {
@@ -257,6 +261,35 @@ const Dashboard: React.FC<DashboardProps> = ({
           </button>
         </div>
       </section>
+      
+      {/* Seed Fragments Section */}
+      {fragments.filter(f => f.fragmentType === 'seed').length > 0 && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">待磨炼种子 SEED GEMS</h4>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {fragments.filter(f => f.fragmentType === 'seed').slice(0, 6).map((seed) => (
+              <div key={seed.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+                <div className="flex justify-between items-start mb-2">
+                  <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[8px] font-black rounded uppercase tracking-widest">{seed.language}</span>
+                  <button 
+                    onClick={() => onPromoteFragment?.(seed.id)}
+                    className="text-[10px] text-slate-400 hover:text-indigo-600 font-bold flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <span>入馆</span>
+                    <span>✨</span>
+                  </button>
+                </div>
+                <h5 
+                  className="text-sm font-bold text-slate-800 serif-font line-clamp-2"
+                  dangerouslySetInnerHTML={{ __html: renderRuby(seed.content) }}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {recommendedIteration && (
         <section className="animate-in slide-in-from-top-4 duration-1000">

@@ -10,13 +10,13 @@ interface RehearsalReportProps {
   language: string;
   date: string;
   onBack: () => void;
-  onSaveVocab: (vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>) => Promise<void>;
+  onBulkSaveVocab: (vocabs: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>[]) => Promise<void>;
   onRetryFailed?: (failedItems: { word: string; meaning: string; usage: string; }[]) => void;
   isArchived?: boolean;
   existingVocab: AdvancedVocab[];
 }
 
-const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language, date, onBack, onSaveVocab, onRetryFailed, isArchived = false, existingVocab }) => {
+const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language, date, onBack, onBulkSaveVocab, onRetryFailed, isArchived = false, existingVocab }) => {
   const [isPlaying, setIsPlaying] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'diff' | 'final'>('diff');
   const [savedGems, setSavedGems] = useState<Set<string>>(new Set());
@@ -236,11 +236,28 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
                   setIsSavingGems(true);
                   const toastId = toast.loading('正在收藏珍宝...');
                   try {
-                    const gemsToSave = filteredRecommendedGems.filter(g => selectedGemsInModal.has(g.word));
-                    for (const gem of gemsToSave) {
-                      await onSaveVocab({ word: gem.word, meaning: gem.meaning, usage: gem.usage, language, level: 'Intermediate', timestamp: Date.now() });
-                      setSavedGems(prev => new Set(prev).add(gem.word));
+                    const gemsToSave = filteredRecommendedGems
+                      .filter(g => selectedGemsInModal.has(g.word))
+                      .map(gem => ({
+                        word: gem.word,
+                        meaning: gem.meaning,
+                        usage: gem.usage,
+                        language,
+                        level: 'Intermediate' as const,
+                        timestamp: Date.now()
+                      }));
+
+                    if (gemsToSave.length > 0) {
+                      await onBulkSaveVocab(gemsToSave);
+                      
+                      const savedWords = gemsToSave.map(g => g.word);
+                      setSavedGems(prev => {
+                        const next = new Set(prev);
+                        savedWords.forEach(w => next.add(w));
+                        return next;
+                      });
                     }
+                    
                     toast.success('珍宝收藏成功！', { id: toastId });
                     setIsGemModalOpen(false);
                   } catch (e) {

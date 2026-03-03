@@ -22,6 +22,7 @@ export interface AdvancedVocab {
   mastery?: number; 
   language: string;
   practices?: PracticeRecord[];
+  aiSummary?: string; 
   lastReviewTimestamp?: number;
   timestamp: number;
 }

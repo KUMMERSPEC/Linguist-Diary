@@ -38,7 +38,7 @@ import ProfileView from './components/ProfileView';
 
 import { ViewState, DiaryEntry, ChatMessage, RehearsalEvaluation, DiaryIteration, AdvancedVocab, PracticeRecord, InspirationFragment, UserProfile } from './types';
 import { analyzeDiaryEntry, analyzeDiaryEntryStream, enrichFragment } from './services/geminiService';
-import { stripRuby, weaveRubyMarkdown } from './utils/textHelpers';
+import { stripRuby, weaveRubyMarkdown, detectLanguage } from './utils/textHelpers';
 import { calculateDiff } from './utils/diffHelper';
 import { Toaster, toast } from 'react-hot-toast';
 
@@ -84,7 +84,7 @@ const App: React.FC = () => {
 
   const [promotingFragmentId, setPromotingFragmentId] = useState<string | null>(null);
 
-  const [practiceQueue, setPracticeQueue] = useState<string[]>([]);
+  const [practiceQueue, setPracticeQueue] = useState<string[][]>([]);
   const [queueIndex, setQueueIndex] = useState(-1);
 
   const [editName, setEditName] = useState('');
@@ -462,6 +462,89 @@ const App: React.FC = () => {
     }
   };
 
+    const handleBulkSaveVocab = async (vocabs: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>[]) => {
+    if (!user) return;
+    
+    const newVocabsToProcess: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>[] = [];
+    const existingWords = new Set(allAdvancedVocab.map(v => stripRuby(v.word).trim().toLowerCase() + v.language));
+
+    for (const v of vocabs) {
+      const normalized = stripRuby(v.word).trim().toLowerCase();
+      if (!existingWords.has(normalized + v.language)) {
+        newVocabsToProcess.push(v);
+        existingWords.add(normalized + v.language); 
+      }
+    }
+
+    if (newVocabsToProcess.length === 0) return;
+
+    if (!db || user.isMock) {
+      let currentVocabList = [...allAdvancedVocab];
+      for (const v of newVocabsToProcess) {
+        const cleanWord = stripRuby(v.word).trim().toLowerCase();
+        const potentialParents = currentVocabList
+          .filter(ov => ov.language === v.language)
+          .filter(ov => {
+            const cleanExisting = stripRuby(ov.word).toLowerCase().trim();
+            return cleanWord.includes(cleanExisting) && cleanWord !== cleanExisting;
+          })
+          .sort((a, b) => stripRuby(b.word).length - stripRuby(a.word).length);
+        
+        const parentId = potentialParents[0]?.id;
+        const newVocab: AdvancedVocab = { ...v, id: uuidv4(), mastery: 0, practices: [], timestamp: Date.now(), parentId };
+        
+        currentVocabList = currentVocabList.map((ov: AdvancedVocab) => {
+          if (ov.language === v.language && !ov.parentId) {
+            const cleanExisting = stripRuby(ov.word).toLowerCase().trim();
+            if (cleanExisting.includes(cleanWord) && cleanExisting !== cleanWord) {
+              return { ...ov, parentId: newVocab.id };
+            }
+          }
+          return ov;
+        });
+        currentVocabList = [newVocab, ...currentVocabList];
+      }
+      setAllAdvancedVocab(currentVocabList);
+      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(currentVocabList));
+    } else {
+      const batch = writeBatch(db);
+      const vocabColRef = collection(db, 'users', user.uid, 'advancedVocab');
+      
+      for (const v of newVocabsToProcess) {
+        const cleanWord = stripRuby(v.word).trim().toLowerCase();
+        const potentialParents = allAdvancedVocab
+          .filter(ov => ov.language === v.language)
+          .filter(ov => {
+            const cleanExisting = stripRuby(ov.word).toLowerCase().trim();
+            return cleanWord.includes(cleanExisting) && cleanWord !== cleanExisting;
+          })
+          .sort((a, b) => stripRuby(b.word).length - stripRuby(a.word).length);
+        
+        const parentId = potentialParents[0]?.id;
+        const newDocRef = doc(vocabColRef);
+        
+        const dataToSave: any = { ...v, mastery: 0, timestamp: serverTimestamp() };
+        if (parentId) dataToSave.parentId = parentId;
+        
+        batch.set(newDocRef, dataToSave);
+
+        const childrenToUpdate = allAdvancedVocab.filter(ov => 
+          ov.language === v.language && 
+          !ov.parentId && 
+          stripRuby(ov.word).toLowerCase().trim().includes(cleanWord) && 
+          stripRuby(ov.word).toLowerCase().trim() !== cleanWord
+        );
+
+        for (const child of childrenToUpdate) {
+          batch.update(doc(db, 'users', user.uid, 'advancedVocab', child.id), { parentId: newDocRef.id });
+        }
+      }
+      
+      await batch.commit();
+      await loadUserData(user.uid, false);
+    }
+  };
+
   const handleBulkPromoteFragments = async (fragmentIds: string[]) => {
     if (!user || promotingFragmentId) return;
     
@@ -469,6 +552,9 @@ const App: React.FC = () => {
     const toastId = toast.loading(`正在批量升级 ${fragmentIds.length} 项记录...`);
     
     try {
+      const vocabsToSave: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>[] = [];
+      const idsToDelete = new Set<string>();
+
       for (const id of fragmentIds) {
         const fragment = fragments.find(f => f.id === id);
         if (!fragment) continue;
@@ -486,57 +572,36 @@ const App: React.FC = () => {
           }
         }
 
-        const vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'> = {
+        const detectedLang = detectLanguage(fragment.content);
+        const finalLang = (fragment.language === 'English' && detectedLang === 'Japanese') ? 'Japanese' : fragment.language;
+
+        vocabsToSave.push({
           word: fragment.content,
           meaning: finalMeaning || "未命名珍宝",
           usage: finalUsage || "暂无例句",
           level: 'Intermediate',
-          language: fragment.language,
+          language: finalLang,
           timestamp: Date.now()
-        };
-
-        // We use a simplified version of handleSaveManualVocab here to avoid repeated state updates
-        const normalizedNewWord = stripRuby(vocab.word).trim().toLowerCase();
-        const isExisting = allAdvancedVocab.some(v => stripRuby(v.word).trim().toLowerCase() === normalizedNewWord && v.language === vocab.language);
-        
-        if (!isExisting) {
-          const cleanWord = normalizedNewWord;
-          const potentialParents = allAdvancedVocab
-            .filter(v => v.language === vocab.language)
-            .filter(v => {
-              const cleanExisting = stripRuby(v.word).toLowerCase().trim();
-              return cleanWord.includes(cleanExisting) && cleanWord !== cleanExisting;
-            })
-            .sort((a, b) => stripRuby(b.word).length - stripRuby(a.word).length);
-          
-          const parentId = potentialParents[0]?.id;
-
-          if (!db || user.isMock) {
-            const newVocab: AdvancedVocab = { ...vocab, id: uuidv4(), mastery: 0, practices: [], timestamp: Date.now(), parentId };
-            setAllAdvancedVocab(prev => [newVocab, ...prev]);
-            setFragments(prev => prev.filter(f => f.id !== id));
-          } else {
-            const dataToSave: { [key: string]: any } = { ...vocab, mastery: 0, timestamp: serverTimestamp() };
-            if (parentId) dataToSave.parentId = parentId;
-            await addDoc(collection(db, 'users', user.uid, 'advancedVocab'), dataToSave);
-            await deleteDoc(doc(db, 'users', user.uid, 'fragments', id));
-          }
-        } else {
-          // If already exists, just delete the fragment
-          if (!db || user.isMock) {
-            setFragments(prev => prev.filter(f => f.id !== id));
-          } else {
-            await deleteDoc(doc(db, 'users', user.uid, 'fragments', id));
-          }
-        }
+        });
+        idsToDelete.add(id);
       }
-      
-      if (db && !user.isMock) {
-        await loadUserData(user.uid, false);
-      } else {
-        // Sync local storage
-        localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(allAdvancedVocab));
-        localStorage.setItem(`linguist_fragments_${user.uid}`, JSON.stringify(fragments));
+
+      if (vocabsToSave.length > 0) {
+        await handleBulkSaveVocab(vocabsToSave);
+        
+        if (!db || user.isMock) {
+          setFragments(prev => prev.filter(f => !idsToDelete.has(f.id)));
+          const currentFragments = JSON.parse(localStorage.getItem(`linguist_fragments_${user.uid}`) || '[]');
+          const filteredFragments = currentFragments.filter((f: any) => !idsToDelete.has(f.id));
+          localStorage.setItem(`linguist_fragments_${user.uid}`, JSON.stringify(filteredFragments));
+        } else {
+          const batch = writeBatch(db);
+          idsToDelete.forEach(id => {
+            batch.delete(doc(db, 'users', user.uid, 'fragments', id));
+          });
+          await batch.commit();
+          await loadUserData(user.uid, false);
+        }
       }
       
       toast.success('批量升级成功！', { id: toastId });
@@ -572,12 +637,15 @@ const App: React.FC = () => {
         }
       }
 
+      const detectedLang = detectLanguage(fragment.content);
+      const finalLang = (fragment.language === 'English' && detectedLang === 'Japanese') ? 'Japanese' : fragment.language;
+
       const vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'> = {
         word: fragment.content,
         meaning: finalMeaning || "未命名珍宝",
         usage: finalUsage || "暂无例句",
         level: 'Intermediate',
-        language: fragment.language,
+        language: finalLang,
         timestamp: Date.now()
       };
 
@@ -599,11 +667,14 @@ const App: React.FC = () => {
     setIsLoading(true);
     setError(null);
 
+    // Auto-correct language if it's clearly Japanese but set to English
+    const detectedLang = detectLanguage(text);
+    const finalLanguage = (language === 'English' && detectedLang === 'Japanese') ? 'Japanese' : language;
     
     try {
-      const historyContext = entries.filter(e => e.language === language && e.analysis).slice(0, 3);
+      const historyContext = entries.filter(e => e.language === finalLanguage && e.analysis).slice(0, 3);
       
-      const analysis = await analyzeDiaryEntry(text, language, historyContext);
+      const analysis = await analyzeDiaryEntry(text, finalLanguage, historyContext);
 
       const clientTimestamp = Date.now();
       const newEntrySkeleton: Omit<DiaryEntry, 'id'> = {
@@ -639,23 +710,29 @@ const App: React.FC = () => {
       });
 
       if (vocabItemsToSave.length > 0) {
-        if (!db || user.isMock) {
-          const updated = [...vocabItemsToSave, ...allAdvancedVocab];
-          setAllAdvancedVocab(updated);
-          localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
-        } else {
-          const vocabCol = collection(db, 'users', user.uid, 'advancedVocab');
-          for (const item of vocabItemsToSave) {
-            const { id, practices, ...data } = item;
-            await addDoc(vocabCol, { ...data, timestamp: serverTimestamp() });
-          }
-          loadUserData(user.uid, user.isMock);
-        }
+        await handleBulkSaveVocab(vocabItemsToSave.map(v => ({
+          word: v.word,
+          meaning: v.meaning,
+          usage: v.usage,
+          level: v.level,
+          language: v.language,
+          timestamp: v.timestamp
+        })));
       }
 
       if (usedFragmentIds.length > 0) {
-        for (const fId of usedFragmentIds) {
-          await handleDeleteFragment(fId);
+        if (!db || user.isMock) {
+          const idsToDelete = new Set(usedFragmentIds);
+          setFragments(prev => prev.filter(f => !idsToDelete.has(f.id)));
+          const currentFragments = JSON.parse(localStorage.getItem(`linguist_fragments_${user.uid}`) || '[]');
+          const filteredFragments = currentFragments.filter((f: any) => !idsToDelete.has(f.id));
+          localStorage.setItem(`linguist_fragments_${user.uid}`, JSON.stringify(filteredFragments));
+        } else {
+          const batch = writeBatch(db);
+          usedFragmentIds.forEach(id => {
+            batch.delete(doc(db, 'users', user.uid, 'fragments', id));
+          });
+          await batch.commit();
         }
       }
 
@@ -686,9 +763,10 @@ const App: React.FC = () => {
     if (!user || !currentEntry) return;
     setIsLoading(true);
     try {
+      const vocabsToSave: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>[] = [];
       for (const item of failedItems) {
         const enrichment = await enrichFragment(item.word, currentEntry.language || 'English');
-        await handleSaveManualVocab({
+        vocabsToSave.push({
           word: item.word,
           meaning: enrichment.meaning || item.meaning,
           usage: enrichment.usage || item.usage,
@@ -697,6 +775,11 @@ const App: React.FC = () => {
           timestamp: Date.now()
         });
       }
+
+      if (vocabsToSave.length > 0) {
+        await handleBulkSaveVocab(vocabsToSave);
+      }
+      
       toast.success('失败词条已重新分析并入馆！');
 
       // Update currentEntry and entries to reflect the changes
@@ -783,50 +866,51 @@ const App: React.FC = () => {
     const needingReview = allAdvancedVocab.filter(v => (v.mastery || 0) < 5);
     if (needingReview.length === 0) { alert("所有馆藏珍宝均已达到巅峰。"); return; }
     
-    // Priority 1: Mastery level 0
-    // Priority 2: Forgetting curve (longest time since last review)
     const sorted = [...needingReview].sort((a, b) => {
       const masteryA = a.mastery || 0;
       const masteryB = b.mastery || 0;
-
-      // Mastery 0 is top priority
       if (masteryA === 0 && masteryB !== 0) return -1;
       if (masteryB === 0 && masteryA !== 0) return 1;
-
-      // If mastery is same (or both non-zero), use forgetting curve
       const timeA = a.lastReviewTimestamp || a.timestamp;
       const timeB = b.lastReviewTimestamp || b.timestamp;
-
-      // We want the one with the OLDEST review time first (longest interval)
       if (timeA !== timeB) return timeA - timeB;
-      
-      // Final tie-breaker: mastery level (lower first)
       return masteryA - masteryB;
     });
 
-    const finalQueue: string[] = [];
-    const excludedIds = new Set<string>();
+    const finalQueue: string[][] = [];
+    const usedIds = new Set<string>();
 
-    for (const v of sorted) {
-      if (finalQueue.length >= 10) break;
-      if (excludedIds.has(v.id)) continue;
+    let i = 0;
+    while (i < sorted.length && finalQueue.length < 10) {
+      const v = sorted[i];
+      if (usedIds.has(v.id)) { i++; continue; }
 
-      finalQueue.push(v.id);
-      
-      // If we pick this item, exclude its parent and all its children from this session
-      if (v.parentId) excludedIds.add(v.parentId);
-      const children = allAdvancedVocab.filter(child => child.parentId === v.id);
-      children.forEach(child => excludedIds.add(child.id));
+      const group = [v.id];
+      usedIds.add(v.id);
+
+      // Try to find 1-2 more words to form a combo if mastery is low
+      if ((v.mastery || 0) < 3) {
+        for (let j = i + 1; j < sorted.length && group.length < 3; j++) {
+          const candidate = sorted[j];
+          if (!usedIds.has(candidate.id) && (candidate.mastery || 0) < 3 && candidate.language === v.language) {
+            group.push(candidate.id);
+            usedIds.add(candidate.id);
+          }
+        }
+      }
+
+      finalQueue.push(group);
+      i++;
     }
 
     setPracticeQueue(finalQueue);
     setQueueIndex(0);
-    setSelectedVocabForPracticeId(finalQueue[0]);
+    setSelectedVocabForPracticeId(finalQueue[0].join(','));
     setIsPracticeActive(true);
     setView('vocab_practice');
   };
 
-  const handleUpdateMastery = async (vocabId: string, word: string, newMastery: number, record?: PracticeRecord) => {
+  const handleUpdateMastery = async (vocabId: string, word: string, newMastery: number, record?: PracticeRecord, aiSummary?: string) => {
     if (!user) return;
     const now = Date.now();
     
@@ -834,14 +918,32 @@ const App: React.FC = () => {
     const parentId = vocabToUpdate?.parentId;
 
     setAllAdvancedVocab(prev => {
-      let next = prev.map(v => v.id === vocabId ? { 
-        ...v, 
-        mastery: newMastery, 
-        lastReviewTimestamp: now,
-        practices: record ? [record, ...(v.practices || [])] : v.practices 
-      } : v);
+      let next = prev.map(v => {
+        if (v.id === vocabId) {
+          let updatedPractices = v.practices || [];
+          if (record) {
+            const isSimple = record.originalAttempt && record.originalAttempt.length < 30;
+            updatedPractices = updatedPractices.filter(p => {
+              if (isSimple && p.originalAttempt && p.originalAttempt.length < 30) {
+                const similarity = p.originalAttempt.toLowerCase() === record.originalAttempt?.toLowerCase();
+                if (similarity) return false;
+              }
+              return true;
+            });
+            updatedPractices = [record, ...updatedPractices].slice(0, 5);
+          }
 
-      // Synergy Boost: If this is a child, boost parent by 20% of the gain or just a flat 0.2
+          return { 
+            ...v, 
+            mastery: newMastery, 
+            lastReviewTimestamp: now,
+            practices: updatedPractices,
+            aiSummary: aiSummary || v.aiSummary
+          };
+        }
+        return v;
+      });
+
       if (parentId) {
         next = next.map(v => {
           if (v.id === parentId) {
@@ -857,12 +959,29 @@ const App: React.FC = () => {
     
     if (!db || user.isMock) {
       const localVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
-      let updated = localVocab.map((v: any) => v.id === vocabId ? { 
-        ...v, 
-        mastery: newMastery, 
-        lastReviewTimestamp: now,
-        practices: record ? [record, ...(v.practices || [])] : v.practices 
-      } : v);
+      let updated = localVocab.map((v: any) => {
+        if (v.id === vocabId) {
+          let updatedPractices = v.practices || [];
+          if (record) {
+            const isSimple = record.originalAttempt && record.originalAttempt.length < 30;
+            updatedPractices = updatedPractices.filter((p: any) => {
+              if (isSimple && p.originalAttempt && p.originalAttempt.length < 30) {
+                if (p.originalAttempt.toLowerCase() === record.originalAttempt?.toLowerCase()) return false;
+              }
+              return true;
+            });
+            updatedPractices = [record, ...updatedPractices].slice(0, 5);
+          }
+          return { 
+            ...v, 
+            mastery: newMastery, 
+            lastReviewTimestamp: now,
+            practices: updatedPractices,
+            aiSummary: aiSummary || v.aiSummary
+          };
+        }
+        return v;
+      });
 
       if (parentId) {
         updated = updated.map((v: any) => v.id === parentId ? { ...v, mastery: Math.min(5, Number(((v.mastery || 0) + 0.2).toFixed(2))) } : v);
@@ -873,8 +992,11 @@ const App: React.FC = () => {
       const vocabDocRef = doc(db, 'users', user.uid, 'advancedVocab', vocabId);
       await updateDoc(vocabDocRef, { 
         mastery: newMastery,
-        lastReviewTimestamp: now
+        lastReviewTimestamp: now,
+        aiSummary: aiSummary || null
       });
+      // Note: Full practice history is stored in subcollection, but local state is pruned.
+      // For simplicity, we don't delete from Firestore here, just let the local state be the "curated" view.
       if (record) { await addDoc(collection(vocabDocRef, 'practices'), { ...record, timestamp: serverTimestamp() }); }
 
       if (parentId) {
@@ -985,11 +1107,16 @@ const App: React.FC = () => {
     }
   };
 
-  const handleViewChange = (v: ViewState, vocabId?: string, isPracticeActive?: boolean) => {
+  const handleViewChange = (v: ViewState, vocabId?: string, isPracticeActive?: boolean, prefill?: string) => {
     setView(v);
     if (vocabId) setSelectedVocabForPracticeId(vocabId);
     if (isPracticeActive !== undefined) setIsPracticeActive(isPracticeActive);
-    if (v !== 'editor') { setPrefilledEditorText(''); setSummaryPrompt(''); }
+    if (v === 'editor' && prefill) {
+      setPrefilledEditorText(prefill);
+    } else if (v !== 'editor') {
+      setPrefilledEditorText('');
+      setSummaryPrompt('');
+    }
   };
 
     const handleDeletePractice = async (vocabId: string, practiceId: string) => {
@@ -1153,7 +1280,7 @@ const App: React.FC = () => {
     <div>
       <Toaster position="bottom-center" toastOptions={{ duration: 3000 }} />
       <Layout activeView={view} onViewChange={handleViewChange} user={user} onLogout={handleLogout} isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen}>
-      {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartSmartReview} entries={entries} allAdvancedVocab={allAdvancedVocab} recommendedIteration={recommendedIteration} onStartIteration={handleStartIteration} onSaveFragment={handleSaveFragment} />}
+      {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartSmartReview} entries={entries} allAdvancedVocab={allAdvancedVocab} recommendedIteration={recommendedIteration} onStartIteration={handleStartIteration} onSaveFragment={handleSaveFragment} fragments={fragments} onPromoteFragment={handlePromoteFragment} />}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraft} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} fragments={fragments} onDeleteFragment={handleDeleteFragment} preferredLanguages={preferredLanguages} />}
       {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} allAdvancedVocab={allAdvancedVocab} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isExistingEntry={isReviewingExisting} />}
       {/* // FIX: Updated function name from handleUpdateLanguage to handleUpdateEntryLanguage */}
@@ -1201,7 +1328,7 @@ const App: React.FC = () => {
         <VocabPracticeDetailView selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onBackToPracticeHistory={() => setView('vocab_list')} onUpdateLanguage={handleUpdateVocabLanguage} preferredLanguages={preferredLanguages} onDeletePractice={handleDeletePractice} onBatchDeletePractices={handleBatchDeletePractices} />
       )}
       {view === 'rehearsal' && <Rehearsal allAdvancedVocab={allAdvancedVocab} preferredLanguages={preferredLanguages} onSaveRehearsal={handleSaveRehearsal} onSaveVocab={handleSaveManualVocab} setView={setView} />}
-      {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} onSaveVocab={handleSaveManualVocab} onRetryFailed={handleRetryFailedGems} isArchived={true} existingVocab={allAdvancedVocab} />}
+      {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} onBulkSaveVocab={handleBulkSaveVocab} onRetryFailed={handleRetryFailedGems} isArchived={true} existingVocab={allAdvancedVocab} />}
       {view === 'profile' && <ProfileView user={user} editName={editName} setEditName={setEditName} editPhoto={editPhoto} setEditPhoto={setEditPhoto} isAvatarPickerOpen={isAvatarPickerOpen} setIsAvatarPickerOpen={setIsAvatarPickerOpen} avatarSeeds={AVATAR_SEEDS} onSaveProfile={handleSaveProfile} isLoading={isLoading} iterationDay={user.iterationDay ?? 0} onSetIterationDay={handleSetIterationDay} preferredLanguages={preferredLanguages} onSetPreferredLanguages={handleSetPreferredLanguages} onActivatePro={handleActivatePro} />}
       
       {showProModal && <ProUpgradeModal />}

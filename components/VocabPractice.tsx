@@ -20,7 +20,7 @@ const LOADING_MESSAGES = [
 interface VocabPracticeProps {
   selectedVocabId: string;
   allAdvancedVocab: (AdvancedVocab & { language: string })[];
-  onUpdateMastery: (vocabId: string, word: string, newMastery: number, record?: PracticeRecord) => void; 
+  onUpdateMastery: (vocabId: string, word: string, newMastery: number, record?: PracticeRecord, aiSummary?: string) => void; 
   onBackToVocabList: () => void;
   onViewChange: (view: ViewState, vocabId?: string, isPracticeActive?: boolean) => void;
   onSaveFragment: (content: string, language: string, type: 'transient' | 'seed', meaning?: string, usage?: string) => Promise<void>;
@@ -96,9 +96,12 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const validationRequestsRef = useRef<Set<string>>(new Set());
 
-  const currentVocab = useMemo(() => {
-    return allAdvancedVocab.find(v => v.id === selectedVocabId || `${v.word}-${v.language}` === selectedVocabId);
+  const currentVocabs = useMemo(() => {
+    const ids = selectedVocabId.split(',');
+    return ids.map(id => allAdvancedVocab.find(v => v.id === id || `${v.word}-${v.language}` === id)).filter(Boolean) as (AdvancedVocab & { language: string })[];
   }, [selectedVocabId, allAdvancedVocab]);
+
+  const currentVocab = currentVocabs[0]; // Primary vocab for language context
 
   const parentVocab = useMemo(() => {
     if (!currentVocab?.parentId) return null;
@@ -233,56 +236,64 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
     (async () => {
       let accumulatedText = '';
       try {
+        const wordsToValidate = currentVocabs.map(v => ({
+          word: v.word,
+          meaning: v.meaning,
+          history: v.practices?.[0]?.feedback // Pass last feedback as history context
+        }));
+
         const stream = validateVocabUsageStream(
-          vocabToValidate.word, 
-          vocabToValidate.meaning, 
+          wordsToValidate,
           inputToValidate, 
-          vocabToValidate.language
+          currentVocab.language
         );
 
         for await (const chunk of stream) {
           accumulatedText += chunk;
-          // Update partial feedback only if we are still on this vocab
-          if (selectedVocabId === vocabToValidate.id) {
-             // Try to parse partial JSON if possible for better UX
-             // (Simplified for now, full parse happens at end)
-          }
         }
 
         const result = JSON.parse(accumulatedText);
         
-        let newMastery = vocabToValidate.mastery || 0;
-        let status: PracticeRecord['status'] = 'Polished';
-        if (result.isCorrect) {
-          newMastery = Math.min(newMastery + 1, 5);
-          status = 'Perfect';
-        } else {
-          newMastery = Math.max(newMastery - 1, 0);
-        }
+        // Update mastery for ALL words in the combo
+        currentVocabs.forEach(v => {
+          let newMastery = v.mastery || 0;
+          let status: PracticeRecord['status'] = 'Polished';
+          if (result.isCorrect) {
+            newMastery = Math.min(newMastery + 1, 5);
+            status = 'Perfect';
+          } else {
+            newMastery = Math.max(newMastery - 1, 0);
+          }
 
-        const record: PracticeRecord = {
-          id: uuidv4(),
-          sentence: vocabToValidate.usage,
-          originalAttempt: inputToValidate,
-          feedback: result.feedback || "AI 已评估该句子。",
-          betterVersion: result.betterVersion,
-          timestamp: Date.now(),
-          status,
-          vocabId: vocabToValidate.id
-        };
+          const record: PracticeRecord = {
+            id: uuidv4(),
+            sentence: v.usage,
+            originalAttempt: inputToValidate,
+            feedback: result.feedback || "AI 已评估该句子。",
+            betterVersion: result.betterVersion,
+            timestamp: Date.now(),
+            status,
+            vocabId: v.id
+          };
+          
+          onUpdateMastery(v.id, v.word, newMastery, record, result.usageInsight);
+        });
         
-        onUpdateMastery(vocabToValidate.id, vocabToValidate.word, newMastery, record);
-        
-        // Update session results with final data
+        // Update session results for the primary word (for summary display)
         setSessionResults(prev => ({
           ...prev,
-          [vocabToValidate.id]: {
-            ...prev[vocabToValidate.id],
+          [currentVocab.id]: {
+            wordId: currentVocab.id,
+            word: currentVocabs.map(v => v.word).join(' + '),
+            input: inputToValidate,
+            language: currentVocab.language,
             isCorrect: result.isCorrect,
             feedback: result.feedback,
+            usageInsight: result.usageInsight,
             betterVersion: result.betterVersion,
             keyPhrases: result.keyPhrases,
-            status: status === 'Perfect' ? 'Perfect' : 'Polished'
+            status: result.isCorrect ? 'Perfect' : 'Polished',
+            timestamp: Date.now()
           }
         }));
 
@@ -295,10 +306,14 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
         console.error("Background validation error:", e);
         setSessionResults(prev => ({
           ...prev,
-          [vocabToValidate.id]: {
-            ...prev[vocabToValidate.id],
+          [currentVocab.id]: {
+            wordId: currentVocab.id,
+            word: currentVocabs.map(v => v.word).join(' + '),
+            input: inputToValidate,
+            language: currentVocab.language,
             status: 'Polished', // Fallback
-            feedback: "评估过程中出现异常，请稍后查看。"
+            feedback: "评估过程中出现异常，请稍后查看。",
+            timestamp: Date.now()
           }
         }));
         if (!onNextInQueue || (!queueProgress)) {
@@ -569,7 +584,7 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
       </header>
 
       <div className="flex-1 flex flex-col lg:flex-row lg:items-start gap-6 md:gap-8 overflow-y-auto no-scrollbar pb-8">
-        <div className="shrink-0 lg:flex-1 lg:max-w-[30%] bg-white p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 space-y-6 md:space-y-8 relative transition-all duration-700">
+        <div className="shrink-0 lg:flex-1 lg:max-w-[40%] bg-white p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 space-y-6 md:space-y-8 relative transition-all duration-700 overflow-y-auto no-scrollbar max-h-[80vh]">
           {showSuccessAnimation && (
             <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/80 rounded-[2rem] md:rounded-[2.5rem] z-20 animate-in fade-in zoom-in duration-500">
               <span className="text-6xl md:text-7xl">✨</span>
@@ -577,48 +592,43 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
           )}
 
           <div className="flex items-center justify-between pb-4 border-b border-slate-50 relative">
-            <div className="flex flex-col">
-              <h3 className="text-2xl md:text-3xl font-black text-slate-900 serif-font">
-                {renderRuby(currentVocab.word)}
-              </h3>
-              {parentVocab && (
-                <div className="mt-1 flex items-center space-x-1.5 opacity-40 hover:opacity-100 transition-opacity cursor-help group/parent" title={`父词汇: ${stripRuby(parentVocab.word)}\n释义: ${stripRuby(parentVocab.meaning)}`}>
-                  <span className="text-[8px] font-black bg-slate-100 text-slate-500 px-1 rounded">PARENT</span>
-                  <span className="text-[10px] font-bold text-slate-500 serif-font">{stripRuby(parentVocab.word)}</span>
-                  <div className="hidden group-hover/parent:block absolute top-full left-0 mt-2 p-3 bg-slate-900 text-white text-[10px] rounded-xl shadow-xl z-30 w-48 animate-in fade-in slide-in-from-top-1">
-                    <p className="font-bold mb-1 text-indigo-300 uppercase tracking-widest text-[8px]">原始定义 ORIGINAL DEFINITION</p>
-                    <p className="leading-relaxed opacity-90">{stripRuby(parentVocab.meaning)}</p>
-                  </div>
+             <div className="flex flex-col">
+                <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-2">打磨目标 TARGET GEMS</h3>
+                <div className="flex flex-wrap gap-3">
+                  {currentVocabs.map(v => (
+                    <div key={v.id} className="bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100 flex items-center space-x-2">
+                       <span className="text-lg font-black text-slate-900 serif-font">{rubyUtil(v.word)}</span>
+                       <span className="text-[8px] font-black bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full">M{Number(v.mastery || 0).toFixed(1)}</span>
+                    </div>
+                  ))}
                 </div>
-              )}
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="md:hidden px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-lg text-[8px] font-black uppercase tracking-widest">M{Number(currentVocab.mastery || 0).toFixed(1)}</span>
-              <button 
-                onClick={() => handlePlayAudio(currentVocab.word, 'word')} 
-                disabled={isAudioLoading && playingAudioId === 'word'}
-                className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-all ${playingAudioId === 'word' ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-indigo-600'}`}
+             </div>
+             <button 
+                onClick={() => handlePlayAudio(currentVocabs.map(v => stripRuby(v.word)).join(', '), 'combo-words')} 
+                disabled={isAudioLoading && playingAudioId === 'combo-words'}
+                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${playingAudioId === 'combo-words' ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-400 hover:text-indigo-600'}`}
               >
-                {isAudioLoading && playingAudioId === 'word' ? (
+                {isAudioLoading && playingAudioId === 'combo-words' ? (
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                ) : playingAudioId === 'word' ? '⏹' : '🎧'}
+                ) : playingAudioId === 'combo-words' ? '⏹' : '🎧'}
               </button>
-            </div>
           </div>
 
-          <div className="space-y-5 md:space-y-6">
-            <div>
-              <span className="text-[9px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest block mb-2">词汇解析 DEFINITION</span>
-              <p className="text-slate-600 text-xs md:text-sm leading-relaxed">
-                {stripRuby(currentVocab.meaning)}
-              </p>
-            </div>
-            <div>
-              <span className="text-[9px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest block mb-2">参考范例 EXAMPLE</span>
-              <div className="bg-indigo-50/40 p-4 md:p-6 rounded-2xl italic text-sm md:text-base text-indigo-800 border-l-4 border-indigo-400">
-                <p className="leading-relaxed">“ {renderRuby(currentVocab.usage)} ”</p>
+          <div className="space-y-8">
+            {currentVocabs.map((v, idx) => (
+              <div key={v.id} className="space-y-3 animate-in fade-in slide-in-from-left-4" style={{ animationDelay: `${idx * 150}ms` }}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest">{v.word} 释义</span>
+                  <button onClick={() => handlePlayAudio(v.usage, `usage-${v.id}`)} className="text-[10px] text-indigo-400 hover:underline">听例句</button>
+                </div>
+                <p className="text-slate-600 text-xs md:text-sm leading-relaxed bg-slate-50/50 p-3 rounded-xl border border-slate-50">
+                  {stripRuby(v.meaning)}
+                </p>
+                <div className="bg-indigo-50/30 p-4 rounded-2xl italic text-xs text-indigo-800 border-l-2 border-indigo-200">
+                  <p className="leading-relaxed">“ {rubyUtil(v.usage)} ”</p>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
         </div>
 

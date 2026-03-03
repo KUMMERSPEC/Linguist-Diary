@@ -78,3 +78,16 @@ export const weaveRuby = (text: string, readingPairs?: ReadingPair[], language: 
   const markdown = weaveRubyMarkdown(text, readingPairs, language);
   return renderRuby(markdown);
 };
+
+/**
+ * Simple language detection based on character sets.
+ */
+export const detectLanguage = (text: string): string => {
+  if (!text) return 'English';
+  // Check for Japanese characters (Hiragana, Katakana, or Kanji)
+  const japaneseRegex = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/;
+  if (japaneseRegex.test(text)) {
+    return 'Japanese';
+  }
+  return 'English';
+};

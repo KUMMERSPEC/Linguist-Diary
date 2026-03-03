@@ -13,7 +13,7 @@ interface VocabListViewProps {
   allAdvancedVocab: (AdvancedVocab & { language: string })[];
   fragments: InspirationFragment[];
   onViewChange: (view: ViewState, vocabId?: string, isPracticeActive?: boolean) => void;
-  onUpdateMastery: (entryId: string, word: string, newMastery: number, record?: PracticeRecord) => void;
+  onUpdateMastery: (vocabId: string, word: string, newMastery: number, record?: PracticeRecord, aiSummary?: string) => void;
   onDeleteVocab?: (vocabId: string) => void;
   onDeleteFragment?: (id: string) => void;
   onPromoteFragment?: (id: string) => void;
@@ -39,6 +39,7 @@ const ShardItem = React.memo(({
   onDeleteFragment, 
   onPromoteToSeed, 
   onPromoteFragment, 
+  onViewChange,
   promotingFragmentId,
   handlePlayAudio,
   playingAudioId
@@ -49,6 +50,7 @@ const ShardItem = React.memo(({
   onDeleteFragment?: (id: string) => void, 
   onPromoteToSeed?: (id: string) => void, 
   onPromoteFragment?: (id: string) => void, 
+  onViewChange?: (view: ViewState, vocabId?: string, isPracticeActive?: boolean, prefill?: string) => void,
   promotingFragmentId?: string | null,
   handlePlayAudio: (e: React.MouseEvent, text: string, id: string) => void,
   playingAudioId: string | null
@@ -97,10 +99,10 @@ const ShardItem = React.memo(({
        <div className="flex flex-col space-y-1.5">
          {f.fragmentType === 'transient' && (
            <button 
-             onClick={() => onPromoteToSeed?.(f.id)}
-             className="w-full text-[9px] font-black text-emerald-600 bg-emerald-50 py-2 rounded-xl uppercase tracking-widest hover:bg-emerald-100 transition-colors border border-emerald-100"
+             onClick={() => onViewChange?.('editor', undefined, undefined, f.content)}
+             className="w-full text-[9px] font-black text-indigo-600 bg-indigo-50 py-2 rounded-xl uppercase tracking-widest hover:bg-indigo-100 transition-colors border border-indigo-100"
            >
-             🌱 转化为种子
+             🖋️ 去记录，去书写
            </button>
          )}
          {f.fragmentType === 'seed' && (
@@ -819,6 +821,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
                 onDeleteFragment={onDeleteFragment}
                 onPromoteToSeed={onPromoteToSeed}
                 onPromoteFragment={onPromoteFragment}
+                onViewChange={onViewChange}
                 promotingFragmentId={promotingFragmentId}
                 handlePlayAudio={handlePlayAudio}
                 playingAudioId={playingAudioId}
