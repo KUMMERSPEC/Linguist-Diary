@@ -75,7 +75,6 @@ const App: React.FC = () => {
   const [summaryPrompt, setSummaryPrompt] = useState<string>('');
   const [isReviewingExisting, setIsReviewingExisting] = useState(false); 
   const [showProModal, setShowProModal] = useState(false);
-  const [showPracticeModeModal, setShowPracticeModeModal] = useState(false);
 
 
   const [allAdvancedVocab, setAllAdvancedVocab] = useState<AdvancedVocab[]>([]); 
@@ -1278,57 +1277,11 @@ const App: React.FC = () => {
     );
   };
 
-  const PracticeModeModal: React.FC = () => {
-    return (
-      <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setShowPracticeModeModal(false)}></div>
-        <div className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-500">
-           <div className="bg-indigo-600 p-8 text-center relative overflow-hidden">
-             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
-             <div className="w-16 h-16 bg-white rounded-2xl mx-auto flex items-center justify-center text-3xl mb-4 shadow-xl">💎</div>
-             <h3 className="text-xl font-black text-white serif-font">选择打磨模式</h3>
-             <p className="text-indigo-100 text-[10px] font-black uppercase tracking-widest mt-2">SELECT PRACTICE MODE</p>
-           </div>
-           <div className="p-8 space-y-4">
-              <button 
-                onClick={() => handleStartSmartReview('single')}
-                className="w-full group bg-slate-50 hover:bg-white hover:shadow-xl hover:shadow-slate-200/50 p-6 rounded-[2rem] border border-slate-100 transition-all flex items-center space-x-6 text-left"
-              >
-                <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-xl group-hover:scale-110 transition-transform">🖋️</div>
-                <div className="flex-1">
-                  <h4 className="text-sm font-black text-slate-900 serif-font">单词打磨 Normal Mode</h4>
-                  <p className="text-[10px] text-slate-400 mt-1">逐一攻克馆藏珍宝，稳扎稳打提升熟练度。</p>
-                </div>
-              </button>
-
-              <button 
-                onClick={() => handleStartSmartReview('combo')}
-                className="w-full group bg-indigo-50/50 hover:bg-white hover:shadow-xl hover:shadow-indigo-200/30 p-6 rounded-[2rem] border border-indigo-100 transition-all flex items-center space-x-6 text-left"
-              >
-                <div className="w-12 h-12 bg-indigo-600 rounded-2xl shadow-lg flex items-center justify-center text-xl group-hover:scale-110 transition-transform">🕸️</div>
-                <div className="flex-1">
-                  <h4 className="text-sm font-black text-indigo-600 serif-font">织网打磨 Combo Challenge</h4>
-                  <p className="text-[10px] text-indigo-400/70 mt-1">将多个生词编织进同一个语境，深度挑战表达力。</p>
-                </div>
-              </button>
-
-              <button 
-                onClick={() => setShowPracticeModeModal(false)}
-                className="w-full py-3 text-[10px] font-black uppercase text-slate-400 tracking-widest hover:text-slate-600 transition-colors"
-              >
-                取消打磨 CANCEL
-              </button>
-           </div>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div>
       <Toaster position="bottom-center" toastOptions={{ duration: 3000 }} />
       <Layout activeView={view} onViewChange={handleViewChange} user={user} onLogout={handleLogout} isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen}>
-      {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={() => setShowPracticeModeModal(true)} entries={entries} allAdvancedVocab={allAdvancedVocab} recommendedIteration={recommendedIteration} onStartIteration={handleStartIteration} onSaveFragment={handleSaveFragment} fragments={fragments} onPromoteFragment={handlePromoteFragment} />}
+      {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartSmartReview} entries={entries} allAdvancedVocab={allAdvancedVocab} recommendedIteration={recommendedIteration} onStartIteration={handleStartIteration} onSaveFragment={handleSaveFragment} fragments={fragments} onPromoteFragment={handlePromoteFragment} />}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraft} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} fragments={fragments} onDeleteFragment={handleDeleteFragment} preferredLanguages={preferredLanguages} />}
       {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} allAdvancedVocab={allAdvancedVocab} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isExistingEntry={isReviewingExisting} />}
       {/* // FIX: Updated function name from handleUpdateLanguage to handleUpdateEntryLanguage */}
@@ -1380,7 +1333,6 @@ const App: React.FC = () => {
       {view === 'profile' && <ProfileView user={user} editName={editName} setEditName={setEditName} editPhoto={editPhoto} setEditPhoto={setEditPhoto} isAvatarPickerOpen={isAvatarPickerOpen} setIsAvatarPickerOpen={setIsAvatarPickerOpen} avatarSeeds={AVATAR_SEEDS} onSaveProfile={handleSaveProfile} isLoading={isLoading} iterationDay={user.iterationDay ?? 0} onSetIterationDay={handleSetIterationDay} preferredLanguages={preferredLanguages} onSetPreferredLanguages={handleSetPreferredLanguages} onActivatePro={handleActivatePro} />}
       
       {showProModal && <ProUpgradeModal />}
-      {showPracticeModeModal && <PracticeModeModal />}
     </Layout>
     </div>
   );
