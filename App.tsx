@@ -1374,7 +1374,7 @@ const App: React.FC = () => {
           onBatchDeletePractices={handleBatchDeletePractices} 
         />
       )}
-      {view === 'rehearsal' && <Rehearsal allAdvancedVocab={allAdvancedVocab} preferredLanguages={preferredLanguages} onSaveRehearsal={handleSaveRehearsal} onSaveVocab={handleSaveManualVocab} setView={setView} />}
+      {view === 'rehearsal' && <Rehearsal allAdvancedVocab={allAdvancedVocab} preferredLanguages={preferredLanguages} onSaveRehearsal={handleSaveRehearsal} onSaveVocab={handleSaveManualVocab} onBulkSaveVocab={handleBulkSaveVocab} setView={setView} />}
       {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} onBulkSaveVocab={handleBulkSaveVocab} onRetryFailed={handleRetryFailedGems} isArchived={true} existingVocab={allAdvancedVocab} />}
       {view === 'profile' && <ProfileView user={user} editName={editName} setEditName={setEditName} editPhoto={editPhoto} setEditPhoto={setEditPhoto} isAvatarPickerOpen={isAvatarPickerOpen} setIsAvatarPickerOpen={setIsAvatarPickerOpen} avatarSeeds={AVATAR_SEEDS} onSaveProfile={handleSaveProfile} isLoading={isLoading} iterationDay={user.iterationDay ?? 0} onSetIterationDay={handleSetIterationDay} preferredLanguages={preferredLanguages} onSetPreferredLanguages={handleSetPreferredLanguages} onActivatePro={handleActivatePro} />}
       

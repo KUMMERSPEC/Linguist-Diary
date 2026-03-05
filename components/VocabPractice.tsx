@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AdvancedVocab, PracticeRecord, ViewState } from '../types';
 import { validateVocabUsageStream, generateDiaryAudio } from '../services/geminiService';
-import { playSmartSpeech } from '../services/audioService';
+import { playSmartSpeech, getAudioWithCache } from '../services/audioService';
 import { renderRuby as rubyUtil, stripRuby } from '../utils/textHelpers'; 
 import { v4 as uuidv4 } from 'uuid';
 import toast from 'react-hot-toast';
@@ -144,7 +144,7 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
         // Background Fetching: Pre-warm the audio for the next word
         // This simulates the "API handshake" and reduces perceived latency for the next item
         if (nextVocab.word.length >= 10) {
-          generateDiaryAudio(stripRuby(nextVocab.word)).catch(() => {});
+          getAudioWithCache(stripRuby(nextVocab.word)).catch(() => {});
         }
       }
     }

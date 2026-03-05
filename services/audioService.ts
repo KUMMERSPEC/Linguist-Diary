@@ -1,38 +1,95 @@
 
-import { generateDiaryAudio } from "./geminiService";
-import { decode, decodeAudioData } from "../utils/audioHelpers";
+import { openDB, IDBPDatabase } from 'idb';
+import { generateDiaryAudio } from './geminiService';
+import { decode, decodeAudioData } from '../utils/audioHelpers';
 
-// Local Memory Cache for this session
-const audioBufferCache: Record<string, AudioBuffer> = {};
+const DB_NAME = 'linguist_audio_cache';
+const STORE_NAME = 'audio_blobs';
+const DB_VERSION = 1;
 
-/**
- * Native Browser TTS - 0 Token, 0 Latency
- */
-export const playNativeSpeech = (text: string, language: string) => {
-  return new Promise((resolve) => {
-    const msg = new SpeechSynthesisUtterance();
-    msg.text = text;
-    
-    // Map language codes to browser voice locales
-    const langMap: Record<string, string> = {
-      'English': 'en-US',
-      'Japanese': 'ja-JP',
-      'French': 'fr-FR',
-      'Spanish': 'es-ES',
-      'German': 'de-DE'
-    };
-    
-    msg.lang = langMap[language] || 'en-US';
-    msg.rate = 0.9; // Slightly slower for better learning
-    msg.onend = resolve;
-    window.speechSynthesis.speak(msg);
-  });
+let dbPromise: Promise<IDBPDatabase> | null = null;
+
+const getDB = () => {
+  if (!dbPromise) {
+    dbPromise = openDB(DB_NAME, DB_VERSION, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME);
+        }
+      },
+    });
+  }
+  return dbPromise;
 };
 
 /**
- * Tiered Speech Logic: 
- * If it's a short word, use native. 
- * If it's a long sentence, use AI with caching.
+ * Generates a unique key for the audio cache based on text and optional parameters
+ */
+const generateKey = (text: string, voice?: string): string => {
+  const cleanText = text.trim().toLowerCase();
+  return `${cleanText}_${voice || 'default'}`;
+};
+
+/**
+ * Saves base64 audio data to IndexedDB
+ */
+export const cacheAudio = async (text: string, base64Data: string, voice?: string): Promise<void> => {
+  try {
+    const db = await getDB();
+    const key = generateKey(text, voice);
+    await db.put(STORE_NAME, base64Data, key);
+  } catch (error) {
+    console.error('Failed to cache audio:', error);
+  }
+};
+
+/**
+ * Retrieves base64 audio data from IndexedDB
+ */
+export const getCachedAudio = async (text: string, voice?: string): Promise<string | null> => {
+  try {
+    const db = await getDB();
+    const key = generateKey(text, voice);
+    const data = await db.get(STORE_NAME, key);
+    return data || null;
+  } catch (error) {
+    console.error('Failed to get cached audio:', error);
+    return null;
+  }
+};
+
+/**
+ * Clears the entire audio cache
+ */
+export const clearAudioCache = async (): Promise<void> => {
+  try {
+    const db = await getDB();
+    await db.clear(STORE_NAME);
+  } catch (error) {
+    console.error('Failed to clear audio cache:', error);
+  }
+};
+
+/**
+ * Gets audio data with caching
+ */
+export const getAudioWithCache = async (text: string): Promise<string> => {
+  if (!text) return "";
+  
+  const cached = await getCachedAudio(text);
+  if (cached) {
+    return cached;
+  }
+
+  const audioData = await generateDiaryAudio(text);
+  if (audioData) {
+    await cacheAudio(text, audioData);
+  }
+  return audioData;
+};
+
+/**
+ * Plays audio using the smart speech logic with caching
  */
 export const playSmartSpeech = async (
   text: string, 
@@ -40,44 +97,31 @@ export const playSmartSpeech = async (
   id: string, 
   onStart: () => void, 
   onEnd: () => void,
-  forceAI: boolean = false
-) => {
-  // 1. For short words, always prefer native (Token Saver)
-  if (!forceAI && text.length < 10) {
-    onStart();
-    await playNativeSpeech(text, language);
-    onEnd();
-    return null;
-  }
-
-  // 2. Check Cache for AI voice
-  const cacheKey = `${language}_${text}`;
-  onStart();
-
+  isLongText: boolean = false
+): Promise<AudioBufferSourceNode | null> => {
   try {
-    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+    onStart();
     
-    let buffer: AudioBuffer;
-    if (audioBufferCache[cacheKey]) {
-      buffer = audioBufferCache[cacheKey];
-    } else {
-      // 3. Fallback to API
-      const base64 = await generateDiaryAudio(text);
-      if (!base64) throw new Error("TTS failed");
-      const bytes = decode(base64);
-      buffer = await decodeAudioData(bytes, audioCtx, 24000, 1);
-      audioBufferCache[cacheKey] = buffer; // Cache it
+    const base64Audio = await getAudioWithCache(text);
+    
+    if (!base64Audio) {
+      onEnd();
+      return null;
     }
 
+    const bytes = decode(base64Audio);
+    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+    const audioBuffer = await decodeAudioData(bytes, audioCtx, 24000, 1);
+    
     const source = audioCtx.createBufferSource();
-    source.buffer = buffer;
+    source.buffer = audioBuffer;
     source.connect(audioCtx.destination);
     source.onended = onEnd;
     source.start();
+    
     return source;
-  } catch (e) {
-    console.warn("AI TTS failed, falling back to native:", e);
-    await playNativeSpeech(text, language);
+  } catch (error) {
+    console.error('playSmartSpeech error:', error);
     onEnd();
     return null;
   }

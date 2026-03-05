@@ -4,6 +4,7 @@ import { Search, LayoutGrid, List, ChevronDown, ChevronUp, Filter, ArrowUpDown }
 import { Tooltip } from 'react-tooltip';
 import { AdvancedVocab, PracticeRecord, ViewState, InspirationFragment } from '../types';
 import { generateDiaryAudio } from '../services/geminiService';
+import { getAudioWithCache } from '../services/audioService';
 import { decode, decodeAudioData } from '../utils/audioHelpers';
 import { renderRuby, stripRuby } from '../utils/textHelpers';
 import { db } from '../firebase';
@@ -582,7 +583,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
     setPlayingAudioId(id);
     try {
       const cleanText = stripRuby(text);
-      const base64Audio = await generateDiaryAudio(cleanText);
+      const base64Audio = await getAudioWithCache(cleanText);
       if (!base64Audio) { setPlayingAudioId(null); return; }
       const bytes = decode(base64Audio);
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });

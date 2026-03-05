@@ -33,12 +33,13 @@ const TOPICS = [
 interface RehearsalProps {
   onSaveRehearsal: (evaluation: RehearsalEvaluation) => void;
   onSaveVocab: (vocab: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>) => void;
+  onBulkSaveVocab: (vocabs: Omit<AdvancedVocab, 'id' | 'mastery' | 'practices'>[]) => Promise<void>;
   setView: (view: ViewState) => void;
   allAdvancedVocab?: AdvancedVocab[];
   preferredLanguages: string[];
 }
 
-const Rehearsal: React.FC<RehearsalProps> = ({ onSaveRehearsal, onSaveVocab, setView, allAdvancedVocab = [], preferredLanguages = [] }) => {
+const Rehearsal: React.FC<RehearsalProps> = ({ onSaveRehearsal, onSaveVocab, onBulkSaveVocab, setView, allAdvancedVocab = [], preferredLanguages = [] }) => {
   const filteredLangs = useMemo(() => LANGUAGES.filter(l => (preferredLanguages ?? []).includes(l.code)), [preferredLanguages]);
   const [mode, setMode] = useState<'normal' | 'weave'>('normal');
   const [language, setLanguage] = useState(filteredLangs[0] || LANGUAGES[0]);
@@ -422,8 +423,9 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveRehearsal, onSaveVocab, set
               onSaveRehearsal(evaluation);
               setView('history');
             }}
-            onSaveVocab={onSaveVocab}
+            onBulkSaveVocab={onBulkSaveVocab}
             onRetryFailed={handleRetryFailed}
+            existingVocab={allAdvancedVocab}
           />
       )}
     </div>

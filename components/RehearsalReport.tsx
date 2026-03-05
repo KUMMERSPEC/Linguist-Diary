@@ -2,6 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { RehearsalEvaluation, AdvancedVocab } from '../types';
 import { generateDiaryAudio } from '../services/geminiService';
+import { getAudioWithCache } from '../services/audioService';
 import { decode, decodeAudioData } from '../utils/audioHelpers';
 import toast from 'react-hot-toast';
 
@@ -50,7 +51,7 @@ const RehearsalReport: React.FC<RehearsalReportProps> = ({ evaluation, language,
     setIsPlaying(id);
     try {
       const cleanText = textToPlay.replace(/\[(.*?)\]\(.*?\)/g, '$1');
-      const base64Audio = await generateDiaryAudio(cleanText);
+      const base64Audio = await getAudioWithCache(cleanText);
       if (!base64Audio) { setIsPlaying(null); return; }
       const bytes = decode(base64Audio);
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
