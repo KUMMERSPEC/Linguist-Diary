@@ -14,6 +14,7 @@ interface VocabPracticeDetailViewProps {
   onDeletePractice?: (vocabId: string, practiceId: string) => void;
   onBatchDeletePractices?: (vocabId: string, practiceIds: string[]) => void;
   onUpdateLanguage?: (vocabId: string, language: string) => void;
+  onMarkAsMastered?: (vocabId: string) => void;
   preferredLanguages?: string[];
 }
 
@@ -258,9 +259,19 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
             </div>
           )}
 
-          <div className="mt-6 pt-6 border-t border-slate-50 text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-2">
-            <span>💡 提示：</span>
-            <span>独立精准造句 (Perfect) 提升掌握度，否则视为仍需磨练。</span>
+          <div className="mt-6 pt-6 border-t border-slate-50 text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span>💡 提示：</span>
+              <span>独立精准造句 (Perfect) 提升掌握度，否则视为仍需磨练。</span>
+            </div>
+            {(currentVocab.mastery || 0) < 5 && (
+              <button 
+                onClick={() => onMarkAsMastered?.(currentVocab.id)}
+                className="text-indigo-600 hover:text-indigo-800 transition-colors"
+              >
+                🎓 一键满级
+              </button>
+            )}
           </div>
         </div>
 

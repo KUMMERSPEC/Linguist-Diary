@@ -1080,9 +1080,46 @@ const App: React.FC = () => {
       });
       await batch.commit();
     }
+    toast.success(`已更新 ${vocabIds.length} 个词汇的语种`);
   };
 
-    const handleSaveRehearsal = async (rehearsalData: RehearsalEvaluation) => {
+  const handleLinkVocab = async (vocabIds: string[], parentId: string | null) => {
+    if (!user) return;
+    setAllAdvancedVocab(prev => prev.map(v => vocabIds.includes(v.id) ? { ...v, parentId: parentId || undefined } : v));
+    
+    if (!db || user.isMock) {
+      const localVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
+      const updated = localVocab.map((v: any) => vocabIds.includes(v.id) ? { ...v, parentId: parentId || undefined } : v);
+      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
+    } else {
+      const batch = writeBatch(db);
+      vocabIds.forEach(id => {
+        batch.update(doc(db, 'users', user.uid, 'advancedVocab', id), { parentId: parentId || null });
+      });
+      await batch.commit();
+    }
+    toast.success(parentId ? `已成功建立关联` : `已解除关联`);
+  };
+
+  const handleMarkAsMastered = async (vocabId: string) => {
+    if (!user) return;
+    const now = Date.now();
+    setAllAdvancedVocab(prev => prev.map(v => v.id === vocabId ? { ...v, mastery: 5.0, lastReviewTimestamp: now } : v));
+    
+    if (!db || user.isMock) {
+      const localVocab = JSON.parse(localStorage.getItem(`linguist_vocab_${user.uid}`) || '[]');
+      const updated = localVocab.map((v: any) => v.id === vocabId ? { ...v, mastery: 5.0, lastReviewTimestamp: now } : v);
+      localStorage.setItem(`linguist_vocab_${user.uid}`, JSON.stringify(updated));
+    } else {
+      await updateDoc(doc(db, 'users', user.uid, 'advancedVocab', vocabId), { 
+        mastery: 5.0,
+        lastReviewTimestamp: now
+      });
+    }
+    toast.success(`已标记为满级，该词将不再出现在练习中`);
+  };
+
+  const handleSaveRehearsal = async (rehearsalData: RehearsalEvaluation) => {
     if (!user) return;
 
     const newEntry: Omit<DiaryEntry, 'id'> = {
@@ -1302,7 +1339,7 @@ const App: React.FC = () => {
         />
       )}
       {view === 'chat' && <ChatEditor onFinish={(msgs, lang, summary) => { setChatLanguage(lang); setPrefilledEditorText(''); setSummaryPrompt(summary); setView('editor'); }} allGems={allAdvancedVocab} preferredLanguages={preferredLanguages} />}
-      {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} fragments={fragments} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} onDeleteVocab={handleDeleteVocab} onDeleteFragment={handleDeleteFragment} onPromoteFragment={handlePromoteFragment} onPromoteToSeed={handlePromoteToSeed} onBulkPromoteFragments={handleBulkPromoteFragments} isMenuOpen={isMenuOpen} onBulkUpdateLanguage={handleBulkUpdateVocabLanguage} promotingFragmentId={promotingFragmentId} />}
+      {view === 'vocab_list' && <VocabListView allAdvancedVocab={allAdvancedVocab} fragments={fragments} onViewChange={handleViewChange} onUpdateMastery={handleUpdateMastery} onDeleteVocab={handleDeleteVocab} onDeleteFragment={handleDeleteFragment} onPromoteFragment={handlePromoteFragment} onPromoteToSeed={handlePromoteToSeed} onBulkPromoteFragments={handleBulkPromoteFragments} isMenuOpen={isMenuOpen} onBulkUpdateLanguage={handleBulkUpdateVocabLanguage} onLinkVocab={handleLinkVocab} onMarkAsMastered={handleMarkAsMastered} promotingFragmentId={promotingFragmentId} />}
       {view === 'vocab_practice' && selectedVocabForPracticeId && (
         <VocabPractice 
           selectedVocabId={selectedVocabForPracticeId} 
@@ -1326,7 +1363,16 @@ const App: React.FC = () => {
         />
       )}
       {view === 'vocab_practice_detail' && selectedVocabForPracticeId && (
-        <VocabPracticeDetailView selectedVocabId={selectedVocabForPracticeId} allAdvancedVocab={allAdvancedVocab} onBackToPracticeHistory={() => setView('vocab_list')} onUpdateLanguage={handleUpdateVocabLanguage} preferredLanguages={preferredLanguages} onDeletePractice={handleDeletePractice} onBatchDeletePractices={handleBatchDeletePractices} />
+        <VocabPracticeDetailView 
+          selectedVocabId={selectedVocabForPracticeId} 
+          allAdvancedVocab={allAdvancedVocab} 
+          onBackToPracticeHistory={() => setView('vocab_list')} 
+          onUpdateLanguage={handleUpdateVocabLanguage} 
+          onMarkAsMastered={handleMarkAsMastered}
+          preferredLanguages={preferredLanguages} 
+          onDeletePractice={handleDeletePractice} 
+          onBatchDeletePractices={handleBatchDeletePractices} 
+        />
       )}
       {view === 'rehearsal' && <Rehearsal allAdvancedVocab={allAdvancedVocab} preferredLanguages={preferredLanguages} onSaveRehearsal={handleSaveRehearsal} onSaveVocab={handleSaveManualVocab} setView={setView} />}
       {view === 'rehearsal_report' && currentEntry?.rehearsal && <RehearsalReport evaluation={currentEntry.rehearsal} language={currentEntry.language} date={currentEntry.date} onBack={() => setView('history')} onBulkSaveVocab={handleBulkSaveVocab} onRetryFailed={handleRetryFailedGems} isArchived={true} existingVocab={allAdvancedVocab} />}

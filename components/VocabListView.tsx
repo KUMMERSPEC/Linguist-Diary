@@ -21,6 +21,8 @@ interface VocabListViewProps {
   onBulkPromoteFragments?: (ids: string[]) => void;
   isMenuOpen?: boolean;
   onBulkUpdateLanguage?: (vocabIds: string[], language: string) => void;
+  onLinkVocab?: (vocabIds: string[], parentId: string | null) => void;
+  onMarkAsMastered?: (vocabId: string) => void;
   promotingFragmentId?: string | null;
 }
 
@@ -125,14 +127,16 @@ const GemGridItem = React.memo(({
   onDeleteVocab,
   handlePlayAudio,
   playingAudioId,
-  getMasteryTextStyle
+  getMasteryTextStyle,
+  onMarkAsMastered
 }: {
   gem: AdvancedVocab & { language: string },
   onViewChange: (view: ViewState, vocabId?: string) => void,
   onDeleteVocab?: (id: string) => void,
   handlePlayAudio: (e: React.MouseEvent, text: string, id: string) => void,
   playingAudioId: string | null,
-  getMasteryTextStyle: (mastery: number | undefined) => string
+  getMasteryTextStyle: (mastery: number | undefined) => string,
+  onMarkAsMastered?: (id: string) => void
 }) => (
   <div 
     onClick={() => onViewChange('vocab_practice_detail', gem.id)}
@@ -141,7 +145,18 @@ const GemGridItem = React.memo(({
      <div className="absolute top-6 left-8">
        <span className="text-[8px] font-black text-slate-200 uppercase tracking-[0.2em]">{gem.language}</span>
      </div>
-     <button onClick={(e) => { e.stopPropagation(); onDeleteVocab?.(gem.id); }} className="absolute top-6 right-8 p-2 text-slate-100 hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100">✕</button>
+     <div className="absolute top-6 right-8 flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+       {(gem.mastery || 0) < 5 && (
+         <button 
+           onClick={(e) => { e.stopPropagation(); onMarkAsMastered?.(gem.id); }} 
+           className="p-2 text-indigo-400 hover:text-indigo-600 transition-colors"
+           title="一键满级"
+         >
+           🎓
+         </button>
+       )}
+       <button onClick={(e) => { e.stopPropagation(); onDeleteVocab?.(gem.id); }} className="p-2 text-slate-100 hover:text-rose-400 transition-colors">✕</button>
+     </div>
      <div className="flex-1 flex flex-col justify-center mt-2">
        <h4 className="text-3xl font-black text-slate-900 serif-font mb-2 tracking-tight leading-relaxed" dangerouslySetInnerHTML={{ __html: renderRuby(gem.word) }}></h4>
        {gem.phonetic && (
@@ -173,7 +188,8 @@ const GemRowItem = React.memo(({
   getMasteryTextStyle,
   loadingPractices,
   gemPractices,
-  onDeleteVocab
+  onDeleteVocab,
+  onMarkAsMastered
 }: {
   gem: AdvancedVocab & { language: string },
   isExpanded: boolean,
@@ -187,7 +203,8 @@ const GemRowItem = React.memo(({
   getMasteryTextStyle: (mastery: number | undefined) => string,
   loadingPractices: Set<string>,
   gemPractices: Record<string, PracticeRecord[]>,
-  onDeleteVocab?: (id: string) => void
+  onDeleteVocab?: (id: string) => void,
+  onMarkAsMastered?: (id: string) => void
 }) => (
   <div key={gem.id} className="group transition-colors hover:bg-slate-50/50">
     <div 
@@ -327,9 +344,19 @@ const GemRowItem = React.memo(({
                <span className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">入库日期: {new Date(gem.timestamp).toLocaleDateString()}</span>
                <span className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">语种: {gem.language}</span>
              </div>
-             <button onClick={(e) => { e.stopPropagation(); onDeleteVocab?.(gem.id); }} className="text-[9px] font-black text-rose-400 uppercase tracking-widest hover:text-rose-600 transition-colors">
-               删除记录
-             </button>
+             <div className="flex items-center space-x-4">
+               {(gem.mastery || 0) < 5 && (
+                 <button 
+                   onClick={(e) => { e.stopPropagation(); onMarkAsMastered?.(gem.id); }} 
+                   className="text-[9px] font-black text-indigo-500 uppercase tracking-widest hover:text-indigo-700 transition-colors"
+                 >
+                   🎓 一键满级
+                 </button>
+               )}
+               <button onClick={(e) => { e.stopPropagation(); onDeleteVocab?.(gem.id); }} className="text-[9px] font-black text-rose-400 uppercase tracking-widest hover:text-rose-600 transition-colors">
+                 删除记录
+               </button>
+             </div>
           </div>
         </div>
       </div>
@@ -348,6 +375,8 @@ const VocabListView: React.FC<VocabListViewProps> = ({
   onBulkPromoteFragments,
   isMenuOpen,
   onBulkUpdateLanguage,
+  onLinkVocab,
+  onMarkAsMastered,
   promotingFragmentId
 }) => {
   const [activeTab, setActiveTab] = useState<'gems' | 'shards'>('gems');
@@ -367,6 +396,8 @@ const VocabListView: React.FC<VocabListViewProps> = ({
   const [selectedVocabIds, setSelectedVocabIds] = useState<Set<string>>(new Set());
   const [selectedShardIds, setSelectedShardIds] = useState<Set<string>>(new Set());
   const [isBulkLanguageModalOpen, setIsBulkLanguageModalOpen] = useState(false);
+  const [isBulkLinkModalOpen, setIsBulkLinkModalOpen] = useState(false);
+  const [linkSearchQuery, setLinkSearchQuery] = useState('');
   
   const containerRef = useRef<HTMLDivElement>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -591,6 +622,14 @@ const VocabListView: React.FC<VocabListViewProps> = ({
     }
   };
 
+  const handleBulkLinkChange = (parentId: string | null) => {
+    if (onLinkVocab) {
+      onLinkVocab(Array.from(selectedVocabIds), parentId);
+      setSelectedVocabIds(new Set());
+      setIsBulkLinkModalOpen(false);
+    }
+  };
+
   const getMasteryTextStyle = (mastery: number | undefined) => {
     const m = mastery || 0;
     if (m >= 4) return 'text-indigo-600';
@@ -776,6 +815,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
                   handlePlayAudio={handlePlayAudio}
                   playingAudioId={playingAudioId}
                   getMasteryTextStyle={getMasteryTextStyle}
+                  onMarkAsMastered={onMarkAsMastered}
                 />
               )) : (
                 <EmptyState message="此视角下尚无珍宝" />
@@ -803,6 +843,7 @@ const VocabListView: React.FC<VocabListViewProps> = ({
                     loadingPractices={loadingPractices}
                     gemPractices={gemPractices}
                     onDeleteVocab={onDeleteVocab}
+                    onMarkAsMastered={onMarkAsMastered}
                   />
                 );
               }) : (
@@ -859,8 +900,14 @@ const VocabListView: React.FC<VocabListViewProps> = ({
            </div>
            <div className="flex items-center space-x-3">
              <button 
-               onClick={() => setIsBulkLanguageModalOpen(true)}
+               onClick={() => setIsBulkLinkModalOpen(true)}
                className="bg-indigo-600 text-white px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-xl shadow-indigo-600/20 active:scale-95"
+             >
+               🔗 关联至父级
+             </button>
+             <button 
+               onClick={() => setIsBulkLanguageModalOpen(true)}
+               className="bg-slate-800 text-white px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-xl shadow-slate-800/20 active:scale-95"
              >
                修改语种
              </button>
@@ -907,6 +954,69 @@ const VocabListView: React.FC<VocabListViewProps> = ({
                取消
              </button>
            </div>
+        </div>
+      )}
+
+      {/* Bulk Link Modal */}
+      {isBulkLinkModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsBulkLinkModalOpen(false)}></div>
+          <div className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[80vh] animate-in zoom-in-95 duration-300">
+            <div className="p-8 border-b border-slate-50">
+              <h3 className="text-xl font-black text-slate-900 serif-font">建立关联 Link to Parent</h3>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">选择一个词汇作为这 {selectedVocabIds.size} 个条目的父级</p>
+              
+              <div className="mt-6 relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                <input 
+                  type="text"
+                  placeholder="搜索目标父级词汇..."
+                  value={linkSearchQuery}
+                  onChange={(e) => setLinkSearchQuery(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-2xl text-sm focus:ring-4 focus:ring-indigo-500/5"
+                />
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 space-y-1 no-scrollbar">
+              <button 
+                onClick={() => handleBulkLinkChange(null)}
+                className="w-full text-left p-4 rounded-2xl hover:bg-rose-50 text-rose-600 transition-colors flex items-center justify-between group"
+              >
+                <span className="text-xs font-bold uppercase tracking-widest">解除所有关联 UNLINK ALL</span>
+                <span className="opacity-0 group-hover:opacity-100">✕</span>
+              </button>
+              
+              <div className="h-[1px] bg-slate-50 my-2"></div>
+              
+              {allAdvancedVocab
+                .filter(v => !selectedVocabIds.has(v.id) && !v.parentId) // 不能关联到自己或已是子级的词
+                .filter(v => stripRuby(v.word).toLowerCase().includes(linkSearchQuery.toLowerCase()))
+                .slice(0, 50)
+                .map(v => (
+                  <button 
+                    key={v.id}
+                    onClick={() => handleBulkLinkChange(v.id)}
+                    className="w-full text-left p-4 rounded-2xl hover:bg-slate-50 transition-colors flex items-center justify-between group"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <span className="text-sm font-bold text-slate-700 serif-font">{stripRuby(v.word)}</span>
+                      <span className="text-[8px] font-black text-slate-300 uppercase">{v.language}</span>
+                    </div>
+                    <span className="text-[10px] font-black text-indigo-600 opacity-0 group-hover:opacity-100">设为父级 SET AS PARENT</span>
+                  </button>
+                ))}
+            </div>
+            
+            <div className="p-6 bg-slate-50 border-t border-slate-100">
+              <button 
+                onClick={() => setIsBulkLinkModalOpen(false)}
+                className="w-full py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest hover:text-slate-600"
+              >
+                取 消 CANCEL
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

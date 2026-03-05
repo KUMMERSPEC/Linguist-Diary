@@ -614,19 +614,15 @@ const VocabPractice: React.FC<VocabPracticeProps> = ({
               </button>
           </div>
 
-          <div className="space-y-8">
+          <div className="space-y-6">
             {currentVocabs.map((v, idx) => (
-              <div key={v.id} className="space-y-3 animate-in fade-in slide-in-from-left-4" style={{ animationDelay: `${idx * 150}ms` }}>
+              <div key={v.id} className="space-y-2 animate-in fade-in slide-in-from-left-4" style={{ animationDelay: `${idx * 150}ms` }}>
                 <div className="flex items-center justify-between">
                   <span className="text-[9px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest">{v.word} 释义</span>
-                  <button onClick={() => handlePlayAudio(v.usage, `usage-${v.id}`)} className="text-[10px] text-indigo-400 hover:underline">听例句</button>
                 </div>
-                <p className="text-slate-600 text-xs md:text-sm leading-relaxed bg-slate-50/50 p-3 rounded-xl border border-slate-50">
+                <p className="text-slate-600 text-xs md:text-sm leading-relaxed bg-slate-50/50 p-4 rounded-2xl border border-slate-50 font-medium">
                   {stripRuby(v.meaning)}
                 </p>
-                <div className="bg-indigo-50/30 p-4 rounded-2xl italic text-xs text-indigo-800 border-l-2 border-indigo-200">
-                  <p className="leading-relaxed">“ {rubyUtil(v.usage)} ”</p>
-                </div>
               </div>
             ))}
           </div>
