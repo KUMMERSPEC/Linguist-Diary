@@ -11,22 +11,25 @@
 /* Add this to your global CSS file */
 /* Let the browser handle the complex ruby layout, we just style it. */
 ruby {
-  display: inline-flex;
-  flex-direction: column-reverse;
-  align-items: center;
+  display: inline-block;
+  position: relative;
   vertical-align: baseline;
   text-indent: 0;
-  line-height: 1;
   white-space: nowrap;
+  /* No line-height here to let it inherit from parent and maintain baseline */
 }
 
 rt {
-  display: block;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 0.12em; /* Gap between furigana and kanji */
   font-size: 0.55rem;
-  line-height: 1.2;
+  line-height: 1;
   user-select: none;
   opacity: 0.6;
-  margin-bottom: 0.2em;
   font-weight: normal;
   text-align: center;
+  pointer-events: none;
 }
