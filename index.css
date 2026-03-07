@@ -16,7 +16,7 @@ ruby {
   vertical-align: baseline;
   text-indent: 0;
   white-space: nowrap;
-  /* No line-height here to let it inherit from parent and maintain baseline */
+  line-height: 1; /* Shrink the box to font size to fix absolute positioning baseline */
 }
 
 rt {
@@ -24,7 +24,7 @@ rt {
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
-  margin-bottom: 0.12em; /* Gap between furigana and kanji */
+  margin-bottom: 0.05em; /* Tighten the gap between furigana and kanji */
   font-size: 0.55rem;
   line-height: 1;
   user-select: none;
