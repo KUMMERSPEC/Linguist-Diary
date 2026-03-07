@@ -263,9 +263,16 @@ const App: React.FC = () => {
     }
   }, [user]);
 
+  const isProEffective = useMemo(() => {
+    if (!user) return false;
+    if (!user.isPro) return false;
+    if (user.proExpiry && user.proExpiry < Date.now()) return false;
+    return true;
+  }, [user]);
+
   const checkQuota = useCallback(() => {
     if (!user) return false;
-    if (user.isPro) return true;
+    if (isProEffective) return true;
     
     const today = new Date().toDateString();
     if (user.lastUsageDate !== today) {
@@ -279,13 +286,13 @@ const App: React.FC = () => {
       return false;
     }
     return true;
-  }, [user, updateUserQuota]);
+  }, [user, isProEffective, updateUserQuota]);
 
   const incrementQuota = useCallback(() => {
-    if (!user || user.isPro) return;
+    if (!user || isProEffective) return;
     const nextCount = (user.dailyUsageCount || 0) + 1;
     updateUserQuota(nextCount, new Date().toDateString());
-  }, [user, updateUserQuota]);
+  }, [user, isProEffective, updateUserQuota]);
 
   const handleActivatePro = async (inputCode: string): Promise<boolean> => {
     if (!user) return false;

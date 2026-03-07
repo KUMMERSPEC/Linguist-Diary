@@ -96,6 +96,9 @@ const ProfileView: React.FC<ProfileViewProps> = ({
     }
   };
 
+  const isProExpired = user.isPro && user.proExpiry && user.proExpiry < Date.now();
+  const isProActive = user.isPro && !isProExpired;
+
   return (
     <div className="flex flex-col h-full animate-in fade-in duration-700 overflow-hidden w-full relative pb-10 md:pb-8">
       <header className="flex flex-col md:flex-row md:items-end justify-between mb-10 px-4 md:px-0 gap-4 shrink-0">
@@ -104,8 +107,8 @@ const ProfileView: React.FC<ProfileViewProps> = ({
           <p className="text-slate-400 text-xs md:text-sm font-medium mt-1 uppercase tracking-widest">Curator of the Language Museum</p>
         </div>
         <div className="flex items-center space-x-3 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white px-5 py-2.5 rounded-2xl border border-slate-100 shadow-sm">
-          <span className={`w-2 h-2 rounded-full animate-pulse ${user.isPro ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
-          <span>{user.isPro ? 'PRO 尊享馆长' : '标准馆长'}</span>
+          <span className={`w-2 h-2 rounded-full animate-pulse ${isProActive ? 'bg-amber-500' : isProExpired ? 'bg-rose-500' : 'bg-emerald-500'}`}></span>
+          <span>{isProActive ? 'PRO 尊享馆长' : isProExpired ? 'PRO 权益已过期' : '标准馆长'}</span>
         </div>
       </header>
 
@@ -140,10 +143,11 @@ const ProfileView: React.FC<ProfileViewProps> = ({
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
                   <h3 className="text-3xl md:text-4xl font-black text-slate-900 serif-font tracking-tight flex items-center justify-center">
                     {user.displayName}
-                    {user.isPro && <span className="ml-2 text-xl" title="Pro Membership">✨</span>}
+                    {isProActive && <span className="ml-2 text-xl" title="Pro Membership">✨</span>}
+                    {isProExpired && <span className="ml-2 text-xl opacity-40 grayscale" title="Pro Expired">⌛</span>}
                   </h3>
                   <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-2">
-                    {user.isPro ? 'PRO SENIOR CURATOR' : 'CHIEF CURATOR'}
+                    {isProActive ? 'PRO SENIOR CURATOR' : isProExpired ? 'EXPIRED PRO CURATOR' : 'CHIEF CURATOR'}
                   </div>
                 </div>
               )}
@@ -154,33 +158,41 @@ const ProfileView: React.FC<ProfileViewProps> = ({
         {/* 核心改动：Pro 与普通状态的激活码区域切换 */}
         {user.isPro && !showInputForPro ? (
           /* PRO 馆长专属卡片 */
-          <section className="bg-slate-900 p-8 rounded-[2.5rem] border border-slate-800 shadow-xl overflow-hidden relative group animate-in zoom-in-95 duration-500">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/10 rounded-bl-full -mr-16 -mt-16 blur-3xl group-hover:bg-indigo-500/10 transition-colors duration-1000"></div>
+          <section className={`p-8 rounded-[2.5rem] border shadow-xl overflow-hidden relative group animate-in zoom-in-95 duration-500 ${isProExpired ? 'bg-slate-800 border-slate-700' : 'bg-slate-900 border-slate-800'}`}>
+            <div className={`absolute top-0 right-0 w-48 h-48 rounded-bl-full -mr-16 -mt-16 blur-3xl transition-colors duration-1000 ${isProExpired ? 'bg-rose-500/5' : 'bg-amber-500/10 group-hover:bg-indigo-500/10'}`}></div>
             <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="flex items-center space-x-5">
-                <div className="w-14 h-14 bg-gradient-to-br from-amber-400 to-indigo-600 rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-indigo-500/20 animate-pulse">
-                  ✨
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-lg transition-all ${isProExpired ? 'bg-slate-700 grayscale opacity-50' : 'bg-gradient-to-br from-amber-400 to-indigo-600 shadow-indigo-500/20 animate-pulse'}`}>
+                  {isProExpired ? '⌛' : '✨'}
                 </div>
                 <div>
-                  <h4 className="text-xl font-black text-white serif-font">尊享馆长权益已生效</h4>
+                  <h4 className={`text-xl font-black serif-font ${isProExpired ? 'text-slate-400' : 'text-white'}`}>
+                    {isProExpired ? '尊享馆长权益已过期' : '尊享馆长权益已生效'}
+                  </h4>
                   <div className="flex items-center space-x-2 mt-1">
-                    <span className="text-amber-500 text-[9px] font-black uppercase tracking-widest">PRO STATUS ACTIVE</span>
+                    <span className={`${isProExpired ? 'text-rose-400' : 'text-amber-500'} text-[9px] font-black uppercase tracking-widest`}>
+                      {isProExpired ? 'PRO STATUS EXPIRED' : 'PRO STATUS ACTIVE'}
+                    </span>
                     <span className="w-1 h-1 bg-slate-700 rounded-full"></span>
-                    <span className="text-indigo-400 text-[9px] font-black uppercase tracking-widest">无限配额解锁</span>
+                    <span className={`${isProExpired ? 'text-slate-500 line-through' : 'text-indigo-400'} text-[9px] font-black uppercase tracking-widest`}>
+                      无限配额解锁
+                    </span>
                   </div>
                 </div>
               </div>
               
               <div className="flex flex-col md:items-end">
-                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">权益有效期至</span>
-                <span className="text-white text-lg font-black tracking-tight serif-font">
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">
+                  {isProExpired ? '权益已于此日期结束' : '权益有效期至'}
+                </span>
+                <span className={`${isProExpired ? 'text-rose-400/80' : 'text-white'} text-lg font-black tracking-tight serif-font`}>
                   {user.proExpiry ? new Date(user.proExpiry).toLocaleDateString() : '永久有效'}
                 </span>
                 <button 
                   onClick={() => setShowInputForPro(true)}
                   className="mt-2 text-[8px] font-black text-indigo-400/60 uppercase tracking-widest hover:text-indigo-400 transition-colors"
                 >
-                  我有新的激活码 / 续费 →
+                  {isProExpired ? '立即续费以恢复特权 →' : '我有新的激活码 / 续费 →'}
                 </button>
               </div>
             </div>

@@ -11,18 +11,23 @@
 /* Add this to your global CSS file */
 /* Let the browser handle the complex ruby layout, we just style it. */
 ruby {
-  position: relative; /* Establishes a positioning context for the furigana */
+  display: inline-flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  vertical-align: bottom;
+  text-indent: 0;
+  margin-top: 0.5em; /* Add space for furigana above */
+  line-height: 1;
+  white-space: nowrap;
 }
 
 rt {
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  white-space: nowrap;
-  font-size: 0.65rem;
-  line-height: 1; /* Keep the furigana line-height compact */
+  display: block;
+  font-size: 0.6rem;
+  line-height: 1;
   user-select: none;
-  opacity: 0.9;
-  padding-bottom: 0.1em; /* Use padding for a small gap that doesn't affect layout */
+  opacity: 0.8;
+  margin-bottom: 0.1em;
+  font-weight: normal;
+  text-align: center;
 }

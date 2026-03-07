@@ -56,8 +56,30 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveRehearsal, onSaveVocab, onB
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'diff' | 'final'>('diff');
   const [shuffleSeed, setShuffleSeed] = useState(0);
+  const [isEditingSource, setIsEditingSource] = useState(false);
+  const [tempSourceText, setTempSourceText] = useState('');
 
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+
+  // Helper to convert HTML ruby to editable [K](R) format
+  const toEditable = (text: string) => {
+    return text.replace(/<ruby>(.*?)<rt>(.*?)<\/rt><\/ruby>/g, '[$1]($2)');
+  };
+
+  // Helper to convert [K](R) back to HTML ruby (if needed, though renderRuby handles both)
+  const fromEditable = (text: string) => {
+    return text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
+  };
+
+  const handleStartEditing = () => {
+    setTempSourceText(toEditable(sourceText));
+    setIsEditingSource(true);
+  };
+
+  const handleSaveSourceEdit = () => {
+    setSourceText(fromEditable(tempSourceText));
+    setIsEditingSource(false);
+  };
 
   const weavingGems = useMemo(() => {
     if (mode !== 'weave') return [];
@@ -371,6 +393,12 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveRehearsal, onSaveVocab, onB
                  <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em]">{mode === 'weave' ? '织网演练成果 WEAVED ARTIFACT' : '源文物内容 ARCHIVE ARTIFACT'}</h3>
                </div>
                <div className="flex items-center space-x-4">
+                 {!isEditingSource && (
+                   <button onClick={handleStartEditing} className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors flex items-center space-x-1.5">
+                     <span>✍️</span>
+                     <span>修正读音</span>
+                   </button>
+                 )}
                  <button onClick={() => setShowSource(!showSource)} className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:underline flex items-center space-x-1.5">
                     <span>{showSource ? '👁️' : '👁️‍🗨️'}</span>
                     <span>{showSource ? '隐藏内容' : '显示内容'}</span>
@@ -388,13 +416,30 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveRehearsal, onSaveVocab, onB
              </div>
              
              <div className="relative">
-                <div className={`transition-all duration-700 ease-in-out ${showSource ? 'blur-0 opacity-100 pointer-events-auto' : 'blur-[14px] opacity-30 select-none pointer-events-none grayscale-[0.3]'}`}>
-                  <p className="text-lg md:text-xl text-slate-800 leading-[2.2] serif-font italic">“ {renderRuby(sourceText)} ”</p>
-                </div>
-                {!showSource && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                     <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] opacity-50">Content Encrypted for Rehearsal</span>
+                {isEditingSource ? (
+                  <div className="space-y-4 animate-in fade-in duration-300">
+                    <textarea
+                      value={tempSourceText}
+                      onChange={(e) => setTempSourceText(e.target.value)}
+                      className="w-full h-40 p-6 bg-slate-50 border-2 border-indigo-100 rounded-2xl text-lg serif-font focus:ring-4 focus:ring-indigo-500/5 transition-all resize-none"
+                      placeholder="使用 [汉字](读音) 格式进行修正..."
+                    />
+                    <div className="flex justify-end space-x-3">
+                      <button onClick={() => setIsEditingSource(false)} className="px-4 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600">取消</button>
+                      <button onClick={handleSaveSourceEdit} className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-100">保存修正 SAVE</button>
+                    </div>
                   </div>
+                ) : (
+                  <>
+                    <div className={`transition-all duration-700 ease-in-out ${showSource ? 'blur-0 opacity-100 pointer-events-auto' : 'blur-[14px] opacity-30 select-none pointer-events-none grayscale-[0.3]'}`}>
+                      <p className="text-lg md:text-xl text-slate-800 leading-[2.2] serif-font italic">“ {renderRuby(sourceText)} ”</p>
+                    </div>
+                    {!showSource && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] opacity-50">Content Encrypted for Rehearsal</span>
+                      </div>
+                    )}
+                  </>
                 )}
              </div>
            </div>
