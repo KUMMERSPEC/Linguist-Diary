@@ -20,11 +20,14 @@ ruby {
 }
 
 rt {
+  display: block; /* Force block to override Safari's default ruby-text behavior */
   position: absolute;
-  bottom: 100%;
+  top: 0;
   left: 50%;
-  transform: translateX(-50%);
-  margin-bottom: 0.05em; /* Tighten the gap between furigana and kanji */
+  /* Move up by 100% of its own height plus a small gap (0.05em) */
+  transform: translate(-50%, -100%) translateY(-0.05em);
+  margin: 0;
+  padding: 0;
   font-size: 0.55rem;
   line-height: 1;
   user-select: none;
@@ -32,4 +35,5 @@ rt {
   font-weight: normal;
   text-align: center;
   pointer-events: none;
+  white-space: nowrap;
 }
