@@ -111,13 +111,13 @@ const Rehearsal: React.FC<RehearsalProps> = ({ onSaveRehearsal, onSaveVocab, onB
 
   const renderRuby = (text: string) => {
     if (!text) return '';
-    const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
+    const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<span class="custom-ruby">$1<span class="custom-rt">$2</span></span>');
     return <span dangerouslySetInnerHTML={{ __html: html }} />;
   };
 
   const renderDiffText = (diff?: string) => {
     if (!diff) return null;
-    let processed = diff.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
+    let processed = diff.replace(/\[(.*?)\]\((.*?)\)/g, '<span class="custom-ruby">$1<span class="custom-rt">$2</span></span>');
     processed = processed
       .replace(/<add>(.*?)<\/add>/g, '<span class="text-emerald-400 font-bold bg-emerald-500/10 px-1 rounded mx-0.5">$1</span>')
       .replace(/<rem>(.*?)<\/rem>/g, '<span class="text-rose-400 line-through opacity-60 mx-0.5">$1</span>');

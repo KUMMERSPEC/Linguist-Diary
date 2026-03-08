@@ -90,7 +90,7 @@ const VocabPracticeDetailView: React.FC<VocabPracticeDetailViewProps> = ({
 
   const renderRuby = (text: string) => {
     if (!text) return '';
-    const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
+    const html = text.replace(/\[(.*?)\]\((.*?)\)/g, '<span class="custom-ruby">$1<span class="custom-rt">$2</span></span>');
     return <span dangerouslySetInnerHTML={{ __html: html }} />;
   };
 

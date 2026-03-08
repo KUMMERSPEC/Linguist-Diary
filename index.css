@@ -10,7 +10,7 @@
 
 /* Add this to your global CSS file */
 /* Let the browser handle the complex ruby layout, we just style it. */
-ruby {
+.custom-ruby {
   display: inline-block;
   position: relative;
   vertical-align: baseline;
@@ -19,7 +19,7 @@ ruby {
   line-height: 1; /* Shrink the box to font size to fix absolute positioning baseline */
 }
 
-rt {
+.custom-rt {
   display: block; /* Force block to override Safari's default ruby-text behavior */
   position: absolute;
   top: 0;

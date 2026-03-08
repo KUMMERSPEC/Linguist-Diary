@@ -6,7 +6,7 @@ import { ReadingPair } from '../types';
  */
 export const renderRuby = (text: string | null | undefined): string => {
   if (!text) return '';
-  return text.replace(/\[(.*?)\]\((.*?)\)/g, '<ruby>$1<rt>$2</rt></ruby>');
+  return text.replace(/\[(.*?)\]\((.*?)\)/g, '<span class="custom-ruby">$1<span class="custom-rt">$2</span></span>');
 };
 
 /**
