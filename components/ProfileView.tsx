@@ -96,7 +96,20 @@ const ProfileView: React.FC<ProfileViewProps> = ({
     }
   };
 
-  const isProExpired = user.isPro && user.proExpiry && user.proExpiry < Date.now();
+  // Defensive check: if proExpiry is a Timestamp object, convert it
+  let expiry = user.proExpiry;
+  if (expiry && typeof expiry !== 'number') {
+    if (typeof (expiry as any).toMillis === 'function') {
+      expiry = (expiry as any).toMillis();
+    } else if (expiry instanceof Date) {
+      expiry = expiry.getTime();
+    } else if (typeof expiry === 'string') {
+      const parsed = new Date(expiry).getTime();
+      if (!isNaN(parsed)) expiry = parsed;
+    }
+  }
+
+  const isProExpired = user.isPro && expiry && typeof expiry === 'number' && expiry < Date.now();
   const isProActive = user.isPro && !isProExpired;
 
   return (

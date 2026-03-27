@@ -68,6 +68,7 @@ const App: React.FC = () => {
   const [currentEntry, setCurrentEntry] = useState<DiaryEntry | null>(null); 
   const [currentEntryIterations, setCurrentEntryIterations] = useState<DiaryIteration[]>([]); 
   const [isLoading, setIsLoading] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(false);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chatLanguage, setChatLanguage] = useState('');
@@ -139,7 +140,7 @@ const App: React.FC = () => {
   const loadUserData = useCallback(async (userId: string, isMock: boolean) => {
     // Avoid re-loading if already loading or if we already have data for this user
     // (Optional: you might want to force reload sometimes, but for now let's stabilize)
-    setIsLoading(true);
+    setIsDataLoading(true);
     setError(null);
     try {
       if (!db || isMock) {
@@ -160,9 +161,38 @@ const App: React.FC = () => {
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
           const data = userDocSnap.data();
-          if (data.profile) {
-             setUser(prev => prev ? { iterationDay: 0, preferredLanguages: DEFAULT_LANGS, isPro: false, dailyUsageCount: 0, ...prev, ...data.profile } : null);
+          // Merge root data and profile data (for backward compatibility)
+          const profileData = data.profile || {};
+          const mergedData = { ...data, ...profileData };
+          delete mergedData.profile; // Clean up the merged object
+
+          // Convert timestamps to numbers if necessary
+          if (mergedData.proExpiry && typeof mergedData.proExpiry !== 'number') {
+            if (typeof mergedData.proExpiry.toMillis === 'function') {
+              mergedData.proExpiry = mergedData.proExpiry.toMillis();
+            } else if (mergedData.proExpiry instanceof Date) {
+              mergedData.proExpiry = mergedData.proExpiry.getTime();
+            } else if (typeof mergedData.proExpiry === 'string') {
+              const parsed = new Date(mergedData.proExpiry).getTime();
+              if (!isNaN(parsed)) mergedData.proExpiry = parsed;
+            }
           }
+
+          // Check for expired Pro status and sync with Firebase if needed
+          if (mergedData.isPro && mergedData.proExpiry && typeof mergedData.proExpiry === 'number' && mergedData.proExpiry < Date.now()) {
+            mergedData.isPro = false;
+            // Update Firebase in the background
+            updateDoc(userDocRef, { isPro: false }).catch(err => console.error("Failed to sync expired Pro status:", err));
+          }
+
+          setUser(prev => prev ? { 
+            iterationDay: 0, 
+            preferredLanguages: DEFAULT_LANGS, 
+            isPro: false, 
+            dailyUsageCount: 0, 
+            ...prev, 
+            ...mergedData 
+          } : null);
         }
         
         // Initial fetch of entries - we use a direct call here instead of the memoized fetchEntries 
@@ -203,7 +233,7 @@ const App: React.FC = () => {
       console.error("Error loading user data:", e);
       setError("无法加载数据。");
     } finally {
-      setIsLoading(false);
+      setIsDataLoading(false);
     }
   }, []); // Empty deps to keep it stable
 
@@ -259,14 +289,36 @@ const App: React.FC = () => {
        const profile = JSON.parse(localStorage.getItem(`linguist_profile_${user.uid}`) || '{}');
        localStorage.setItem(`linguist_profile_${user.uid}`, JSON.stringify({ ...profile, ...update }));
     } else {
-       await updateDoc(doc(db, 'users', user.uid), { profile: { ...user, ...update } });
+       await updateDoc(doc(db, 'users', user.uid), update);
     }
   }, [user]);
 
   const isProEffective = useMemo(() => {
     if (!user) return false;
     if (!user.isPro) return false;
-    if (user.proExpiry && user.proExpiry < Date.now()) return false;
+    
+    // Defensive check: if proExpiry is a Timestamp object, convert it
+    let expiry = user.proExpiry;
+    if (expiry && typeof expiry !== 'number') {
+      if (typeof (expiry as any).toMillis === 'function') {
+        expiry = (expiry as any).toMillis();
+      } else if (expiry instanceof Date) {
+        expiry = expiry.getTime();
+      } else if (typeof expiry === 'string') {
+        // Handle potential string dates
+        const parsed = new Date(expiry).getTime();
+        if (!isNaN(parsed)) expiry = parsed;
+      }
+    }
+
+    // If we still don't have a valid number for expiry, we can't safely say it's active if it's supposed to have one
+    if (expiry && typeof expiry === 'number') {
+      if (expiry < Date.now()) return false;
+    } else if (expiry) {
+      // If expiry exists but is not a number (and couldn't be parsed), assume expired for safety
+      return false;
+    }
+    
     return true;
   }, [user]);
 
@@ -338,7 +390,7 @@ const App: React.FC = () => {
       });
       
       const userRef = doc(db, 'users', user.uid);
-      batch.set(userRef, { profile: { ...user, ...proData } }, { merge: true });
+      batch.set(userRef, proData, { merge: true });
 
       await batch.commit();
       setUser(prev => prev ? { ...prev, ...proData } : null);
@@ -1325,7 +1377,25 @@ const App: React.FC = () => {
     <div>
       <Toaster position="bottom-center" toastOptions={{ duration: 3000 }} />
       <Layout activeView={view} onViewChange={handleViewChange} user={user} onLogout={handleLogout} isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen}>
-      {view === 'dashboard' && <Dashboard onNewEntry={() => setView('editor')} onStartReview={handleStartSmartReview} entries={entries} allAdvancedVocab={allAdvancedVocab} recommendedIteration={recommendedIteration} onStartIteration={handleStartIteration} onSaveFragment={handleSaveFragment} fragments={fragments} onPromoteFragment={handlePromoteFragment} />}
+        {view === 'dashboard' && (
+          isDataLoading ? (
+            <div className="h-full flex items-center justify-center bg-slate-50">
+              <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+            </div>
+          ) : (
+            <Dashboard 
+              onNewEntry={() => setView('editor')} 
+              onStartReview={handleStartSmartReview} 
+              entries={entries} 
+              allAdvancedVocab={allAdvancedVocab} 
+              recommendedIteration={recommendedIteration} 
+              onStartIteration={handleStartIteration} 
+              onSaveFragment={handleSaveFragment} 
+              fragments={fragments} 
+              onPromoteFragment={handlePromoteFragment} 
+            />
+          )
+        )}
       {view === 'editor' && <Editor onAnalyze={handleAnalyze} onSaveDraft={handleSaveDraft} isLoading={isLoading} initialText={prefilledEditorText} initialLanguage={chatLanguage} summaryPrompt={summaryPrompt} fragments={fragments} onDeleteFragment={handleDeleteFragment} preferredLanguages={preferredLanguages} />}
       {view === 'review' && currentEntry && <Review analysis={currentEntry.analysis!} language={currentEntry.language} iterations={currentEntryIterations} allAdvancedVocab={allAdvancedVocab} onSave={() => setView('history')} onBack={() => setView('history')} onSaveManualVocab={handleSaveManualVocab} isExistingEntry={isReviewingExisting} />}
       {/* // FIX: Updated function name from handleUpdateLanguage to handleUpdateEntryLanguage */}
